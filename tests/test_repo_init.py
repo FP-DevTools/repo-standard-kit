@@ -12,6 +12,7 @@ from repo_standard.repo_init import (
     ensure_output_dir,
     infer_package_name,
     infer_repo_name,
+    initialize_git_repository,
     main,
     run_optional_installs,
     validate_package_name,
@@ -119,8 +120,30 @@ def test_ensure_git_repository_initializes_when_missing(
 
     ensure_git_repository(tmp_path)
 
-    assert calls == [(["git", "init"], tmp_path)]
-    assert "Initialized a local Git repository" in capsys.readouterr().err
+    assert calls == [(["git", "init", "--initial-branch=main"], tmp_path)]
+    assert "Initialized a local Git repository on main" in capsys.readouterr().err
+
+
+def test_initialize_git_repository_falls_back_when_initial_branch_flag_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[tuple[list[str], Path]] = []
+
+    def fake_run(command: list[str], *, cwd: Path, check: bool) -> None:
+        assert check is True
+        calls.append((command, cwd))
+        if command == ["git", "init", "--initial-branch=main"]:
+            raise subprocess.CalledProcessError(returncode=129, cmd=command)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    initialize_git_repository(tmp_path)
+
+    assert calls == [
+        (["git", "init", "--initial-branch=main"], tmp_path),
+        (["git", "init"], tmp_path),
+        (["git", "branch", "-m", "main"], tmp_path),
+    ]
 
 
 def test_ensure_git_repository_skips_existing_repo(
@@ -163,10 +186,10 @@ def test_run_optional_installs_initializes_git_before_pre_commit(
 
     assert calls == [
         (["uv", "sync"], tmp_path),
-        (["git", "init"], tmp_path),
+        (["git", "init", "--initial-branch=main"], tmp_path),
         (["uv", "run", "pre-commit", "install"], tmp_path),
     ]
-    assert "Initialized a local Git repository" in capsys.readouterr().err
+    assert "Initialized a local Git repository on main" in capsys.readouterr().err
 
 
 def test_run_optional_installs_skips_git_init_inside_existing_repo(

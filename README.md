@@ -82,8 +82,8 @@ Git URL for this repository.
 from the target directory name.
 `--description` is also optional and can be refined later in `README.md`.
 If the target directory is not yet a Git repository, `repo-init` initializes
-one automatically before installing pre-commit hooks. You can add or change the
-remote afterward.
+one automatically on `main` before installing pre-commit hooks. You can add or
+change the remote afterward.
 
 ## Current Profiles
 

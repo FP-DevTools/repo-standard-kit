@@ -157,18 +157,31 @@ def has_git_repository(output_dir: Path) -> bool:
     return (output_dir / ".git").exists()
 
 
+def initialize_git_repository(output_dir: Path) -> None:
+    try:
+        subprocess.run(
+            ["git", "init", "--initial-branch=main"], cwd=output_dir, check=True
+        )
+        return
+    except FileNotFoundError:
+        raise
+    except subprocess.CalledProcessError:
+        subprocess.run(["git", "init"], cwd=output_dir, check=True)
+        subprocess.run(["git", "branch", "-m", "main"], cwd=output_dir, check=True)
+
+
 def ensure_git_repository(output_dir: Path) -> None:
     if has_git_repository(output_dir):
         return
     try:
-        subprocess.run(["git", "init"], cwd=output_dir, check=True)
+        initialize_git_repository(output_dir)
     except FileNotFoundError as error:
         raise RuntimeError(
             "Git is required to install pre-commit hooks automatically. "
             "Install Git or rerun with --no-install."
         ) from error
     print(
-        "Initialized a local Git repository so pre-commit hooks can be "
+        "Initialized a local Git repository on main so pre-commit hooks can be "
         "installed. Add or change the remote later as needed.",
         file=sys.stderr,
     )
