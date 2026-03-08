@@ -8,10 +8,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-PROFILE_ALIASES = {
-    "python": "python-single",
-}
-
 PLACEHOLDERS = {
     "__REPO_NAME__": "repo_name",
     "__PACKAGE_NAME__": "package_name",
@@ -27,13 +23,11 @@ def build_parser() -> argparse.ArgumentParser:
         description="Create a new repository from the standard starter kits."
     )
     parser.add_argument(
-        "--profile",
-        choices=["python", "python-single", "python-workspace"],
-        required=True,
+        "--profile", choices=["python-single", "python-workspace"], required=True
     )
-    parser.add_argument("--repo-name", required=True)
+    parser.add_argument("--repo-name")
     parser.add_argument("--package-name")
-    parser.add_argument("--description", required=True)
+    parser.add_argument("--description", default="Describe this repository.")
     parser.add_argument(
         "--repo-type",
         choices=["service", "library", "cli"],
@@ -52,10 +46,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return build_parser().parse_args(argv)
-
-
-def normalize_profile(profile: str) -> str:
-    return PROFILE_ALIASES.get(profile, profile)
 
 
 def validate_package_name(package_name: str) -> None:
@@ -83,8 +73,17 @@ def infer_package_name(repo_name: str) -> str:
     return candidate
 
 
+def infer_repo_name(output_dir: Path) -> str:
+    repo_name = output_dir.resolve().name
+    if not repo_name:
+        raise ValueError(
+            "Could not infer a repository name from the target directory; "
+            "pass --repo-name explicitly."
+        )
+    return repo_name
+
+
 def resolve_starter_dir(profile: str, repo_root: Path | None = None) -> Path:
-    profile = normalize_profile(profile)
     if repo_root is not None:
         candidate = repo_root / "starter-kits" / profile
         if candidate.exists():
@@ -183,7 +182,6 @@ def bootstrap_repo(
     output_dir: Path,
     no_install: bool,
 ) -> Path:
-    profile = normalize_profile(profile)
     if profile == "python-single":
         package_name = package_name or infer_package_name(repo_name)
         validate_package_name(package_name)
@@ -218,11 +216,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     repo_root = Path(__file__).resolve().parents[2]
     output_dir = Path(args.output_dir).resolve()
+    repo_name = args.repo_name or infer_repo_name(output_dir)
 
     bootstrap_repo(
         repo_root=repo_root,
         profile=args.profile,
-        repo_name=args.repo_name,
+        repo_name=repo_name,
         package_name=args.package_name,
         description=args.description,
         repo_type=args.repo_type,
@@ -231,7 +230,7 @@ def main(argv: list[str] | None = None) -> int:
         output_dir=output_dir,
         no_install=args.no_install,
     )
-    print(f"Bootstrapped {args.repo_name} into {output_dir}")
+    print(f"Bootstrapped {repo_name} into {output_dir}")
     return 0
 
 

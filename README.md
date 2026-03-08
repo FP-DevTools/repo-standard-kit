@@ -65,9 +65,7 @@ That gives you:
 
 ```bash
 repo-init \
-  --profile python-single \
-  --repo-name my-service \
-  --description "Short repo purpose"
+  --profile python-single
 ```
 
 4. Review the generated `AGENTS.md` and `README.md`.
@@ -79,6 +77,10 @@ repository. Generate or template the target repository separately.
 
 If you prefer HTTPS instead of SSH, use the same command shape with the HTTPS
 Git URL for this repository.
+
+`--repo-name` is optional. By default, `repo-init` infers the repository name
+from the target directory name.
+`--description` is also optional and can be refined later in `README.md`.
 
 ## Current Profiles
 

@@ -9,9 +9,7 @@ Run this from an empty target directory:
 
 ```bash
 repo-init \
-  --profile python-single \
-  --repo-name widget-api \
-  --description "Receive, validate, and store widget payloads"
+  --profile python-single
 ```
 
 ## Expected Generated Files

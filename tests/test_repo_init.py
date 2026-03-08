@@ -9,6 +9,7 @@ from repo_standard.repo_init import (
     ensure_no_unresolved_placeholders,
     ensure_output_dir,
     infer_package_name,
+    infer_repo_name,
     main,
     validate_package_name,
 )
@@ -98,6 +99,10 @@ def test_infer_package_name_normalizes_repo_name() -> None:
     assert infer_package_name("widget-api") == "widget_api"
 
 
+def test_infer_repo_name_uses_target_directory_name(tmp_path: Path) -> None:
+    assert infer_repo_name(tmp_path / "widget-platform") == "widget-platform"
+
+
 def test_ensure_output_dir_rejects_non_empty_directory(tmp_path: Path) -> None:
     output_dir = tmp_path / "existing"
     output_dir.mkdir()
@@ -124,14 +129,55 @@ def test_main_bootstraps_into_current_working_directory(
         [
             "--profile",
             "python-single",
-            "--repo-name",
-            "empty-dir-app",
-            "--description",
-            "Empty directory bootstrap",
             "--no-install",
         ]
     )
 
     assert exit_code == 0
     assert (tmp_path / "AGENTS.md").exists()
-    assert (tmp_path / "src" / "empty_dir_app" / "__init__.py").exists()
+    inferred_package = tmp_path.name.replace("-", "_")
+    assert (tmp_path / "src" / inferred_package / "__init__.py").exists()
+    readme_text = (tmp_path / "README.md").read_text(encoding="utf-8")
+    assert "Describe this repository." in readme_text
+
+
+def test_main_infers_repo_name_from_output_dir(tmp_path: Path) -> None:
+    output_dir = tmp_path / "inferred-service"
+
+    exit_code = main(
+        [
+            "--profile",
+            "python-single",
+            "--output-dir",
+            str(output_dir),
+            "--no-install",
+        ]
+    )
+
+    assert exit_code == 0
+    readme_text = (output_dir / "README.md").read_text(encoding="utf-8")
+    assert "# inferred-service" in readme_text
+    assert (output_dir / "src" / "inferred_service" / "__init__.py").exists()
+    assert "Describe this repository." in readme_text
+
+
+def test_main_infers_workspace_repo_name_from_current_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace_dir = tmp_path / "widget-platform"
+    workspace_dir.mkdir()
+    monkeypatch.chdir(workspace_dir)
+
+    exit_code = main(
+        [
+            "--profile",
+            "python-workspace",
+            "--no-install",
+        ]
+    )
+
+    assert exit_code == 0
+    readme_text = (workspace_dir / "README.md").read_text(encoding="utf-8")
+    assert "# widget-platform" in readme_text
+    assert (workspace_dir / "packages" / ".gitkeep").exists()
+    assert "Describe this repository." in readme_text
