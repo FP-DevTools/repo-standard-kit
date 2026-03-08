@@ -52,7 +52,7 @@ The recommended workflow is:
 1. Install the tool once:
 
 ```bash
-uv tool install --from "git+ssh://git@github.com/JayTeeBat/repo-standard-kit.git" repo-init
+uv tool install --from "git+ssh://git@github.com/JayTeeBat/repo-standard-kit.git" repo-standard-kit
 ```
 
 That gives you:
