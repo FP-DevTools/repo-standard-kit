@@ -8,18 +8,19 @@ from repo_standard.repo_init import (
     bootstrap_repo,
     ensure_no_unresolved_placeholders,
     ensure_output_dir,
+    infer_package_name,
     main,
     validate_package_name,
 )
 
 
-def test_bootstrap_repo_renders_python_starter(tmp_path: Path) -> None:
+def test_bootstrap_repo_renders_python_single_starter(tmp_path: Path) -> None:
     repo_root = Path(__file__).resolve().parents[1]
     output_dir = tmp_path / "demo-service"
 
     bootstrap_repo(
         repo_root=repo_root,
-        profile="python",
+        profile="python-single",
         repo_name="demo-service",
         package_name="demo_service",
         description="Demo service",
@@ -45,9 +46,56 @@ def test_bootstrap_repo_renders_python_starter(tmp_path: Path) -> None:
     assert not (output_dir / "src" / "package_name").exists()
 
 
+def test_bootstrap_repo_infers_package_name_for_python_single(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    output_dir = tmp_path / "demo-service"
+
+    bootstrap_repo(
+        repo_root=repo_root,
+        profile="python-single",
+        repo_name="demo-service",
+        package_name=None,
+        description="Demo service",
+        repo_type="service",
+        python_version="3.12",
+        author="",
+        output_dir=output_dir,
+        no_install=True,
+    )
+
+    assert (output_dir / "src" / "demo_service" / "__init__.py").exists()
+
+
+def test_bootstrap_repo_renders_python_workspace_starter(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    output_dir = tmp_path / "widget-platform"
+
+    bootstrap_repo(
+        repo_root=repo_root,
+        profile="python-workspace",
+        repo_name="widget-platform",
+        package_name=None,
+        description="Workspace repo",
+        repo_type="service",
+        python_version="3.12",
+        author="",
+        output_dir=output_dir,
+        no_install=True,
+    )
+
+    readme_text = (output_dir / "README.md").read_text(encoding="utf-8")
+    assert "Python workspace" in readme_text
+    assert (output_dir / "packages" / ".gitkeep").exists()
+    assert not (output_dir / "src").exists()
+
+
 def test_validate_package_name_rejects_invalid_identifier() -> None:
     with pytest.raises(ValueError, match="valid Python identifier"):
         validate_package_name("not-valid")
+
+
+def test_infer_package_name_normalizes_repo_name() -> None:
+    assert infer_package_name("widget-api") == "widget_api"
 
 
 def test_ensure_output_dir_rejects_non_empty_directory(tmp_path: Path) -> None:
@@ -75,11 +123,9 @@ def test_main_bootstraps_into_current_working_directory(
     exit_code = main(
         [
             "--profile",
-            "python",
+            "python-single",
             "--repo-name",
             "empty-dir-app",
-            "--package-name",
-            "empty_dir_app",
             "--description",
             "Empty directory bootstrap",
             "--no-install",

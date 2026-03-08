@@ -8,12 +8,10 @@ repository.
 Run this from an empty target directory:
 
 ```bash
-uv run repo-init \
-  --profile python \
+repo-init \
+  --profile python-single \
   --repo-name widget-api \
-  --package-name widget_api \
-  --description "Receive, validate, and store widget payloads" \
-  --repo-type service
+  --description "Receive, validate, and store widget payloads"
 ```
 
 ## Expected Generated Files

@@ -16,27 +16,28 @@ Do not clone the standards repository as the base of a product repository.
 
 ## Recommended New Repository Flow
 
-1. Create an empty target repository or working directory.
-2. Run `repo-init` with the Python profile and repository metadata.
-3. Review generated `AGENTS.md`, `README.md`, and package naming.
-4. Run the generated repository quality gates.
-5. Make the initial commit on `main`.
-
-### Golden Path
-
-From inside the standards repo, generate into a sibling target directory:
+1. Install the tool once:
 
 ```bash
-uv run repo-init \
-  --profile python \
-  --repo-name widget-api \
-  --package-name widget_api \
-  --description "Receive and validate widget payloads" \
-  --output-dir ../widget-api
+uv tool install --from "git+ssh://git@github.com/JayTeeBat/repo-standard-kit.git" repo-init
 ```
 
-If you install `repo-init` as a user tool, the same bootstrap can be run from
-inside the empty target directory without `--output-dir`.
+2. Create and enter an empty target repository or working directory.
+3. Run `repo-init` with the Python profile and repository metadata.
+4. Review generated `AGENTS.md`, `README.md`, and package naming.
+5. Run the generated repository quality gates.
+6. Make the initial commit on `main`.
+
+### Golden Path: Single Package
+
+From inside the empty target directory:
+
+```bash
+repo-init \
+  --profile python-single \
+  --repo-name widget-api \
+  --description "Receive and validate widget payloads"
+```
 
 After generation:
 
@@ -48,17 +49,39 @@ After generation:
 6. Run `uv run pytest`
 7. Make the initial commit on `main`
 
+### Golden Path: Workspace
+
+From inside the empty workspace directory, bootstrap the workspace shell:
+
+```bash
+repo-init \
+  --profile python-workspace \
+  --repo-name widget-platform \
+  --description "Workspace for widget services and libraries"
+```
+
+Then add the first package from the workspace root:
+
+```bash
+repo-add-package \
+  --package-name widget_api \
+  --description "Service package for widget API behavior"
+```
+
+If you prefer HTTPS instead of SSH, use the same command shape with the HTTPS
+Git URL for this repository.
+
 ## `repo-init` Inputs
 
 Required:
 
 - `--profile`
 - `--repo-name`
-- `--package-name`
 - `--description`
 
 Optional:
 
+- `--package-name`
 - `--repo-type`
 - `--python-version`
 - `--author`
@@ -71,6 +94,6 @@ The generated repository should contain:
 
 - a concrete `AGENTS.md`
 - baseline Python tooling files
-- a standard `src/` and `tests/` layout
+- a standard single-package or workspace layout
 - a README with the repository purpose and workflow entry points
 - no unresolved template placeholders

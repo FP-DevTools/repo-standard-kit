@@ -8,6 +8,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+PROFILE_ALIASES = {
+    "python": "python-single",
+}
+
 PLACEHOLDERS = {
     "__REPO_NAME__": "repo_name",
     "__PACKAGE_NAME__": "package_name",
@@ -22,9 +26,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Create a new repository from the standard starter kits."
     )
-    parser.add_argument("--profile", choices=["python"], required=True)
+    parser.add_argument(
+        "--profile",
+        choices=["python", "python-single", "python-workspace"],
+        required=True,
+    )
     parser.add_argument("--repo-name", required=True)
-    parser.add_argument("--package-name", required=True)
+    parser.add_argument("--package-name")
     parser.add_argument("--description", required=True)
     parser.add_argument(
         "--repo-type",
@@ -46,6 +54,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return build_parser().parse_args(argv)
 
 
+def normalize_profile(profile: str) -> str:
+    return PROFILE_ALIASES.get(profile, profile)
+
+
 def validate_package_name(package_name: str) -> None:
     if not package_name.isidentifier():
         raise ValueError(
@@ -61,7 +73,18 @@ def ensure_output_dir(output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
 
+def infer_package_name(repo_name: str) -> str:
+    candidate = repo_name.replace("-", "_").lower()
+    if not candidate.isidentifier():
+        raise ValueError(
+            "Could not infer a valid package name from --repo-name; "
+            "pass --package-name explicitly."
+        )
+    return candidate
+
+
 def resolve_starter_dir(profile: str, repo_root: Path | None = None) -> Path:
+    profile = normalize_profile(profile)
     if repo_root is not None:
         candidate = repo_root / "starter-kits" / profile
         if candidate.exists():
@@ -152,7 +175,7 @@ def bootstrap_repo(
     repo_root: Path,
     profile: str,
     repo_name: str,
-    package_name: str,
+    package_name: str | None,
     description: str,
     repo_type: str,
     python_version: str,
@@ -160,7 +183,12 @@ def bootstrap_repo(
     output_dir: Path,
     no_install: bool,
 ) -> Path:
-    validate_package_name(package_name)
+    profile = normalize_profile(profile)
+    if profile == "python-single":
+        package_name = package_name or infer_package_name(repo_name)
+        validate_package_name(package_name)
+    elif package_name is not None:
+        raise ValueError("--package-name is only valid for python-single repos.")
 
     starter_dir = resolve_starter_dir(profile, repo_root)
     ensure_output_dir(output_dir)
@@ -168,14 +196,15 @@ def bootstrap_repo(
 
     values = {
         "repo_name": repo_name,
-        "package_name": package_name,
+        "package_name": package_name or "",
         "description": description,
         "repo_type": repo_type,
         "python_version": python_version,
         "author": author,
     }
     render_text_files(output_dir, values)
-    rename_package_dir(output_dir, package_name)
+    if package_name is not None:
+        rename_package_dir(output_dir, package_name)
     update_python_version(output_dir, python_version)
     ensure_no_unresolved_placeholders(output_dir)
 
