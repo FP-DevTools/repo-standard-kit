@@ -19,7 +19,7 @@ Do not clone the standards repository as the base of a product repository.
 1. Install the tool once:
 
 ```bash
-uv tool install --from "git+ssh://git@github.com/JayTeeBat/repo-standard-kit.git" repo-init
+uv tool install --from "git+ssh://git@github.com/JayTeeBat/repo-standard-kit.git" repo-standard-kit
 ```
 
 2. Create and enter an empty target repository or working directory.
