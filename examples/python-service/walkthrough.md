@@ -9,9 +9,7 @@ Run this from an empty target directory:
 
 ```bash
 repo-init \
-  --profile python-single \
-  --repo-name widget-api \
-  --description "Receive, validate, and store widget payloads"
+  --profile python-single
 ```
 
 ## Expected Generated Files
@@ -38,7 +36,8 @@ Check these files first:
 ## Golden Path After Bootstrap
 
 1. Run `uv sync`
-2. Run `uv run pre-commit install`
+2. Run `uv run pre-commit install` if you bootstrapped with `--no-install`
+   or if you want to reinstall the hooks later
 3. Run `uv run pre-commit run --all-files`
 4. Run `uv run ty check`
 5. Run `uv run pytest`

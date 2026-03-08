@@ -28,15 +28,17 @@ uv tool install --from "git+ssh://git@github.com/JayTeeBat/repo-standard-kit.git
 5. Run the generated repository quality gates.
 6. Make the initial commit on `main`.
 
+If the target directory is not yet a Git repository, `repo-init` initializes
+one automatically before installing pre-commit hooks. Add or change the remote
+afterward as needed.
+
 ### Golden Path: Single Package
 
 From inside the empty target directory:
 
 ```bash
 repo-init \
-  --profile python-single \
-  --repo-name widget-api \
-  --description "Receive and validate widget payloads"
+  --profile python-single
 ```
 
 After generation:
@@ -55,9 +57,7 @@ From inside the empty workspace directory, bootstrap the workspace shell:
 
 ```bash
 repo-init \
-  --profile python-workspace \
-  --repo-name widget-platform \
-  --description "Workspace for widget services and libraries"
+  --profile python-workspace
 ```
 
 Then add the first package from the workspace root:
@@ -76,11 +76,11 @@ Git URL for this repository.
 Required:
 
 - `--profile`
-- `--repo-name`
-- `--description`
 
 Optional:
 
+- `--repo-name`
+- `--description`
 - `--package-name`
 - `--repo-type`
 - `--python-version`
@@ -97,3 +97,11 @@ The generated repository should contain:
 - a standard single-package or workspace layout
 - a README with the repository purpose and workflow entry points
 - no unresolved template placeholders
+
+By default, `repo-init` infers the repository name from the target directory.
+Use `--repo-name` only when you want to override that inferred name.
+By default, `repo-init` uses a placeholder description that you can refine
+later in `README.md`.
+By default, `repo-init` also initializes Git when needed so hook installation
+works in a fresh directory. Use `--no-install` if you want bootstrap to stop
+before environment setup and hook installation.

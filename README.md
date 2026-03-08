@@ -65,9 +65,7 @@ That gives you:
 
 ```bash
 repo-init \
-  --profile python-single \
-  --repo-name my-service \
-  --description "Short repo purpose"
+  --profile python-single
 ```
 
 4. Review the generated `AGENTS.md` and `README.md`.
@@ -80,6 +78,13 @@ repository. Generate or template the target repository separately.
 If you prefer HTTPS instead of SSH, use the same command shape with the HTTPS
 Git URL for this repository.
 
+`--repo-name` is optional. By default, `repo-init` infers the repository name
+from the target directory name.
+`--description` is also optional and can be refined later in `README.md`.
+If the target directory is not yet a Git repository, `repo-init` initializes
+one automatically before installing pre-commit hooks. You can add or change the
+remote afterward.
+
 ## Current Profiles
 
 - `python-single`: one package rooted at `src/<package_name>/`
@@ -90,7 +95,8 @@ Git URL for this repository.
 
 Use this repository in one of two ways:
 
-- New repository: bootstrap from `starter-kits/python/` via `repo-init`
+- New repository: bootstrap from `starter-kits/python-single/` or
+  `starter-kits/python-workspace/` via `repo-init`
 - Existing repository: adapt the repo to match the standard and populate
   `AGENTS.md` using `templates/AGENTS.md`
 

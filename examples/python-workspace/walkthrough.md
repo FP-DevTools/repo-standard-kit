@@ -6,9 +6,7 @@ From inside the empty workspace directory:
 
 ```bash
 repo-init \
-  --profile python-workspace \
-  --repo-name widget-platform \
-  --description "Workspace for widget services and libraries"
+  --profile python-workspace
 ```
 
 ## Add First Package

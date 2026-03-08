@@ -59,7 +59,7 @@ Run from repository root:
 4. `uv run ruff check .`
 5. `uv run ty check`
 6. `uv run pytest`
-7. `uv run repo-init --profile python --repo-name demo-repo --package-name demo_repo --description "Bootstrap validation" --output-dir /tmp/demo-repo --no-install`
+7. `uv run repo-init --profile python-single --output-dir /tmp/demo-repo --no-install`
 
 ## Coding Standards
 

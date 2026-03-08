@@ -10,7 +10,8 @@ This repository contains the `__PACKAGE_NAME__` Python project.
 
 1. Review `AGENTS.md` and confirm the repo-specific scope and constraints.
 2. Run `uv sync`.
-3. Run `uv run pre-commit install`.
+3. Run `uv run pre-commit install` after Git is initialized. If you used
+   `repo-init` without `--no-install`, this is already done for you.
 4. Run `uv run pre-commit run --all-files`.
 5. Run `uv run ty check`.
 6. Run `uv run pytest`.
