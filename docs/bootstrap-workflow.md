@@ -28,6 +28,10 @@ uv tool install --from "git+ssh://git@github.com/JayTeeBat/repo-standard-kit.git
 5. Run the generated repository quality gates.
 6. Make the initial commit on `main`.
 
+If the target directory is not yet a Git repository, `repo-init` initializes
+one automatically before installing pre-commit hooks. Add or change the remote
+afterward as needed.
+
 ### Golden Path: Single Package
 
 From inside the empty target directory:
@@ -98,3 +102,6 @@ By default, `repo-init` infers the repository name from the target directory.
 Use `--repo-name` only when you want to override that inferred name.
 By default, `repo-init` uses a placeholder description that you can refine
 later in `README.md`.
+By default, `repo-init` also initializes Git when needed so hook installation
+works in a fresh directory. Use `--no-install` if you want bootstrap to stop
+before environment setup and hook installation.

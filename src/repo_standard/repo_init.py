@@ -153,20 +153,47 @@ def update_python_version(output_dir: Path, python_version: str) -> None:
     pyproject_path.write_text(text, encoding="utf-8")
 
 
+def has_git_repository(output_dir: Path) -> bool:
+    return (output_dir / ".git").exists()
+
+
+def ensure_git_repository(output_dir: Path) -> None:
+    if has_git_repository(output_dir):
+        return
+    try:
+        subprocess.run(["git", "init"], cwd=output_dir, check=True)
+    except FileNotFoundError as error:
+        raise RuntimeError(
+            "Git is required to install pre-commit hooks automatically. "
+            "Install Git or rerun with --no-install."
+        ) from error
+    print(
+        "Initialized a local Git repository so pre-commit hooks can be "
+        "installed. Add or change the remote later as needed.",
+        file=sys.stderr,
+    )
+
+
 def run_optional_installs(output_dir: Path) -> None:
-    commands = [
-        ["uv", "sync"],
-        ["uv", "run", "pre-commit", "install"],
-    ]
-    for command in commands:
-        try:
-            subprocess.run(command, cwd=output_dir, check=True)
-        except FileNotFoundError:
-            print(
-                f"Skipped {' '.join(command)} because the executable was not found.",
-                file=sys.stderr,
-            )
-            return
+    try:
+        subprocess.run(["uv", "sync"], cwd=output_dir, check=True)
+    except FileNotFoundError:
+        print(
+            "Skipped uv sync because the executable was not found.",
+            file=sys.stderr,
+        )
+        return
+
+    ensure_git_repository(output_dir)
+    try:
+        subprocess.run(
+            ["uv", "run", "pre-commit", "install"], cwd=output_dir, check=True
+        )
+    except FileNotFoundError:
+        print(
+            "Skipped uv run pre-commit install because the executable was not found.",
+            file=sys.stderr,
+        )
 
 
 def bootstrap_repo(

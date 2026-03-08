@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from repo_standard.repo_init import (
     bootstrap_repo,
+    ensure_git_repository,
     ensure_no_unresolved_placeholders,
     ensure_output_dir,
     infer_package_name,
     infer_repo_name,
     main,
+    run_optional_installs,
     validate_package_name,
 )
 
@@ -101,6 +104,89 @@ def test_infer_package_name_normalizes_repo_name() -> None:
 
 def test_infer_repo_name_uses_target_directory_name(tmp_path: Path) -> None:
     assert infer_repo_name(tmp_path / "widget-platform") == "widget-platform"
+
+
+def test_ensure_git_repository_initializes_when_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls: list[tuple[list[str], Path]] = []
+
+    def fake_run(command: list[str], *, cwd: Path, check: bool) -> None:
+        assert check is True
+        calls.append((command, cwd))
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    ensure_git_repository(tmp_path)
+
+    assert calls == [(["git", "init"], tmp_path)]
+    assert "Initialized a local Git repository" in capsys.readouterr().err
+
+
+def test_ensure_git_repository_skips_existing_repo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / ".git").mkdir()
+
+    def fail_run(command: list[str], *, cwd: Path, check: bool) -> None:
+        raise AssertionError(f"subprocess.run should not be called: {command}")
+
+    monkeypatch.setattr(subprocess, "run", fail_run)
+
+    ensure_git_repository(tmp_path)
+
+
+def test_ensure_git_repository_raises_clear_error_when_git_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def missing_git(command: list[str], *, cwd: Path, check: bool) -> None:
+        raise FileNotFoundError(command[0])
+
+    monkeypatch.setattr(subprocess, "run", missing_git)
+
+    with pytest.raises(RuntimeError, match="Install Git or rerun with --no-install"):
+        ensure_git_repository(tmp_path)
+
+
+def test_run_optional_installs_initializes_git_before_pre_commit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls: list[tuple[list[str], Path]] = []
+
+    def fake_run(command: list[str], *, cwd: Path, check: bool) -> None:
+        assert check is True
+        calls.append((command, cwd))
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    run_optional_installs(tmp_path)
+
+    assert calls == [
+        (["uv", "sync"], tmp_path),
+        (["git", "init"], tmp_path),
+        (["uv", "run", "pre-commit", "install"], tmp_path),
+    ]
+    assert "Initialized a local Git repository" in capsys.readouterr().err
+
+
+def test_run_optional_installs_skips_git_init_inside_existing_repo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / ".git").mkdir()
+    calls: list[tuple[list[str], Path]] = []
+
+    def fake_run(command: list[str], *, cwd: Path, check: bool) -> None:
+        assert check is True
+        calls.append((command, cwd))
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    run_optional_installs(tmp_path)
+
+    assert calls == [
+        (["uv", "sync"], tmp_path),
+        (["uv", "run", "pre-commit", "install"], tmp_path),
+    ]
 
 
 def test_ensure_output_dir_rejects_non_empty_directory(tmp_path: Path) -> None:

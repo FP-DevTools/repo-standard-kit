@@ -81,6 +81,9 @@ Git URL for this repository.
 `--repo-name` is optional. By default, `repo-init` infers the repository name
 from the target directory name.
 `--description` is also optional and can be refined later in `README.md`.
+If the target directory is not yet a Git repository, `repo-init` initializes
+one automatically before installing pre-commit hooks. You can add or change the
+remote afterward.
 
 ## Current Profiles
 
@@ -92,7 +95,8 @@ from the target directory name.
 
 Use this repository in one of two ways:
 
-- New repository: bootstrap from `starter-kits/python/` via `repo-init`
+- New repository: bootstrap from `starter-kits/python-single/` or
+  `starter-kits/python-workspace/` via `repo-init`
 - Existing repository: adapt the repo to match the standard and populate
   `AGENTS.md` using `templates/AGENTS.md`
 
