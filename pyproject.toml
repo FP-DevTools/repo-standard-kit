@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = []
 
 [project.scripts]
+repo-add-package = "repo_standard.repo_add_package:main"
 repo-init = "repo_standard.repo_init:main"
 
 [dependency-groups]
