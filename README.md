@@ -52,7 +52,7 @@ The recommended workflow is:
 1. Install the tool once:
 
 ```bash
-uv tool install --from "git+ssh://git@github.com/JayTeeBat/repo-bootstrap-kit.git" repo-bootstrap-kit
+uv tool install --from "git+ssh://git@github.com/FP-DevTools/repo-bootstrap-kit.git" repo-bootstrap-kit
 ```
 
 That gives you:
