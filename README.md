@@ -1,4 +1,4 @@
-# repo-standard-kit
+# repo-bootstrap-kit
 
 Portable development standards, starter kits, and bootstrap tooling for modern
 software repositories.
@@ -52,7 +52,7 @@ The recommended workflow is:
 1. Install the tool once:
 
 ```bash
-uv tool install --from "git+ssh://git@github.com/JayTeeBat/repo-standard-kit.git" repo-standard-kit
+uv tool install --from "git+ssh://git@github.com/JayTeeBat/repo-bootstrap-kit.git" repo-bootstrap-kit
 ```
 
 That gives you:
@@ -102,9 +102,9 @@ Use this repository in one of two ways:
 
 ## Golden Path Example
 
-See [examples/python-service/walkthrough.md](/home/thomazo/dev/repo-standard-kit/examples/python-service/walkthrough.md)
+See [examples/python-service/walkthrough.md](examples/python-service/walkthrough.md)
 for a concrete service-oriented bootstrap flow and the expected generated shape.
-See [examples/python-workspace/walkthrough.md](/home/thomazo/dev/repo-standard-kit/examples/python-workspace/walkthrough.md)
+See [examples/python-workspace/walkthrough.md](examples/python-workspace/walkthrough.md)
 for the workspace bootstrap and package-add flow.
 
 ## Design Principles

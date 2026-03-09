@@ -1,5 +1,5 @@
 [project]
-name = "repo-standard-kit"
+name = "repo-bootstrap-kit"
 version = "0.1.0"
 description = "Portable development standards, starter kits, and bootstrap tooling for software repositories."
 readme = "README.md"
