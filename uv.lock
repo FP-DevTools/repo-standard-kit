@@ -193,7 +193,7 @@ wheels = [
 ]
 
 [[package]]
-name = "repo-standard-kit"
+name = "repo-bootstrap-kit"
 version = "0.1.0"
 source = { editable = "." }
 
