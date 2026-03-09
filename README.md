@@ -64,8 +64,7 @@ That gives you:
 3. Run the bootstrap tool in that directory:
 
 ```bash
-repo-init \
-  --profile python-single
+repo-init --profile python-single
 ```
 
 4. Review the generated `AGENTS.md` and `README.md`.
