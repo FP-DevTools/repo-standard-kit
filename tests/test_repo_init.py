@@ -14,8 +14,10 @@ from repo_standard.repo_init import (
     infer_repo_name,
     initialize_git_repository,
     main,
+    resolve_output_dir,
     run_optional_installs,
     validate_package_name,
+    validate_repo_name,
 )
 
 
@@ -105,6 +107,29 @@ def test_infer_package_name_normalizes_repo_name() -> None:
 
 def test_infer_repo_name_uses_target_directory_name(tmp_path: Path) -> None:
     assert infer_repo_name(tmp_path / "widget-platform") == "widget-platform"
+
+
+def test_validate_repo_name_rejects_path_like_values() -> None:
+    with pytest.raises(ValueError, match="must be a repository name, not a path"):
+        validate_repo_name("foo/bar")
+
+
+def test_resolve_output_dir_uses_repo_name_when_output_dir_not_provided(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    assert resolve_output_dir(None, "widget-platform") == tmp_path / "widget-platform"
+
+
+def test_resolve_output_dir_prefers_explicit_output_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    assert resolve_output_dir("custom-target", "widget-platform") == (
+        tmp_path / "custom-target"
+    )
 
 
 def test_ensure_git_repository_initializes_when_missing(
@@ -268,6 +293,70 @@ def test_main_infers_repo_name_from_output_dir(tmp_path: Path) -> None:
     assert "# inferred-service" in readme_text
     assert (output_dir / "src" / "inferred_service" / "__init__.py").exists()
     assert "Describe this repository." in readme_text
+
+
+def test_main_creates_repo_named_directory_when_repo_name_is_provided(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    exit_code = main(
+        [
+            "--profile",
+            "python-single",
+            "--repo-name",
+            "demo-service",
+            "--no-install",
+        ]
+    )
+
+    output_dir = tmp_path / "demo-service"
+    assert exit_code == 0
+    assert (output_dir / "AGENTS.md").exists()
+    assert (output_dir / "src" / "demo_service" / "__init__.py").exists()
+    readme_text = (output_dir / "README.md").read_text(encoding="utf-8")
+    assert "# demo-service" in readme_text
+
+
+def test_main_uses_explicit_output_dir_when_repo_name_is_also_provided(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "custom-target"
+
+    exit_code = main(
+        [
+            "--profile",
+            "python-single",
+            "--repo-name",
+            "demo-service",
+            "--output-dir",
+            str(output_dir),
+            "--no-install",
+        ]
+    )
+
+    assert exit_code == 0
+    assert (output_dir / "AGENTS.md").exists()
+    assert (output_dir / "src" / "demo_service" / "__init__.py").exists()
+    readme_text = (output_dir / "README.md").read_text(encoding="utf-8")
+    assert "# demo-service" in readme_text
+
+
+def test_main_rejects_path_like_repo_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(ValueError, match="must be a repository name, not a path"):
+        main(
+            [
+                "--profile",
+                "python-single",
+                "--repo-name",
+                "foo/bar",
+                "--no-install",
+            ]
+        )
 
 
 def test_main_infers_workspace_repo_name_from_current_directory(
