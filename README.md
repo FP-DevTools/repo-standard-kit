@@ -60,11 +60,19 @@ That gives you:
 - `repo-init`
 - `repo-add-package`
 
-2. Create and enter an empty target repository or working directory.
-3. Run the bootstrap tool in that directory:
+2. Either create and enter an empty target repository or working directory, or
+   run `repo-init` from the parent directory with `--repo-name` so it creates
+   the repository folder for you.
+3. Run the bootstrap tool:
 
 ```bash
 repo-init --profile python-single
+```
+
+Or from the parent directory:
+
+```bash
+repo-init --profile python-single --repo-name widget-service
 ```
 
 4. Review the generated `AGENTS.md` and `README.md`.
@@ -78,7 +86,8 @@ If you prefer HTTPS instead of SSH, use the same command shape with the HTTPS
 Git URL for this repository.
 
 `--repo-name` is optional. By default, `repo-init` infers the repository name
-from the target directory name.
+from the target directory name. If you provide `--repo-name` without
+`--output-dir`, `repo-init` creates `./<repo-name>` and bootstraps there.
 `--description` is also optional and can be refined later in `README.md`.
 If the target directory is not yet a Git repository, `repo-init` initializes
 one automatically on `main` before installing pre-commit hooks. You can add or

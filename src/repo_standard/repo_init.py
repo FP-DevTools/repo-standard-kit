@@ -37,7 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--author", default="")
     parser.add_argument(
         "--output-dir",
-        default=".",
+        default=None,
         help="Target directory. Defaults to the current working directory.",
     )
     parser.add_argument("--no-install", action="store_true")
@@ -52,6 +52,13 @@ def validate_package_name(package_name: str) -> None:
     if not package_name.isidentifier():
         raise ValueError(
             f"--package-name must be a valid Python identifier (got {package_name!r})"
+        )
+
+
+def validate_repo_name(repo_name: str) -> None:
+    if "/" in repo_name or "\\" in repo_name or repo_name in {".", ".."}:
+        raise ValueError(
+            f"--repo-name must be a repository name, not a path (got {repo_name!r})"
         )
 
 
@@ -81,6 +88,15 @@ def infer_repo_name(output_dir: Path) -> str:
             "pass --repo-name explicitly."
         )
     return repo_name
+
+
+def resolve_output_dir(output_dir_arg: str | None, repo_name: str | None) -> Path:
+    if output_dir_arg is not None:
+        return Path(output_dir_arg).resolve()
+    if repo_name is not None:
+        validate_repo_name(repo_name)
+        return (Path.cwd() / repo_name).resolve()
+    return Path.cwd().resolve()
 
 
 def resolve_starter_dir(profile: str, repo_root: Path | None = None) -> Path:
@@ -255,7 +271,9 @@ def bootstrap_repo(
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     repo_root = Path(__file__).resolve().parents[2]
-    output_dir = Path(args.output_dir).resolve()
+    output_dir = resolve_output_dir(args.output_dir, args.repo_name)
+    if args.repo_name is not None:
+        validate_repo_name(args.repo_name)
     repo_name = args.repo_name or infer_repo_name(output_dir)
 
     bootstrap_repo(

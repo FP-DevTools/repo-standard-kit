@@ -22,7 +22,9 @@ Do not clone the standards repository as the base of a product repository.
 uv tool install --from "git+ssh://git@github.com/JayTeeBat/repo-bootstrap-kit.git" repo-bootstrap-kit
 ```
 
-2. Create and enter an empty target repository or working directory.
+2. Either create and enter an empty target directory, or run `repo-init` from the
+   parent directory with `--repo-name` so it creates the repository folder for
+   you.
 3. Run `repo-init` with the Python profile and repository metadata.
 4. Review generated `AGENTS.md`, `README.md`, and package naming.
 5. Run the generated repository quality gates.
@@ -39,6 +41,14 @@ From inside the empty target directory:
 ```bash
 repo-init \
   --profile python-single
+```
+
+Or from the parent directory, let `repo-init` create the repository folder:
+
+```bash
+repo-init \
+  --profile python-single \
+  --repo-name widget-service
 ```
 
 After generation:
@@ -58,6 +68,14 @@ From inside the empty workspace directory, bootstrap the workspace shell:
 ```bash
 repo-init \
   --profile python-workspace
+```
+
+Or from the parent directory:
+
+```bash
+repo-init \
+  --profile python-workspace \
+  --repo-name widget-platform
 ```
 
 Then add the first package from the workspace root:
@@ -99,7 +117,10 @@ The generated repository should contain:
 - no unresolved template placeholders
 
 By default, `repo-init` infers the repository name from the target directory.
-Use `--repo-name` only when you want to override that inferred name.
+If you pass `--repo-name` without `--output-dir`, `repo-init` creates
+`./<repo-name>` and bootstraps into that new directory. If you pass both,
+`--output-dir` remains the explicit target and `--repo-name` overrides only the
+rendered repository metadata.
 By default, `repo-init` uses a placeholder description that you can refine
 later in `README.md`.
 By default, `repo-init` also initializes Git on `main` when needed so hook
