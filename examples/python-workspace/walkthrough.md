@@ -19,6 +19,18 @@ repo-add-package \
   --description "Service package for widget API behavior"
 ```
 
+## Golden Path After Bootstrap
+
+1. Run `uv sync`
+2. Run `uv run pre-commit install` if you bootstrapped with `--no-install`
+3. Run `uv run pre-commit run --all-files`
+4. Run `uv run ruff format --check .`
+5. Run `uv run ruff check .`
+6. Run `uv run ty check`
+7. Run `uv run pytest`
+8. Run `uv build`
+9. Make the initial commit on `main`
+
 ## Expected Shape
 
 ```text

@@ -38,20 +38,17 @@ Agents own:
 - Keep PRs small and single-purpose
 - CI should mirror the documented local quality gates
 
-## Workflow
-
-- Long-lived branch: `main`
-- Branch prefixes: `feat/`, `fix/`, `refactor/`, `docs/`, `chore/`
-- Merge via reviewed PRs only
-- Keep PRs small and single-purpose
-
 ## Quality Gates
 
 Run from repo root:
 
-1. `<command-1>`
-2. `<command-2>`
-3. `<command-3>`
+1. `uv sync --locked`
+2. `uv run pre-commit run --all-files`
+3. `uv run ruff format --check .`
+4. `uv run ruff check .`
+5. `uv run ty check`
+6. `uv run pytest`
+7. `uv build`
 
 ## Coding Standards
 

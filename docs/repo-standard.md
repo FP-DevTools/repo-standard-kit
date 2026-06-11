@@ -21,6 +21,7 @@ Every repository adopting this standard should provide:
 - a user-facing `README.md`
 - exact quality-gate commands
 - a CI workflow that runs the same quality gates
+- alignment with `spec.md` for mandatory local and CI quality gates
 - a documented repository layout
 - clear API, schema, or migration rules where relevant
 - `uv` as the default Python package manager and build backend
@@ -39,6 +40,7 @@ Every repository adopting this standard should provide:
 
 Use these documents together:
 
+- `spec.md`
 - `docs/agent-operating-model.md`
 - `docs/git-workflow.md`
 - `docs/repo-layout.md`

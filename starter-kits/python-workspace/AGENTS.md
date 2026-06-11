@@ -11,6 +11,7 @@
 - Primary language(s): `Python`
 - Runtime/build system: `uv` with shared root tooling and `uv_build` for package projects
 - Repository type: `workspace`
+- Normative quality gates: `spec.md` from the standards repository
 - Key directories:
   - `packages/`: independently structured package projects
   - `docs/`: durable repository knowledge
@@ -44,12 +45,13 @@ Agents own:
 
 Run from repo root:
 
-1. `uv sync`
+1. `uv sync --locked`
 2. `uv run pre-commit run --all-files`
 3. `uv run ruff format --check .`
 4. `uv run ruff check .`
 5. `uv run ty check`
 6. `uv run pytest`
+7. `uv build`
 
 ## Coding Standards
 

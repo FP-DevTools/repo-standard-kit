@@ -76,9 +76,12 @@ After generation:
 2. Run `uv sync`
 3. Run `uv run pre-commit install`
 4. Run `uv run pre-commit run --all-files`
-5. Run `uv run ty check`
-6. Run `uv run pytest`
-7. Make the initial commit on `main`
+5. Run `uv run ruff format --check .`
+6. Run `uv run ruff check .`
+7. Run `uv run ty check`
+8. Run `uv run pytest`
+9. Run `uv build`
+10. Make the initial commit on `main`
 
 ### Golden Path: Workspace
 
@@ -131,7 +134,7 @@ The generated repository should contain:
 
 - a concrete `AGENTS.md`
 - baseline Python tooling files
-- a GitHub Actions workflow for the quality gate chain
+- a GitHub Actions workflow for the `spec.md` quality gate chain
 - `uv_build` metadata in package `pyproject.toml` files
 - a standard single-package or workspace layout
 - a README with the repository purpose and workflow entry points

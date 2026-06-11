@@ -12,20 +12,21 @@ repo root.
 - root `tests/`
 - shared tool config at the repo root
 - root `uv_build` backend with `module-name` set to the package name
-- root pre-commit hooks that run Ruff through `uv`
+- root pre-commit hooks that run Ruff and generic file checks through `uv`
 - root GitHub Actions workflow for quality gates
 
 ## Quality Gates
 
-1. `uv sync`
+1. `uv sync --locked`
 2. `uv run pre-commit run --all-files`
 3. `uv run ruff format --check .`
 4. `uv run ruff check .`
 5. `uv run ty check`
 6. `uv run pytest`
+7. `uv build`
 
 ## Bootstrap Behavior
 
 - `repo-init --profile python-single`
 - `--package-name` optional and inferred from `--repo-name` when omitted
-- CI should run the same `uv`, `ruff`, `ty`, and `pytest` chain as local quality gates
+- CI should run the same mandatory gate chain defined by `spec.md`

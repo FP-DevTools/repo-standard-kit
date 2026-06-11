@@ -27,6 +27,7 @@ This repository provides:
 
 The normative source documents are:
 
+- `spec.md`
 - `docs/repo-standard.md`
 - `docs/agent-operating-model.md`
 - `docs/git-workflow.md`

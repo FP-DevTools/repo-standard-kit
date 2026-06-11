@@ -29,6 +29,30 @@ IGNORED_ARTIFACT_PARTS = {
     "__pycache__",
 }
 
+MANDATORY_CI_COMMANDS = [
+    "uv sync --locked",
+    "uv run pre-commit run --all-files",
+    "uv run ruff format --check .",
+    "uv run ruff check .",
+    "uv run ty check",
+    "uv run pytest",
+    "uv build",
+]
+
+MANDATORY_PRE_COMMIT_ENTRIES = [
+    "uv run check-yaml",
+    "uv run check-toml",
+    "uv run check-json",
+    "uv run trailing-whitespace-fixer",
+    "uv run end-of-file-fixer",
+    "uv run check-merge-conflict",
+    "uv run detect-private-key",
+    "uv run detect-secrets-hook",
+    "uv run check-added-large-files",
+    "uv run ruff check --force-exclude",
+    "uv run ruff format --force-exclude",
+]
+
 
 def collect_relative_files(root: Path) -> set[Path]:
     return {
@@ -73,12 +97,23 @@ def test_bootstrap_repo_renders_python_single_starter(tmp_path: Path) -> None:
         encoding="utf-8"
     )
     readme_text = (output_dir / "README.md").read_text(encoding="utf-8")
+    workflow_text = (output_dir / ".github" / "workflows" / "quality.yml").read_text(
+        encoding="utf-8"
+    )
+    pre_commit_text = (output_dir / ".pre-commit-config.yaml").read_text(
+        encoding="utf-8"
+    )
 
     assert "__REPO_NAME__" not in agents_text
     assert "demo-service" in pyproject_text
     assert 'importlib.import_module("demo_service")' in smoke_test_text
     assert "## First 10 Minutes" in readme_text
     assert (output_dir / ".github" / "workflows" / "quality.yml").exists()
+    for command in MANDATORY_CI_COMMANDS:
+        assert command in agents_text
+        assert command in workflow_text
+    for entry in MANDATORY_PRE_COMMIT_ENTRIES:
+        assert entry in pre_commit_text
     assert not (output_dir / ".ruff_cache").exists()
     assert (output_dir / "src" / "demo_service" / "__init__.py").exists()
     assert not (output_dir / "src" / "package_name").exists()
@@ -122,8 +157,21 @@ def test_bootstrap_repo_renders_python_workspace_starter(tmp_path: Path) -> None
     )
 
     readme_text = (output_dir / "README.md").read_text(encoding="utf-8")
+    agents_text = (output_dir / "AGENTS.md").read_text(encoding="utf-8")
+    workflow_text = (output_dir / ".github" / "workflows" / "quality.yml").read_text(
+        encoding="utf-8"
+    )
+    pre_commit_text = (output_dir / ".pre-commit-config.yaml").read_text(
+        encoding="utf-8"
+    )
+
     assert "Python workspace" in readme_text
     assert (output_dir / ".github" / "workflows" / "quality.yml").exists()
+    for command in MANDATORY_CI_COMMANDS:
+        assert command in agents_text
+        assert command in workflow_text
+    for entry in MANDATORY_PRE_COMMIT_ENTRIES:
+        assert entry in pre_commit_text
     assert not (output_dir / ".ruff_cache").exists()
     assert (output_dir / "packages" / ".gitkeep").exists()
     assert not (output_dir / "src").exists()
@@ -138,7 +186,7 @@ def test_packaged_starter_kits_match_source_assets() -> None:
         )
 
 
-def test_pre_commit_configs_use_local_uv_managed_ruff_hooks() -> None:
+def test_pre_commit_configs_use_mandatory_local_uv_managed_hooks() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     config_paths = [
         repo_root / ".pre-commit-config.yaml",
@@ -161,8 +209,8 @@ def test_pre_commit_configs_use_local_uv_managed_ruff_hooks() -> None:
     for config_path in config_paths:
         text = config_path.read_text(encoding="utf-8")
         assert "repo: local" in text
-        assert "uv run ruff check --force-exclude" in text
-        assert "uv run ruff format --force-exclude" in text
+        for entry in MANDATORY_PRE_COMMIT_ENTRIES:
+            assert entry in text
         assert "ruff-pre-commit" not in text
 
 
@@ -244,17 +292,44 @@ def test_bootstrap_repo_uses_uv_build_backend_for_python_single(
     assert 'module-name = "demo_service"' in pyproject_text
 
 
-def test_quality_workflow_uses_standard_python_chain() -> None:
-    workflow_path = (
-        Path(__file__).resolve().parents[1] / ".github" / "workflows" / "quality.yml"
-    )
-    workflow_text = workflow_path.read_text(encoding="utf-8")
-    assert "uv sync" in workflow_text
-    assert "uv run pre-commit run --all-files" in workflow_text
-    assert "uv run ruff format --check ." in workflow_text
-    assert "uv run ruff check ." in workflow_text
-    assert "uv run ty check" in workflow_text
-    assert "uv run pytest" in workflow_text
+def test_quality_workflows_use_mandatory_ci_gate_set() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    workflow_paths = [
+        repo_root / ".github" / "workflows" / "quality.yml",
+        repo_root
+        / "starter-kits"
+        / "python-single"
+        / ".github"
+        / "workflows"
+        / "quality.yml",
+        repo_root
+        / "starter-kits"
+        / "python-workspace"
+        / ".github"
+        / "workflows"
+        / "quality.yml",
+        repo_root
+        / "src"
+        / "repo_standard"
+        / "starter_kits"
+        / "python-single"
+        / ".github"
+        / "workflows"
+        / "quality.yml",
+        repo_root
+        / "src"
+        / "repo_standard"
+        / "starter_kits"
+        / "python-workspace"
+        / ".github"
+        / "workflows"
+        / "quality.yml",
+    ]
+
+    for workflow_path in workflow_paths:
+        workflow_text = workflow_path.read_text(encoding="utf-8")
+        for command in MANDATORY_CI_COMMANDS:
+            assert command in workflow_text
 
 
 def test_root_pyproject_uses_uv_build_backend() -> None:
