@@ -20,6 +20,7 @@ Every repository adopting this standard should provide:
 - a concrete `AGENTS.md`
 - a user-facing `README.md`
 - exact quality-gate commands
+- a CI workflow that runs the same quality gates
 - a documented repository layout
 - clear API, schema, or migration rules where relevant
 

@@ -38,6 +38,7 @@ Agents own:
 - Branch prefixes: `feat/`, `fix/`, `refactor/`, `docs/`, `chore/`
 - Merge through reviewed PRs only
 - Keep PRs package-scoped or clearly cross-cutting
+- CI should mirror the documented local quality gates
 
 ## Quality Gates
 

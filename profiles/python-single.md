@@ -11,6 +11,7 @@ repo root.
 - root `src/<package_name>/`
 - root `tests/`
 - shared tool config at the repo root
+- root GitHub Actions workflow for quality gates
 
 ## Quality Gates
 
@@ -25,3 +26,4 @@ repo root.
 
 - `repo-init --profile python-single`
 - `--package-name` optional and inferred from `--repo-name` when omitted
+- CI should run the same `uv`, `ruff`, `ty`, and `pytest` chain as local quality gates

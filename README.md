@@ -19,6 +19,7 @@ This repository provides:
 - a standard Python repository layout
 - starter-kit assets for new repositories
 - a thin bootstrap tool for generating a new repository from the starter kit
+- GitHub Actions CI that mirrors the documented local quality gates
 - a JavaScript/TypeScript profile scaffold for later expansion
 
 ## What Is Normative
@@ -75,7 +76,7 @@ Or from the parent directory:
 repo-init --profile python-single --repo-name widget-service
 ```
 
-4. Review the generated `AGENTS.md` and `README.md`.
+4. Review the generated `AGENTS.md`, `README.md`, and CI workflow.
 5. Run the quality gates in the generated repository.
 6. Make the initial commit on `main`.
 

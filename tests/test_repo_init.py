@@ -21,6 +21,29 @@ from repo_standard.repo_init import (
 )
 
 
+def collect_relative_files(root: Path) -> set[Path]:
+    ignored_dirs = {".ruff_cache", ".pytest_cache", ".mypy_cache", ".ty_cache"}
+    return {
+        path.relative_to(root)
+        for path in root.rglob("*")
+        if path.is_file()
+        and not any(
+            part in ignored_dirs or part == "__pycache__" for part in path.parts
+        )
+        and path.suffix != ".pyc"
+    }
+
+
+def assert_directory_contents_match(source: Path, packaged: Path) -> None:
+    source_files = collect_relative_files(source)
+    packaged_files = collect_relative_files(packaged)
+    assert packaged_files == source_files
+    for relative_path in sorted(source_files):
+        assert (packaged / relative_path).read_text(encoding="utf-8") == (
+            source / relative_path
+        ).read_text(encoding="utf-8")
+
+
 def test_bootstrap_repo_renders_python_single_starter(tmp_path: Path) -> None:
     repo_root = Path(__file__).resolve().parents[1]
     output_dir = tmp_path / "demo-service"
@@ -49,6 +72,8 @@ def test_bootstrap_repo_renders_python_single_starter(tmp_path: Path) -> None:
     assert "demo-service" in pyproject_text
     assert 'importlib.import_module("demo_service")' in smoke_test_text
     assert "## First 10 Minutes" in readme_text
+    assert (output_dir / ".github" / "workflows" / "quality.yml").exists()
+    assert not (output_dir / ".ruff_cache").exists()
     assert (output_dir / "src" / "demo_service" / "__init__.py").exists()
     assert not (output_dir / "src" / "package_name").exists()
 
@@ -92,8 +117,32 @@ def test_bootstrap_repo_renders_python_workspace_starter(tmp_path: Path) -> None
 
     readme_text = (output_dir / "README.md").read_text(encoding="utf-8")
     assert "Python workspace" in readme_text
+    assert (output_dir / ".github" / "workflows" / "quality.yml").exists()
+    assert not (output_dir / ".ruff_cache").exists()
     assert (output_dir / "packages" / ".gitkeep").exists()
     assert not (output_dir / "src").exists()
+
+
+def test_packaged_starter_kits_match_source_assets() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    for profile in ("python-single", "python", "python-workspace"):
+        assert_directory_contents_match(
+            repo_root / "starter-kits" / profile,
+            repo_root / "src" / "repo_standard" / "starter_kits" / profile,
+        )
+
+
+def test_quality_workflow_uses_standard_python_chain() -> None:
+    workflow_path = (
+        Path(__file__).resolve().parents[1] / ".github" / "workflows" / "quality.yml"
+    )
+    workflow_text = workflow_path.read_text(encoding="utf-8")
+    assert "uv sync" in workflow_text
+    assert "uv run pre-commit run --all-files" in workflow_text
+    assert "uv run ruff format --check ." in workflow_text
+    assert "uv run ruff check ." in workflow_text
+    assert "uv run ty check" in workflow_text
+    assert "uv run pytest" in workflow_text
 
 
 def test_validate_package_name_rejects_invalid_identifier() -> None:

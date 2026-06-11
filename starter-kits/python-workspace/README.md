@@ -14,7 +14,11 @@ projects under `packages/`.
 3. Run `uv run pre-commit install` after Git is initialized. If you used
    `repo-init` without `--no-install`, this is already done for you.
 4. Run `uv run pre-commit run --all-files`.
-5. Run `uv run ty check`.
-6. Run `uv run pytest`.
-7. Add the first package with `repo-add-package --package-name your_pkg`.
+5. Review `.github/workflows/quality.yml`.
+6. Run `uv run ty check`.
+7. Run `uv run pytest`.
 8. Make the initial commit on `main`.
+
+## Next Step
+
+Add the first package with `repo-add-package --package-name your_pkg`.

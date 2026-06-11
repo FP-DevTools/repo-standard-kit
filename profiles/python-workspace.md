@@ -8,6 +8,7 @@ Use this profile for monorepos with per-package projects under `packages/`.
 
 - root tooling-only `pyproject.toml`
 - root `.pre-commit-config.yaml`
+- root GitHub Actions workflow for quality gates
 - `packages/<package-slug>/pyproject.toml`
 - `packages/<package-slug>/src/<package_name>/`
 - `packages/<package-slug>/tests/`
@@ -29,3 +30,4 @@ Run from workspace root:
 - `repo-init --profile python-workspace`
 - starts with an empty `packages/` directory
 - add packages later with `repo-add-package`
+- CI should run the same `uv`, `ruff`, `ty`, and `pytest` chain as local quality gates

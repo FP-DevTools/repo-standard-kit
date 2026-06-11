@@ -26,7 +26,7 @@ uv tool install --from "git+ssh://git@github.com/JayTeeBat/repo-bootstrap-kit.gi
    parent directory with `--repo-name` so it creates the repository folder for
    you.
 3. Run `repo-init` with the Python profile and repository metadata.
-4. Review generated `AGENTS.md`, `README.md`, and package naming.
+4. Review generated `AGENTS.md`, `README.md`, package naming, and CI.
 5. Run the generated repository quality gates.
 6. Make the initial commit on `main`.
 
@@ -112,6 +112,7 @@ The generated repository should contain:
 
 - a concrete `AGENTS.md`
 - baseline Python tooling files
+- a GitHub Actions workflow for the quality gate chain
 - a standard single-package or workspace layout
 - a README with the repository purpose and workflow entry points
 - no unresolved template placeholders
