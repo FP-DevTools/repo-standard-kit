@@ -11,6 +11,7 @@ repo root.
 - root `src/<package_name>/`
 - root `tests/`
 - shared tool config at the repo root
+- root `uv_build` backend with `module-name` set to the package name
 - root GitHub Actions workflow for quality gates
 
 ## Quality Gates

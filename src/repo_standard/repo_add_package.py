@@ -81,8 +81,10 @@ def create_package(
             'requires-python = ">=3.12"\n'
             "dependencies = []\n\n"
             "[build-system]\n"
-            'requires = ["hatchling"]\n'
-            'build-backend = "hatchling.build"\n'
+            'requires = ["uv_build>=0.11.20,<0.12"]\n'
+            'build-backend = "uv_build"\n\n'
+            "[tool.uv.build-backend]\n"
+            f'module-name = "{package_name}"\n'
         ),
     )
     write_file(

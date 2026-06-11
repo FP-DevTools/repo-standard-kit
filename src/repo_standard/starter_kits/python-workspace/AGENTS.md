@@ -9,7 +9,7 @@
 
 - Repository name: `__REPO_NAME__`
 - Primary language(s): `Python`
-- Runtime/build system: `uv` with shared root tooling
+- Runtime/build system: `uv` with shared root tooling and `uv_build` for package projects
 - Repository type: `workspace`
 - Key directories:
   - `packages/`: independently structured package projects

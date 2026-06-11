@@ -20,6 +20,7 @@ This repository provides:
 - starter-kit assets for new repositories
 - a thin bootstrap tool for generating a new repository from the starter kit
 - GitHub Actions CI that mirrors the documented local quality gates
+- `uv`-based dependency and build configuration for Python projects
 - a JavaScript/TypeScript profile scaffold for later expansion
 
 ## What Is Normative

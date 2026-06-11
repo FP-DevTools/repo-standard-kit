@@ -23,6 +23,7 @@ Every repository adopting this standard should provide:
 - a CI workflow that runs the same quality gates
 - a documented repository layout
 - clear API, schema, or migration rules where relevant
+- `uv` as the default Python package manager and build backend
 
 ## Core Rules
 

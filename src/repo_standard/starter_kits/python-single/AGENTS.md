@@ -8,7 +8,7 @@
 
 - Repository name: `__REPO_NAME__`
 - Primary language(s): `Python`
-- Runtime/build system: `uv` with `pyproject.toml`
+- Runtime/build system: `uv` with `uv_build` in `pyproject.toml`
 - Repository type: `__REPO_TYPE__`
 - Key directories:
   - `src/`: production package code

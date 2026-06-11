@@ -113,6 +113,7 @@ The generated repository should contain:
 - a concrete `AGENTS.md`
 - baseline Python tooling files
 - a GitHub Actions workflow for the quality gate chain
+- `uv_build` metadata in package `pyproject.toml` files
 - a standard single-package or workspace layout
 - a README with the repository purpose and workflow entry points
 - no unresolved template placeholders

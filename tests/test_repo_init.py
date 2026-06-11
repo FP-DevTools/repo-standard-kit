@@ -125,11 +125,36 @@ def test_bootstrap_repo_renders_python_workspace_starter(tmp_path: Path) -> None
 
 def test_packaged_starter_kits_match_source_assets() -> None:
     repo_root = Path(__file__).resolve().parents[1]
-    for profile in ("python-single", "python", "python-workspace"):
+    for profile in ("python-single", "python-workspace"):
         assert_directory_contents_match(
             repo_root / "starter-kits" / profile,
             repo_root / "src" / "repo_standard" / "starter_kits" / profile,
         )
+
+
+def test_bootstrap_repo_uses_uv_build_backend_for_python_single(
+    tmp_path: Path,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    output_dir = tmp_path / "demo-service"
+
+    bootstrap_repo(
+        repo_root=repo_root,
+        profile="python-single",
+        repo_name="demo-service",
+        package_name="demo_service",
+        description="Demo service",
+        repo_type="service",
+        python_version="3.12",
+        author="",
+        output_dir=output_dir,
+        no_install=True,
+    )
+
+    pyproject_text = (output_dir / "pyproject.toml").read_text(encoding="utf-8")
+    assert 'requires = ["uv_build>=0.11.20,<0.12"]' in pyproject_text
+    assert 'build-backend = "uv_build"' in pyproject_text
+    assert 'module-name = "demo_service"' in pyproject_text
 
 
 def test_quality_workflow_uses_standard_python_chain() -> None:
@@ -143,6 +168,15 @@ def test_quality_workflow_uses_standard_python_chain() -> None:
     assert "uv run ruff check ." in workflow_text
     assert "uv run ty check" in workflow_text
     assert "uv run pytest" in workflow_text
+
+
+def test_root_pyproject_uses_uv_build_backend() -> None:
+    pyproject_text = (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(
+        encoding="utf-8"
+    )
+    assert 'requires = ["uv_build>=0.11.20,<0.12"]' in pyproject_text
+    assert 'build-backend = "uv_build"' in pyproject_text
+    assert 'module-name = "repo_standard"' in pyproject_text
 
 
 def test_validate_package_name_rejects_invalid_identifier() -> None:
