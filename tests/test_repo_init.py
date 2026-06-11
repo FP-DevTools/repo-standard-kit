@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -20,16 +21,21 @@ from repo_standard.repo_init import (
     validate_repo_name,
 )
 
+IGNORED_ARTIFACT_PARTS = {
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".ty_cache",
+    "__pycache__",
+}
+
 
 def collect_relative_files(root: Path) -> set[Path]:
-    ignored_dirs = {".ruff_cache", ".pytest_cache", ".mypy_cache", ".ty_cache"}
     return {
         path.relative_to(root)
         for path in root.rglob("*")
         if path.is_file()
-        and not any(
-            part in ignored_dirs or part == "__pycache__" for part in path.parts
-        )
+        and not any(part in IGNORED_ARTIFACT_PARTS for part in path.parts)
         and path.suffix != ".pyc"
     }
 
@@ -132,6 +138,87 @@ def test_packaged_starter_kits_match_source_assets() -> None:
         )
 
 
+def test_pre_commit_configs_use_local_uv_managed_ruff_hooks() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    config_paths = [
+        repo_root / ".pre-commit-config.yaml",
+        repo_root / "starter-kits" / "python-single" / ".pre-commit-config.yaml",
+        repo_root / "starter-kits" / "python-workspace" / ".pre-commit-config.yaml",
+        repo_root
+        / "src"
+        / "repo_standard"
+        / "starter_kits"
+        / "python-single"
+        / ".pre-commit-config.yaml",
+        repo_root
+        / "src"
+        / "repo_standard"
+        / "starter_kits"
+        / "python-workspace"
+        / ".pre-commit-config.yaml",
+    ]
+
+    for config_path in config_paths:
+        text = config_path.read_text(encoding="utf-8")
+        assert "repo: local" in text
+        assert "uv run ruff check --force-exclude" in text
+        assert "uv run ruff format --force-exclude" in text
+        assert "ruff-pre-commit" not in text
+
+
+def test_tracked_starter_assets_do_not_contain_cache_artifacts() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [
+            "git",
+            "ls-files",
+            "starter-kits",
+            "src/repo_standard/starter_kits",
+        ],
+        cwd=repo_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    tracked_files = result.stdout.splitlines()
+    assert not any(
+        any(part in IGNORED_ARTIFACT_PARTS for part in path.split("/"))
+        or path.endswith(".pyc")
+        for path in tracked_files
+    )
+
+
+def test_built_wheel_contains_clean_packaged_starter_kits(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+
+    subprocess.run(
+        [
+            "uv",
+            "build",
+            "--wheel",
+            "--out-dir",
+            str(tmp_path),
+            "--no-create-gitignore",
+        ],
+        cwd=repo_root,
+        check=True,
+    )
+
+    wheel_path = next(tmp_path.glob("repo_bootstrap_kit-*.whl"))
+    with zipfile.ZipFile(wheel_path) as wheel:
+        names = set(wheel.namelist())
+
+    assert "repo_standard/starter_kits/python-single/AGENTS.md" in names
+    assert "repo_standard/starter_kits/python-workspace/AGENTS.md" in names
+    assert any(name.endswith(".dist-info/entry_points.txt") for name in names)
+    assert not any(
+        any(part in IGNORED_ARTIFACT_PARTS for part in name.split("/"))
+        or name.endswith(".pyc")
+        for name in names
+    )
+
+
 def test_bootstrap_repo_uses_uv_build_backend_for_python_single(
     tmp_path: Path,
 ) -> None:
@@ -177,6 +264,8 @@ def test_root_pyproject_uses_uv_build_backend() -> None:
     assert 'requires = ["uv_build>=0.11.20,<0.12"]' in pyproject_text
     assert 'build-backend = "uv_build"' in pyproject_text
     assert 'module-name = "repo_standard"' in pyproject_text
+    assert "source-exclude" in pyproject_text
+    assert "[tool.hatch" not in pyproject_text
 
 
 def test_validate_package_name_rejects_invalid_identifier() -> None:

@@ -12,6 +12,7 @@ repo root.
 - root `tests/`
 - shared tool config at the repo root
 - root `uv_build` backend with `module-name` set to the package name
+- root pre-commit hooks that run Ruff through `uv`
 - root GitHub Actions workflow for quality gates
 
 ## Quality Gates

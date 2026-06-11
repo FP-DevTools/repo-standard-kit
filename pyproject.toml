@@ -30,24 +30,13 @@ source-include = [
   "profiles/**",
   "templates/**",
 ]
-
-[tool.uv.workspace]
-members = [
-    ".tmp/uv-sample",
-]
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/repo_standard"]
-include = ["src/repo_standard/starter_kits/**"]
-
-[tool.hatch.build.targets.sdist]
-include = [
-  "/src/repo_standard/starter_kits/**",
-  "/starter-kits/**",
-  "/docs/**",
-  "/examples/**",
-  "/profiles/**",
-  "/templates/**",
+source-exclude = [
+  "**/.mypy_cache/**",
+  "**/.pytest_cache/**",
+  "**/.ruff_cache/**",
+  "**/.ty_cache/**",
+  "**/__pycache__/**",
+  "**/*.pyc",
 ]
 
 [tool.ruff]

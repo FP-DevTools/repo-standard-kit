@@ -7,7 +7,7 @@ Use this profile for monorepos with per-package projects under `packages/`.
 ## Layout
 
 - root tooling-only `pyproject.toml`
-- root `.pre-commit-config.yaml`
+- root `.pre-commit-config.yaml` with hooks that run Ruff through `uv`
 - package projects use `uv_build`
 - root GitHub Actions workflow for quality gates
 - `packages/<package-slug>/pyproject.toml`
