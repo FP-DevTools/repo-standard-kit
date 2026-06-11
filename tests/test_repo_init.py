@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,58 @@ from repo_standard.repo_init import (
     validate_package_name,
     validate_repo_name,
 )
+
+IGNORED_ARTIFACT_PARTS = {
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".ty_cache",
+    "__pycache__",
+}
+
+MANDATORY_CI_COMMANDS = [
+    "uv sync --locked",
+    "uv run pre-commit run --all-files",
+    "uv run ruff format --check .",
+    "uv run ruff check .",
+    "uv run ty check",
+    "uv run pytest",
+    "uv build",
+]
+
+MANDATORY_PRE_COMMIT_ENTRIES = [
+    "uv run check-yaml",
+    "uv run check-toml",
+    "uv run check-json",
+    "uv run trailing-whitespace-fixer",
+    "uv run end-of-file-fixer",
+    "uv run check-merge-conflict",
+    "uv run detect-private-key",
+    "uv run detect-secrets-hook",
+    "uv run check-added-large-files",
+    "uv run ruff check --force-exclude",
+    "uv run ruff format --force-exclude",
+]
+
+
+def collect_relative_files(root: Path) -> set[Path]:
+    return {
+        path.relative_to(root)
+        for path in root.rglob("*")
+        if path.is_file()
+        and not any(part in IGNORED_ARTIFACT_PARTS for part in path.parts)
+        and path.suffix != ".pyc"
+    }
+
+
+def assert_directory_contents_match(source: Path, packaged: Path) -> None:
+    source_files = collect_relative_files(source)
+    packaged_files = collect_relative_files(packaged)
+    assert packaged_files == source_files
+    for relative_path in sorted(source_files):
+        assert (packaged / relative_path).read_text(encoding="utf-8") == (
+            source / relative_path
+        ).read_text(encoding="utf-8")
 
 
 def test_bootstrap_repo_renders_python_single_starter(tmp_path: Path) -> None:
@@ -44,11 +97,24 @@ def test_bootstrap_repo_renders_python_single_starter(tmp_path: Path) -> None:
         encoding="utf-8"
     )
     readme_text = (output_dir / "README.md").read_text(encoding="utf-8")
+    workflow_text = (output_dir / ".github" / "workflows" / "quality.yml").read_text(
+        encoding="utf-8"
+    )
+    pre_commit_text = (output_dir / ".pre-commit-config.yaml").read_text(
+        encoding="utf-8"
+    )
 
     assert "__REPO_NAME__" not in agents_text
     assert "demo-service" in pyproject_text
     assert 'importlib.import_module("demo_service")' in smoke_test_text
     assert "## First 10 Minutes" in readme_text
+    assert (output_dir / ".github" / "workflows" / "quality.yml").exists()
+    for command in MANDATORY_CI_COMMANDS:
+        assert command in agents_text
+        assert command in workflow_text
+    for entry in MANDATORY_PRE_COMMIT_ENTRIES:
+        assert entry in pre_commit_text
+    assert not (output_dir / ".ruff_cache").exists()
     assert (output_dir / "src" / "demo_service" / "__init__.py").exists()
     assert not (output_dir / "src" / "package_name").exists()
 
@@ -91,9 +157,190 @@ def test_bootstrap_repo_renders_python_workspace_starter(tmp_path: Path) -> None
     )
 
     readme_text = (output_dir / "README.md").read_text(encoding="utf-8")
+    agents_text = (output_dir / "AGENTS.md").read_text(encoding="utf-8")
+    workflow_text = (output_dir / ".github" / "workflows" / "quality.yml").read_text(
+        encoding="utf-8"
+    )
+    pre_commit_text = (output_dir / ".pre-commit-config.yaml").read_text(
+        encoding="utf-8"
+    )
+
     assert "Python workspace" in readme_text
+    assert (output_dir / ".github" / "workflows" / "quality.yml").exists()
+    for command in MANDATORY_CI_COMMANDS:
+        assert command in agents_text
+        assert command in workflow_text
+    for entry in MANDATORY_PRE_COMMIT_ENTRIES:
+        assert entry in pre_commit_text
+    assert not (output_dir / ".ruff_cache").exists()
     assert (output_dir / "packages" / ".gitkeep").exists()
     assert not (output_dir / "src").exists()
+
+
+def test_packaged_starter_kits_match_source_assets() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    for profile in ("python-single", "python-workspace"):
+        assert_directory_contents_match(
+            repo_root / "starter-kits" / profile,
+            repo_root / "src" / "repo_standard" / "starter_kits" / profile,
+        )
+
+
+def test_pre_commit_configs_use_mandatory_local_uv_managed_hooks() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    config_paths = [
+        repo_root / ".pre-commit-config.yaml",
+        repo_root / "starter-kits" / "python-single" / ".pre-commit-config.yaml",
+        repo_root / "starter-kits" / "python-workspace" / ".pre-commit-config.yaml",
+        repo_root
+        / "src"
+        / "repo_standard"
+        / "starter_kits"
+        / "python-single"
+        / ".pre-commit-config.yaml",
+        repo_root
+        / "src"
+        / "repo_standard"
+        / "starter_kits"
+        / "python-workspace"
+        / ".pre-commit-config.yaml",
+    ]
+
+    for config_path in config_paths:
+        text = config_path.read_text(encoding="utf-8")
+        assert "repo: local" in text
+        for entry in MANDATORY_PRE_COMMIT_ENTRIES:
+            assert entry in text
+        assert "ruff-pre-commit" not in text
+
+
+def test_tracked_starter_assets_do_not_contain_cache_artifacts() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [
+            "git",
+            "ls-files",
+            "starter-kits",
+            "src/repo_standard/starter_kits",
+        ],
+        cwd=repo_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    tracked_files = result.stdout.splitlines()
+    assert not any(
+        any(part in IGNORED_ARTIFACT_PARTS for part in path.split("/"))
+        or path.endswith(".pyc")
+        for path in tracked_files
+    )
+
+
+def test_built_wheel_contains_clean_packaged_starter_kits(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+
+    subprocess.run(
+        [
+            "uv",
+            "build",
+            "--wheel",
+            "--out-dir",
+            str(tmp_path),
+            "--no-create-gitignore",
+        ],
+        cwd=repo_root,
+        check=True,
+    )
+
+    wheel_path = next(tmp_path.glob("repo_bootstrap_kit-*.whl"))
+    with zipfile.ZipFile(wheel_path) as wheel:
+        names = set(wheel.namelist())
+
+    assert "repo_standard/starter_kits/python-single/AGENTS.md" in names
+    assert "repo_standard/starter_kits/python-workspace/AGENTS.md" in names
+    assert any(name.endswith(".dist-info/entry_points.txt") for name in names)
+    assert not any(
+        any(part in IGNORED_ARTIFACT_PARTS for part in name.split("/"))
+        or name.endswith(".pyc")
+        for name in names
+    )
+
+
+def test_bootstrap_repo_uses_uv_build_backend_for_python_single(
+    tmp_path: Path,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    output_dir = tmp_path / "demo-service"
+
+    bootstrap_repo(
+        repo_root=repo_root,
+        profile="python-single",
+        repo_name="demo-service",
+        package_name="demo_service",
+        description="Demo service",
+        repo_type="service",
+        python_version="3.12",
+        author="",
+        output_dir=output_dir,
+        no_install=True,
+    )
+
+    pyproject_text = (output_dir / "pyproject.toml").read_text(encoding="utf-8")
+    assert 'requires = ["uv_build>=0.11.20,<0.12"]' in pyproject_text
+    assert 'build-backend = "uv_build"' in pyproject_text
+    assert 'module-name = "demo_service"' in pyproject_text
+
+
+def test_quality_workflows_use_mandatory_ci_gate_set() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    workflow_paths = [
+        repo_root / ".github" / "workflows" / "quality.yml",
+        repo_root
+        / "starter-kits"
+        / "python-single"
+        / ".github"
+        / "workflows"
+        / "quality.yml",
+        repo_root
+        / "starter-kits"
+        / "python-workspace"
+        / ".github"
+        / "workflows"
+        / "quality.yml",
+        repo_root
+        / "src"
+        / "repo_standard"
+        / "starter_kits"
+        / "python-single"
+        / ".github"
+        / "workflows"
+        / "quality.yml",
+        repo_root
+        / "src"
+        / "repo_standard"
+        / "starter_kits"
+        / "python-workspace"
+        / ".github"
+        / "workflows"
+        / "quality.yml",
+    ]
+
+    for workflow_path in workflow_paths:
+        workflow_text = workflow_path.read_text(encoding="utf-8")
+        for command in MANDATORY_CI_COMMANDS:
+            assert command in workflow_text
+
+
+def test_root_pyproject_uses_uv_build_backend() -> None:
+    pyproject_text = (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(
+        encoding="utf-8"
+    )
+    assert 'requires = ["uv_build>=0.11.20,<0.12"]' in pyproject_text
+    assert 'build-backend = "uv_build"' in pyproject_text
+    assert 'module-name = "repo_standard"' in pyproject_text
+    assert "source-exclude" in pyproject_text
+    assert "[tool.hatch" not in pyproject_text
 
 
 def test_validate_package_name_rejects_invalid_identifier() -> None:

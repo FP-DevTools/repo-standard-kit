@@ -10,6 +10,7 @@ operating boundaries.
 
 - Primary focus: repository standards and Python-first starter assets
 - Secondary focus: future JavaScript/TypeScript profile scaffolding
+- Normative quality gates: `spec.md`
 - Key directories:
   - `src/`: implementation code for bootstrap tooling
   - `tests/`: automated verification for the tooling
@@ -53,13 +54,14 @@ Agents must not:
 
 Run from repository root:
 
-1. `uv sync`
+1. `uv sync --locked`
 2. `uv run pre-commit run --all-files`
 3. `uv run ruff format --check .`
 4. `uv run ruff check .`
 5. `uv run ty check`
 6. `uv run pytest`
-7. `uv run repo-init --profile python-single --output-dir /tmp/demo-repo --no-install`
+7. `uv build`
+8. `uv run repo-init --profile python-single --output-dir /tmp/demo-repo --no-install`
 
 ## Coding Standards
 

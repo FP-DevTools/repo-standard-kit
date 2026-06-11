@@ -8,8 +8,9 @@
 
 - Repository name: `__REPO_NAME__`
 - Primary language(s): `Python`
-- Runtime/build system: `uv` with `pyproject.toml`
+- Runtime/build system: `uv` with `uv_build` in `pyproject.toml`
 - Repository type: `__REPO_TYPE__`
+- Normative quality gates: `spec.md` from the standards repository
 - Key directories:
   - `src/`: production package code
   - `tests/`: automated tests
@@ -37,17 +38,19 @@ Agents own:
 - Branch prefixes: `feat/`, `fix/`, `refactor/`, `docs/`, `chore/`
 - Merge through reviewed PRs only
 - Keep PRs focused and small
+- CI should mirror the documented local quality gates
 
 ## Quality Gates
 
 Run from repo root:
 
-1. `uv sync`
+1. `uv sync --locked`
 2. `uv run pre-commit run --all-files`
 3. `uv run ruff format --check .`
 4. `uv run ruff check .`
 5. `uv run ty check`
 6. `uv run pytest`
+7. `uv build`
 
 ## Coding Standards
 

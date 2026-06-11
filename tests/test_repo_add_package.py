@@ -37,6 +37,10 @@ def test_create_package_creates_workspace_package(tmp_path: Path) -> None:
     assert (package_path / "pyproject.toml").exists()
     assert (package_path / "src" / "widget_api" / "__init__.py").exists()
     assert (package_path / "tests" / "test_smoke.py").exists()
+    pyproject_text = (package_path / "pyproject.toml").read_text(encoding="utf-8")
+    assert 'requires = ["uv_build>=0.11.20,<0.12"]' in pyproject_text
+    assert 'build-backend = "uv_build"' in pyproject_text
+    assert 'module-name = "widget_api"' in pyproject_text
 
 
 def test_validate_package_name_rejects_invalid_identifier() -> None:

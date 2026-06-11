@@ -39,9 +39,12 @@ Check these files first:
 2. Run `uv run pre-commit install` if you bootstrapped with `--no-install`
    or if you want to reinstall the hooks later
 3. Run `uv run pre-commit run --all-files`
-4. Run `uv run ty check`
-5. Run `uv run pytest`
-6. Make the initial commit on `main`
+4. Run `uv run ruff format --check .`
+5. Run `uv run ruff check .`
+6. Run `uv run ty check`
+7. Run `uv run pytest`
+8. Run `uv build`
+9. Make the initial commit on `main`
 
 ## What Good Looks Like
 

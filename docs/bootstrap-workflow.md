@@ -16,17 +16,21 @@ Do not clone the standards repository as the base of a product repository.
 
 ## Recommended New Repository Flow
 
-1. Install the tool once:
+1. Run the initializer directly with `uvx`:
 
 ```bash
-uv tool install --from "git+ssh://git@github.com/JayTeeBat/repo-bootstrap-kit.git" repo-bootstrap-kit
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-bootstrap-kit.git" repo-init --profile python-single --repo-name widget-service
 ```
 
-2. Either create and enter an empty target directory, or run `repo-init` from the
-   parent directory with `--repo-name` so it creates the repository folder for
-   you.
+`uvx` is the short form of `uv tool run`. It installs the bootstrap package
+from this standards repository into an isolated tool environment, then runs
+the packaged `repo-init` command.
+
+2. Either create and enter an empty target directory, or run `repo-init` through
+   `uvx` from the parent directory with `--repo-name` so it creates the
+   repository folder for you.
 3. Run `repo-init` with the Python profile and repository metadata.
-4. Review generated `AGENTS.md`, `README.md`, and package naming.
+4. Review generated `AGENTS.md`, `README.md`, package naming, and CI.
 5. Run the generated repository quality gates.
 6. Make the initial commit on `main`.
 
@@ -34,19 +38,34 @@ If the target directory is not yet a Git repository, `repo-init` initializes
 one automatically on `main` before installing pre-commit hooks. Add or change
 the remote afterward as needed.
 
+For repeated use, install the tool once:
+
+```bash
+uv tool install --from "git+ssh://git@github.com/FP-DevTools/repo-bootstrap-kit.git" repo-bootstrap-kit
+```
+
+Pin a standards version by adding a Git ref:
+
+```bash
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-bootstrap-kit.git@v0.1.0" repo-init --profile python-single --repo-name widget-service
+```
+
+The generated repository derives its `AGENTS.md`, CI workflow, `pyproject.toml`,
+and starter files from the version of this repository that `uv` resolves.
+
 ### Golden Path: Single Package
 
 From inside the empty target directory:
 
 ```bash
-repo-init \
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-bootstrap-kit.git" repo-init \
   --profile python-single
 ```
 
 Or from the parent directory, let `repo-init` create the repository folder:
 
 ```bash
-repo-init \
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-bootstrap-kit.git" repo-init \
   --profile python-single \
   --repo-name widget-service
 ```
@@ -57,23 +76,26 @@ After generation:
 2. Run `uv sync`
 3. Run `uv run pre-commit install`
 4. Run `uv run pre-commit run --all-files`
-5. Run `uv run ty check`
-6. Run `uv run pytest`
-7. Make the initial commit on `main`
+5. Run `uv run ruff format --check .`
+6. Run `uv run ruff check .`
+7. Run `uv run ty check`
+8. Run `uv run pytest`
+9. Run `uv build`
+10. Make the initial commit on `main`
 
 ### Golden Path: Workspace
 
 From inside the empty workspace directory, bootstrap the workspace shell:
 
 ```bash
-repo-init \
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-bootstrap-kit.git" repo-init \
   --profile python-workspace
 ```
 
 Or from the parent directory:
 
 ```bash
-repo-init \
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-bootstrap-kit.git" repo-init \
   --profile python-workspace \
   --repo-name widget-platform
 ```
@@ -112,6 +134,8 @@ The generated repository should contain:
 
 - a concrete `AGENTS.md`
 - baseline Python tooling files
+- a GitHub Actions workflow for the `spec.md` quality gate chain
+- `uv_build` metadata in package `pyproject.toml` files
 - a standard single-package or workspace layout
 - a README with the repository purpose and workflow entry points
 - no unresolved template placeholders

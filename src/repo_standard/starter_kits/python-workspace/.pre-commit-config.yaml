@@ -1,6 +1,59 @@
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.13.1
+  - repo: local
     hooks:
+      - id: check-yaml
+        name: check yaml
+        entry: uv run check-yaml
+        language: system
+        types: [yaml]
+      - id: check-toml
+        name: check toml
+        entry: uv run check-toml
+        language: system
+        types: [toml]
+      - id: check-json
+        name: check json
+        entry: uv run check-json
+        language: system
+        types: [json]
+      - id: trailing-whitespace
+        name: trim trailing whitespace
+        entry: uv run trailing-whitespace-fixer
+        language: system
+        types: [text]
+      - id: end-of-file-fixer
+        name: fix final newline
+        entry: uv run end-of-file-fixer
+        language: system
+        types: [text]
+      - id: check-merge-conflict
+        name: check merge conflict markers
+        entry: uv run check-merge-conflict
+        language: system
+      - id: detect-private-key
+        name: detect private keys
+        entry: uv run detect-private-key
+        language: system
+        types: [text]
+      - id: detect-secrets
+        name: detect secrets
+        entry: uv run detect-secrets-hook
+        language: system
+        types: [text]
+      - id: check-added-large-files
+        name: prevent oversized files
+        entry: uv run check-added-large-files
+        args: ["--maxkb=1024"]
+        language: system
       - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
       - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true

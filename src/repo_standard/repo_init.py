@@ -17,6 +17,14 @@ PLACEHOLDERS = {
     "__AUTHOR__": "author",
 }
 
+IGNORED_STARTER_ENTRIES = {
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".ty_cache",
+}
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -108,10 +116,19 @@ def resolve_starter_dir(profile: str, repo_root: Path | None = None) -> Path:
 
 
 def copy_starter(starter_dir: Path, output_dir: Path) -> None:
+    def ignore_starter_entries(_directory: str, names: list[str]) -> set[str]:
+        return {
+            name
+            for name in names
+            if name in IGNORED_STARTER_ENTRIES or name.endswith(".pyc")
+        }
+
     for item in starter_dir.iterdir():
+        if item.name in IGNORED_STARTER_ENTRIES or item.suffix == ".pyc":
+            continue
         destination = output_dir / item.name
         if item.is_dir():
-            shutil.copytree(item, destination)
+            shutil.copytree(item, destination, ignore=ignore_starter_entries)
         else:
             shutil.copy2(item, destination)
 

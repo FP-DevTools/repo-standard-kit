@@ -19,12 +19,15 @@ This repository provides:
 - a standard Python repository layout
 - starter-kit assets for new repositories
 - a thin bootstrap tool for generating a new repository from the starter kit
+- GitHub Actions CI that mirrors the documented local quality gates
+- `uv`-based dependency and build configuration for Python projects
 - a JavaScript/TypeScript profile scaffold for later expansion
 
 ## What Is Normative
 
 The normative source documents are:
 
+- `spec.md`
 - `docs/repo-standard.md`
 - `docs/agent-operating-model.md`
 - `docs/git-workflow.md`
@@ -47,9 +50,25 @@ define the intent and rules.
 
 ## Bootstrap A New Python Repository
 
-The recommended workflow is:
+The recommended workflow is to run the initializer directly with `uvx`:
 
-1. Install the tool once:
+```bash
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-bootstrap-kit.git" repo-init --profile python-single --repo-name widget-service
+```
+
+`uvx` is the short form of `uv tool run`. It installs the bootstrap package
+from this standards repository into an isolated tool environment, then runs
+the packaged `repo-init` command. The generated repository derives its
+`AGENTS.md`, CI workflow, `pyproject.toml`, and starter files from the version
+of this repository that `uv` resolves.
+
+Pin a standards version by adding a Git ref:
+
+```bash
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-bootstrap-kit.git@v0.1.0" repo-init --profile python-single --repo-name widget-service
+```
+
+For repeated use, install the tool once:
 
 ```bash
 uv tool install --from "git+ssh://git@github.com/FP-DevTools/repo-bootstrap-kit.git" repo-bootstrap-kit
@@ -60,10 +79,11 @@ That gives you:
 - `repo-init`
 - `repo-add-package`
 
-2. Either create and enter an empty target repository or working directory, or
-   run `repo-init` from the parent directory with `--repo-name` so it creates
-   the repository folder for you.
-3. Run the bootstrap tool:
+Then either create and enter an empty target repository or working directory,
+or run `repo-init` from the parent directory with `--repo-name` so it creates
+the repository folder for you.
+
+Run the bootstrap tool:
 
 ```bash
 repo-init --profile python-single
@@ -75,12 +95,18 @@ Or from the parent directory:
 repo-init --profile python-single --repo-name widget-service
 ```
 
-4. Review the generated `AGENTS.md` and `README.md`.
+4. Review the generated `AGENTS.md`, `README.md`, and CI workflow.
 5. Run the quality gates in the generated repository.
 6. Make the initial commit on `main`.
 
 Do not clone this standards repository as the starting point for a product
 repository. Generate or template the target repository separately.
+
+For a workspace repository, use the workspace profile:
+
+```bash
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-bootstrap-kit.git" repo-init --profile python-workspace --repo-name widget-platform
+```
 
 If you prefer HTTPS instead of SSH, use the same command shape with the HTTPS
 Git URL for this repository.

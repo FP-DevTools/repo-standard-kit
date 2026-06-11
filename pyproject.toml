@@ -12,28 +12,34 @@ repo-init = "repo_standard.repo_init:main"
 
 [dependency-groups]
 dev = [
+  "detect-secrets>=1.5.0",
   "pre-commit>=4.0.0",
+  "pre-commit-hooks>=5.0.0",
   "pytest>=8.0.0",
   "ruff>=0.6.0",
   "ty>=0.0.1a16",
 ]
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["uv_build>=0.11.20,<0.12"]
+build-backend = "uv_build"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/repo_standard"]
-include = ["src/repo_standard/starter_kits/**"]
-
-[tool.hatch.build.targets.sdist]
-include = [
-  "/src/repo_standard/starter_kits/**",
-  "/starter-kits/**",
-  "/docs/**",
-  "/examples/**",
-  "/profiles/**",
-  "/templates/**",
+[tool.uv.build-backend]
+module-name = "repo_standard"
+source-include = [
+  "docs/**",
+  "examples/**",
+  "profiles/**",
+  "spec.md",
+  "templates/**",
+]
+source-exclude = [
+  "**/.mypy_cache/**",
+  "**/.pytest_cache/**",
+  "**/.ruff_cache/**",
+  "**/.ty_cache/**",
+  "**/__pycache__/**",
+  "**/*.pyc",
 ]
 
 [tool.ruff]
