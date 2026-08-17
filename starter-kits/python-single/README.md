@@ -24,5 +24,7 @@ This repository contains the `__PACKAGE_NAME__` Python project.
 ## Development
 
 Repository workflow, quality gates, and coding standards are defined in
-`AGENTS.md`. The mandatory quality gates derive from `spec.md` in the standards
-repository.
+`AGENTS.md`. The mandatory quality gates and this README's structure derive
+from [repo-bootstrap-kit](https://github.com/FP-DevTools/repo-bootstrap-kit)
+(`spec.md`, `templates/README.md`). Keep this file's shape aligned with that
+template when you update it.
