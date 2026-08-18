@@ -5,11 +5,12 @@ on:
     inputs:
       ref:
         description: >-
-          repo-standard-kit ref to install. Defaults to the ref this reusable
-          workflow was itself called at, so a caller pinning
-          `uses: .../compliance.yml@vX.Y.Z` needs nothing further.
+          repo-standard-kit ref to install. Must match the ref pinned in
+          `uses: .../compliance.yml@ref` — GitHub Actions does not expose a
+          reliable way for a called reusable workflow to read that pin from
+          inside itself, so the caller states it explicitly.
         type: string
-        default: ""
+        required: true
       strict:
         description: "Treat 'should' findings as failures too."
         type: boolean
@@ -34,18 +35,6 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
 
-      - name: Resolve repo-standard-kit ref
-        id: resolve-ref
-        shell: bash
-        run: |
-          ref="${{ inputs.ref }}"
-          if [ -z "$ref" ]; then
-            ref="${GITHUB_WORKFLOW_REF#*@}"
-            ref="${ref#refs/tags/}"
-            ref="${ref#refs/heads/}"
-          fi
-          echo "ref=$ref" >> "$GITHUB_OUTPUT"
-
       - name: Run repo-check
         shell: bash
         run: |
@@ -56,4 +45,4 @@ jobs:
           if [ "${{ inputs.check-enforcement }}" = "true" ]; then
             args+=(--check-enforcement)
           fi
-          uvx --from "git+https://github.com/FP-DevTools/repo-standard-kit.git@${{ steps.resolve-ref.outputs.ref }}" repo-check "${args[@]}"
+          uvx --from "git+https://github.com/FP-DevTools/repo-standard-kit.git@${{ inputs.ref }}" repo-check "${args[@]}"
