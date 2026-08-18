@@ -686,3 +686,23 @@ def test_every_cited_spec_section_exists() -> None:
             if int(cited) not in existing:
                 dangling.append(f"{path.relative_to(REPO_ROOT)} cites §{cited}")
     assert not dangling, f"dangling spec citations: {dangling}"
+
+
+def test_version_pin_examples_match_the_package_version() -> None:
+    """Docs show a pinned install; the pin must be this version, not a stale one.
+
+    This example has silently gone stale on every release so far. Asserting it
+    against pyproject.toml turns "remember to bump the docs" into a gate.
+    """
+    pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    version_match = re.search(r'^version = "([^"]+)"', pyproject, re.MULTILINE)
+    assert version_match, "could not read version from pyproject.toml"
+    version = version_match.group(1)
+
+    stale: list[str] = []
+    for name in ("README.md", "docs/bootstrap-workflow.md"):
+        text = (REPO_ROOT / name).read_text(encoding="utf-8")
+        for pinned in re.findall(r"repo-standard-kit\.git@v([0-9][^\"\s]*)", text):
+            if pinned != version:
+                stale.append(f"{name} pins v{pinned}, package is {version}")
+    assert not stale, f"stale version-pin examples: {stale}"

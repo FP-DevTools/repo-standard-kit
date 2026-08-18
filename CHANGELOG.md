@@ -24,6 +24,13 @@ the changes listed under **Adopters must**.
 
 ## [Unreleased]
 
+### Fixed
+
+- The `uvx --from ...@vX.Y.Z` pin examples in `README.md` and
+  `docs/bootstrap-workflow.md` now match the package version. They had gone
+  stale on every release so far, so a test asserts them against
+  `pyproject.toml` rather than relying on remembering to bump them.
+
 ## [0.3.0] - 2026-08-18
 
 ### Added
