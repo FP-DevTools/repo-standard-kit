@@ -1,0 +1,49 @@
+{
+  "mandatory_ci_commands": [
+    "uv sync --locked",
+    "uv run pre-commit run --all-files",
+    "uv run ruff format --check .",
+    "uv run ruff check .",
+    "uv run ty check",
+    "uv run pytest",
+    "uv build"
+  ],
+  "mandatory_pre_commit_entries": [
+    "uv run check-yaml",
+    "uv run check-toml",
+    "uv run check-json",
+    "uv run trailing-whitespace-fixer",
+    "uv run end-of-file-fixer",
+    "uv run check-merge-conflict",
+    "uv run detect-private-key",
+    "uv run detect-secrets-hook",
+    "uv run check-added-large-files",
+    "uv run ruff check --force-exclude",
+    "uv run ruff format --force-exclude"
+  ],
+  "prose_width": 88,
+  "required_agents_sections": [
+    "Repository Purpose",
+    "Repository Context",
+    "Human And Agent Responsibilities",
+    "Workflow",
+    "Quality Gates",
+    "Coding Standards",
+    "Testing Policy",
+    "Documentation Rules",
+    "Repository Layout",
+    "Change Control Notes"
+  ],
+  "ruff_baseline": {
+    "line_length": 88,
+    "select": [
+      "E",
+      "F",
+      "I",
+      "B",
+      "UP",
+      "PT"
+    ]
+  },
+  "standard_version": "0.3.1"
+}

@@ -22,6 +22,8 @@ This repository provides:
 - a standard Python repository layout
 - starter-kit assets for new repositories
 - a thin bootstrap tool for generating a new repository from the starter kit
+- a `repo-check` CLI and library that verify a repository's structural
+  alignment with the standard
 - GitHub Actions CI that mirrors the documented local quality gates
 - `uv`-based dependency and build configuration for Python projects
 
@@ -92,6 +94,19 @@ repository. Generate or template the target repository separately.
 See [docs/bootstrap-workflow.md](docs/bootstrap-workflow.md) for the full
 option reference, the workspace `repo-add-package` flow, and the expected
 generated output.
+
+## Check A Repository's Alignment
+
+Run `repo-check` against any repository the same way, with `uvx` or after
+`uv sync`:
+
+```bash
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-check /path/to/repository
+```
+
+It reports structural findings against the same normative documents
+`repo-init` generates from — see [docs/compliance.md](docs/compliance.md)
+for the full rule catalogue and what it does not check.
 
 ## Current Profiles
 
