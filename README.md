@@ -73,7 +73,7 @@ Then:
 Pin a standards version by adding a Git ref:
 
 ```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v0.3.0" repo-init --profile python-single --repo-name widget-service
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v0.3.1" repo-init --profile python-single --repo-name widget-service
 ```
 
 For repeated use, install the tool once. That puts `repo-init` and

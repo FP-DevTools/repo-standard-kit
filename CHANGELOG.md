@@ -24,12 +24,20 @@ the changes listed under **Adopters must**.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-08-18
+
 ### Fixed
 
 - The `uvx --from ...@vX.Y.Z` pin examples in `README.md` and
   `docs/bootstrap-workflow.md` now match the package version. They had gone
   stale on every release so far, so a test asserts them against
-  `pyproject.toml` rather than relying on remembering to bump them.
+  `pyproject.toml` rather than relying on remembering to bump them. The
+  `v0.3.0` tag ships the stale example; this corrects it forward rather than
+  moving a published tag.
+
+### Adopters must
+
+- Nothing. This is a documentation correction with no effect on alignment.
 
 ## [0.3.0] - 2026-08-18
 
@@ -129,7 +137,8 @@ the changes listed under **Adopters must**.
 Initial standard, Python starter kits, and the `repo-init` and
 `repo-add-package` bootstrap tools.
 
-[Unreleased]: https://github.com/FP-DevTools/repo-standard-kit/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/FP-DevTools/repo-standard-kit/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/FP-DevTools/repo-standard-kit/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/FP-DevTools/repo-standard-kit/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/FP-DevTools/repo-standard-kit/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/FP-DevTools/repo-standard-kit/releases/tag/v0.1.0
