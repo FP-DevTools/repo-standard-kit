@@ -65,7 +65,7 @@ of this repository that `uv` resolves.
 Pin a standards version by adding a Git ref:
 
 ```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v0.1.0" repo-init --profile python-single --repo-name widget-service
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v0.2.0" repo-init --profile python-single --repo-name widget-service
 ```
 
 For repeated use, install the tool once:
