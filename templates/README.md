@@ -105,11 +105,10 @@ See `AGENTS.md` for the full repo-level contract (human/agent
 responsibilities, workflow rules, coding standards). This section covers what
 a new contributor needs first.
 
-This README's structure follows the
-[repo-standard-kit](https://github.com/FP-DevTools/repo-standard-kit)
-standard (`templates/README.md`). Keep this file's shape aligned with that
-template when you update it, and check this repository against it
-periodically for standards drift.
+This README's structure follows the [repo-standard-kit] standard — see its
+[README template][readme-template]. Keep this file's shape aligned with it
+when you update it, and check this repository against it periodically for
+standards drift.
 
 ### Set Up Your Dev Environment
 
@@ -159,7 +158,7 @@ and must stay time-limited.
 - Upgrade a dependency: `uv lock --upgrade-package <package>` then
   `uv sync --locked`.
 - `uv run deptry .` and `uv run pip-audit` are recommended for dependency
-  hygiene and vulnerability scanning (see `docs/quality-gates.md`).
+  hygiene and vulnerability scanning (see the [quality-gates spec][quality-gates]).
 - Workspace repos: each package under `packages/<slug>/` declares its own
   dependencies; the root `pyproject.toml` is tooling-only.
 
@@ -191,3 +190,7 @@ merge to `main`, etc.). Include rollback steps if non-obvious.>
 ### License
 
 Licensed under `<license-name>`. See [LICENSE](LICENSE).
+
+[repo-standard-kit]: https://github.com/FP-DevTools/repo-standard-kit
+[quality-gates]: https://github.com/FP-DevTools/repo-standard-kit/blob/main/docs/quality-gates.md
+[readme-template]: https://github.com/FP-DevTools/repo-standard-kit/blob/main/templates/README.md

@@ -9,10 +9,11 @@
 
 - Repository name: `__REPO_NAME__`
 - Primary language(s): `Python`
-- Runtime/build system: `uv` with shared root tooling and `uv_build` for package projects
+- Runtime/build system: `uv` with shared root tooling and `uv_build` for
+  package projects
 - Repository type: `workspace`
-- Standards source: [repo-standard-kit](https://github.com/FP-DevTools/repo-standard-kit) —
-  quality gates derive from its `docs/quality-gates.md`; review this repository against it
+- Standards source: [repo-standard-kit] — quality gates derive from its
+  [quality-gates spec][quality-gates]; review this repository against it
   periodically for standards drift
 - Key directories:
   - `packages/`: independently structured package projects
@@ -85,3 +86,6 @@ Run from repo root:
 ## Change Control Notes
 
 Document cross-package API or dependency rules here when the workspace evolves.
+
+[repo-standard-kit]: https://github.com/FP-DevTools/repo-standard-kit
+[quality-gates]: https://github.com/FP-DevTools/repo-standard-kit/blob/main/docs/quality-gates.md

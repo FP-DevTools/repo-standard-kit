@@ -20,9 +20,6 @@ repo root.
 `docs/quality-gates.md` defines the mandatory local and CI gate chain. Run it
 from the repository root. This profile adds no extra gates and relaxes none.
 
-For Python profiles, `uv run ty check` is the approved static type checking
-gate, equivalent to `mypy`.
-
 ## Bootstrap Behavior
 
 - `repo-init --profile python-single`

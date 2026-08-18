@@ -22,9 +22,6 @@ Use this profile for monorepos with per-package projects under `packages/`.
 once from the workspace root so it covers every package. This profile adds no
 extra gates and relaxes none.
 
-For Python profiles, `uv run ty check` is the approved static type checking
-gate, equivalent to `mypy`.
-
 ## Bootstrap Behavior
 
 - `repo-init --profile python-workspace`
