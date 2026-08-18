@@ -231,10 +231,27 @@ def test_missing_adr_dir_reports_rsk012_as_should(tmp_path: Path) -> None:
 
 def test_overlong_markdown_line_reports_rsk013_as_should(tmp_path: Path) -> None:
     root = _minimal_repo(tmp_path)
-    (root / "NOTES.md").write_text("word " * 30 + "\n", encoding="utf-8")
+    (root / "docs" / "notes.md").write_text("word " * 30 + "\n", encoding="utf-8")
     findings = [f for f in check_repo(root, RULES) if f.rule_id == "RSK013"]
     assert len(findings) == 1
     assert findings[0].severity == "should"
+
+
+def test_overlong_markdown_line_outside_prose_width_scope_is_not_reported(
+    tmp_path: Path,
+) -> None:
+    """§13 scopes prose width to docs/, README.md, and AGENTS.md.
+
+    A pilot run against a real repository showed this rule flooding
+    thousands of findings against machine-generated Markdown (diff
+    summaries) living outside that scope; RSK013 must not touch it.
+    """
+    root = _minimal_repo(tmp_path)
+    (root / "generated").mkdir()
+    (root / "generated" / "report.md").write_text("word " * 30 + "\n", encoding="utf-8")
+    (root / "NOTES.md").write_text("word " * 30 + "\n", encoding="utf-8")
+    findings = [f for f in check_repo(root, RULES) if f.rule_id == "RSK013"]
+    assert findings == []
 
 
 def test_platform_check_excluded_by_default(tmp_path: Path) -> None:

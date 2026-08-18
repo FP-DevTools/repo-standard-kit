@@ -121,7 +121,7 @@ behind `--check-enforcement`.
 | `RSK010` | Ruff `line-length` and `select` match the baseline | §13 | shall |
 | `RSK011` | No unresolved `__PLACEHOLDER__` tokens | `repo-standard.md` | shall |
 | `RSK012` | `docs/adr/` exists | `repo-layout.md` | should |
-| `RSK013` | Markdown wraps at the documented prose width | §13 | should |
+| `RSK013` | `docs/`, `README.md`, `AGENTS.md` wrap at the prose width | §13 | should |
 | `RSK014` | Branch protection configured on `main` | §10 | platform |
 
 ## What This Cannot Check

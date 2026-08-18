@@ -78,31 +78,27 @@ def _relative(root: Path, path: Path) -> str:
     return path.relative_to(root).as_posix()
 
 
-def _git_tracked_markdown(root: Path) -> list[Path] | None:
-    if not (root / ".git").exists():
-        return None
-    try:
-        result = subprocess.run(
-            ["git", "ls-files", "*.md"],
-            cwd=root,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        return None
-    return [root / line for line in result.stdout.splitlines() if line]
+def _prose_width_scope(root: Path) -> list[Path]:
+    """Files §13's prose width applies to: `docs/**`, `README.md`, `AGENTS.md`.
 
-
-def _iter_markdown_files(root: Path) -> list[Path]:
-    tracked = _git_tracked_markdown(root)
-    if tracked is not None:
-        return tracked
-    return [
-        path
-        for path in root.rglob("*.md")
-        if not any(part in _IGNORED_DIR_PARTS for part in path.relative_to(root).parts)
+    Not every tracked Markdown file — a repository's `docs/` tree commonly
+    sits alongside generated, non-prose Markdown (diff summaries, changelogs
+    pulled from elsewhere) that §13 was never written to cover.
+    """
+    files = [
+        path for name in ("README.md", "AGENTS.md") if (path := root / name).is_file()
     ]
+    docs_dir = root / "docs"
+    if docs_dir.is_dir():
+        files.extend(
+            path
+            for path in docs_dir.rglob("*.md")
+            if path.is_file()
+            and not any(
+                part in _IGNORED_DIR_PARTS for part in path.relative_to(root).parts
+            )
+        )
+    return files
 
 
 # --- individual rule checks -------------------------------------------------
@@ -358,11 +354,9 @@ def _check_adr_dir(root: Path, rules: Rules) -> list[Finding]:
 
 
 def _check_prose_width(root: Path, rules: Rules) -> list[Finding]:
-    """RSK013: Markdown wraps at the documented prose width (§13)."""
+    """RSK013: docs/, README.md, and AGENTS.md wrap at the prose width (§13)."""
     findings = []
-    for path in _iter_markdown_files(root):
-        if not path.is_file():
-            continue
+    for path in _prose_width_scope(root):
         for line_number, width in prose_offenders(path, rules.prose_width):
             findings.append(
                 Finding(
