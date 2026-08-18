@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 from conftest import REPO_ROOT
 
 from repo_standard.compliance import cli
@@ -355,3 +356,31 @@ def test_repo_check_console_script_runs_end_to_end(tmp_path: Path) -> None:
     )
     assert result.returncode == 1
     assert "RSK001" in result.stdout
+
+
+# --- consumption surfaces -----------------------------------------------
+
+
+def test_pre_commit_hooks_manifest_declares_repo_check() -> None:
+    manifest = yaml.safe_load(
+        (REPO_ROOT / ".pre-commit-hooks.yaml").read_text(encoding="utf-8")
+    )
+    [hook] = manifest
+    assert hook["id"] == "repo-check"
+    assert hook["entry"] == "repo-check"
+    assert hook["language"] == "python"
+    assert hook["pass_filenames"] is False
+    assert hook["always_run"] is True
+
+
+def test_compliance_workflow_is_reusable_and_pinned_to_setup_uv() -> None:
+    workflow_path = REPO_ROOT / ".github" / "workflows" / "compliance.yml"
+    workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+    # PyYAML parses the bare `on:` key as boolean True.
+    assert "workflow_call" in workflow[True]
+    assert workflow["permissions"] == {"contents": "read"}
+
+    text = workflow_path.read_text(encoding="utf-8")
+    assert "astral-sh/setup-uv@v5" in text
+    assert "actions/checkout@v5" in text
+    assert "git+https://github.com/FP-DevTools/repo-standard-kit.git" in text
