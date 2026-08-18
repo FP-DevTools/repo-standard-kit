@@ -134,20 +134,14 @@ standards drift.
 
 ### Quality Gates
 
-These are mandatory before merge and run in CI on every PR to `main`
-(`.github/workflows/quality.yml`). Run them locally first:
+The mandatory gate chain is listed in `AGENTS.md`, which is the one place this
+repository states it, and runs in CI on every PR to `main`
+(`.github/workflows/quality.yml`). Run it locally before pushing.
 
-1. `uv sync --locked`
-2. `uv run pre-commit run --all-files`
-3. `uv run ruff format --check .`
-4. `uv run ruff check .`
-5. `uv run ty check`
-6. `uv run pytest`
-7. `uv build`
-
-No PR merges into `main` unless all mandatory gates pass. Temporary
-exemptions require explicit justification in the PR and maintainer approval,
-and must stay time-limited.
+No PR merges into `main` unless all mandatory gates pass, and branch protection
+enforces that rather than convention — see the
+[quality-gates spec][quality-gates]. Temporary exemptions require explicit
+justification in the PR and maintainer approval, and must stay time-limited.
 
 ### Dependency Management
 

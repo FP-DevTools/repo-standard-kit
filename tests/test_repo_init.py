@@ -620,3 +620,44 @@ def test_profiles_neither_add_nor_relax_gates() -> None:
         assert not restated, (
             f"profiles/{profile}.md restates gates instead of deferring: {restated}"
         )
+
+
+@pytest.mark.parametrize(
+    "agents_path",
+    [
+        Path("AGENTS.md"),
+        Path("templates/AGENTS.md"),
+        *(
+            starter_kit_dir(p).relative_to(REPO_ROOT) / "AGENTS.md"
+            for p in STARTER_KIT_PROFILES
+        ),
+    ],
+    ids=["repo-root", "template", "starter-single", "starter-workspace"],
+)
+def test_shipped_agents_files_state_the_exact_gate_chain(agents_path: Path) -> None:
+    """The contract requires exact gate commands in AGENTS.md; hold each copy to it."""
+    text = (REPO_ROOT / agents_path).read_text(encoding="utf-8")
+    missing = [c for c in mandatory_ci_commands() if c not in text]
+    assert not missing, f"{agents_path} omits mandatory gates: {missing}"
+
+
+def test_readme_template_defers_to_agents_for_the_gate_chain() -> None:
+    """The README template's Quality Gates section points at AGENTS.md.
+
+    Onboarding aids elsewhere in the template - the common-commands table, the
+    setup steps - may name individual commands. What must not exist is a second
+    authoritative copy of the chain competing with the one AGENTS.md carries.
+    """
+    text = (REPO_ROOT / "templates" / "README.md").read_text(encoding="utf-8")
+    heading = "### Quality Gates"
+    assert heading in text, "templates/README.md lost its Quality Gates section"
+    section = text.split(heading, 1)[1].split("\n### ", 1)[0]
+
+    restated = [c for c in mandatory_ci_commands() if c in section]
+    assert not restated, (
+        "templates/README.md restates the gate chain instead of deferring to "
+        f"AGENTS.md: {restated}"
+    )
+    assert "AGENTS.md" in section, (
+        "the Quality Gates section must point at AGENTS.md for the chain"
+    )

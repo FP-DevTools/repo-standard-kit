@@ -40,7 +40,8 @@ Agents must not:
 
 1. Update the normative docs first when changing the standard.
 2. Update templates and starter kits in the same change.
-3. Validate the bootstrap tool against a temporary output directory.
+3. Validate bootstrap behavior with `uv run pytest`, which generates into a
+   temporary directory rather than a fixed path.
 4. Keep changes small and focused by concern.
 
 ## Quality Gates
@@ -54,7 +55,11 @@ Run from repository root:
 5. `uv run ty check`
 6. `uv run pytest`
 7. `uv build`
-8. `uv run repo-init --profile python-single --output-dir /tmp/demo-repo --no-install`
+
+This is exactly the chain in `docs/quality-gates.md`; this repository adds no
+gates of its own. Bootstrap behavior needs no separate manual step — `uv run
+pytest` exercises the `repo-init` and `repo-add-package` entry points end to
+end in a temporary directory, on every platform.
 
 ## Coding Standards
 

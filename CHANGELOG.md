@@ -52,6 +52,9 @@ the changes listed under **Adopters must**.
   drifting silently.
 - Tests asserting that every shipped and generated `AGENTS.md` carries all
   ten required sections, and that neither profile adds or relaxes a gate.
+- Tests asserting that every shipped `AGENTS.md` states the exact gate chain,
+  and that the README template defers to `AGENTS.md` rather than keeping a
+  second copy of it.
 - A `Change Control Notes` section in this repository's own `AGENTS.md`,
   which the contract required and it was missing.
 
@@ -70,6 +73,12 @@ the changes listed under **Adopters must**.
   repository runs for itself; generated repositories were receiving `@v4`.
 - Both Python profiles defer to `docs/quality-gates.md` for the gate chain
   instead of restating it.
+- The README template's Quality Gates section defers to `AGENTS.md` instead of
+  restating the chain as a competing authority. The common-commands table and
+  setup steps are unchanged.
+- This repository's own gate chain no longer carries an eighth step that
+  bootstrapped into a hardcoded `/tmp` path. It was not portable, and `uv run
+  pytest` already exercises the CLI end to end in a temporary directory.
 
 ### Removed
 
