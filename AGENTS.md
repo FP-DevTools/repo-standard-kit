@@ -40,9 +40,12 @@ Agents must not:
 
 1. Update the normative docs first when changing the standard.
 2. Update templates and starter kits in the same change.
-3. Validate bootstrap behavior with `uv run pytest`, which generates into a
+3. If the change touches `docs/quality-gates.md` or `docs/repo-standard.md`,
+   run `uv run python scripts/generate_rules.py` and commit the regenerated
+   `src/repo_standard/compliance/rules.json`; `uv run pytest` fails otherwise.
+4. Validate bootstrap behavior with `uv run pytest`, which generates into a
    temporary directory rather than a fixed path.
-4. Keep changes small and focused by concern.
+5. Keep changes small and focused by concern.
 
 ## Quality Gates
 
@@ -78,6 +81,9 @@ end in a temporary directory, on every platform.
 - `src/repo_standard/`: bootstrap implementation
 - `src/repo_standard/starter_kits/`: starter repo skeletons, the single source
   of starter assets for both source checkouts and installed builds
+- `src/repo_standard/compliance/`: the `repo-check` rule set and checker; see
+  `docs/compliance.md`
+- `scripts/`: developer scripts, including `generate_rules.py`
 - `tests/`: automated tests
 - `docs/`: normative standards
 - `profiles/`: language-specific profiles

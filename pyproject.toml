@@ -13,6 +13,7 @@ classifiers = [
 
 [project.scripts]
 repo-add-package = "repo_standard.repo_add_package:main"
+repo-check = "repo_standard.compliance.cli:main"
 repo-init = "repo_standard.repo_init:main"
 
 [dependency-groups]
