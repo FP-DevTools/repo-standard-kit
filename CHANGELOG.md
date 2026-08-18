@@ -32,6 +32,10 @@ the changes listed under **Adopters must**.
   repository must protect `main` with the `quality` status check required,
   at least one approving review, and administrator bypass disabled. Includes
   a `gh api` command to verify the configuration.
+- A platform prerequisite in §10: requiring a status check on a private
+  repository needs GitHub Team or higher. On GitHub Free a private repository
+  cannot require any check and is not aligned with the specification. Recorded
+  in `docs/adr/0001-enforcement-requires-a-paid-github-plan.md`.
 - `LICENSE`, and the matching `license` metadata in `pyproject.toml`.
 - `CHANGELOG.md` with the compatibility policy above.
 - Expected generated trees for both profiles in `docs/bootstrap-workflow.md`,
@@ -78,7 +82,8 @@ the changes listed under **Adopters must**.
 
 - Configure branch protection on `main` as specified in
   `docs/quality-gates.md` §10. This is the only change that can move a
-  previously aligned repository out of alignment.
+  previously aligned repository out of alignment. Private repositories require
+  GitHub Team or higher to do so; see the platform prerequisite in §10.
 - Update any reference to `spec.md` to `docs/quality-gates.md`.
 - Bump `actions/checkout` to `v5` in `.github/workflows/quality.yml`.
 - Confirm `uv run pre-commit run --all-files` runs in CI. Repositories

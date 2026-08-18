@@ -248,6 +248,27 @@ on every pull request still permits a merge if nothing requires it to pass.
 Every repository adopting this specification shall protect `main` so the
 mandatory gates are binding rather than advisory.
 
+### Platform prerequisite
+
+Requiring a status check on a **private** repository needs GitHub Team or
+higher for an organization, or GitHub Pro for a personal account. On the
+GitHub Free plan a private repository cannot require any status check, and
+neither branch protection nor repository rulesets are available:
+
+```text
+GET /repos/{owner}/{repo}/branches/main/protection
+403 Upgrade to GitHub Pro or make this repository public to enable this feature.
+```
+
+No configuration closes this gap. A private repository on GitHub Free can run
+every gate in this document and still permit a merge when they fail, which
+means it does not meet section 9 and is **not aligned** with this
+specification.
+
+Treat a plan that supports branch protection as a precondition for adopting
+this standard on private repositories, not as an implementation detail to
+settle later. Public repositories have branch protection on every plan.
+
 ### Required branch protection
 
 On GitHub, protect `main` with:
@@ -275,6 +296,9 @@ gh api repos/<owner>/<repo>/branches/main/protection \
 
 The `quality` check shall appear in `checks`, `reviews` shall be at least `1`,
 and `enforce_admins` shall be `true`.
+
+A `403` response means the repository is on a plan that does not support
+branch protection; see the platform prerequisite above.
 
 A repository that cannot produce this configuration is not aligned with this
 specification, regardless of whether its workflow passes.
