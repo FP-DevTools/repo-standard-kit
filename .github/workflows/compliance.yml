@@ -1,0 +1,59 @@
+name: Compliance
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: >-
+          repo-standard-kit ref to install. Defaults to the ref this reusable
+          workflow was itself called at, so a caller pinning
+          `uses: .../compliance.yml@vX.Y.Z` needs nothing further.
+        type: string
+        default: ""
+      strict:
+        description: "Treat 'should' findings as failures too."
+        type: boolean
+        default: false
+      check-enforcement:
+        description: >-
+          Also check branch protection (§10). Needs gh and auth in the
+          caller's job.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  repo-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Resolve repo-standard-kit ref
+        id: resolve-ref
+        shell: bash
+        run: |
+          ref="${{ inputs.ref }}"
+          if [ -z "$ref" ]; then
+            ref="${GITHUB_WORKFLOW_REF#*@}"
+            ref="${ref#refs/tags/}"
+            ref="${ref#refs/heads/}"
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      - name: Run repo-check
+        shell: bash
+        run: |
+          args=(--format text)
+          if [ "${{ inputs.strict }}" = "true" ]; then
+            args+=(--strict)
+          fi
+          if [ "${{ inputs.check-enforcement }}" = "true" ]; then
+            args+=(--check-enforcement)
+          fi
+          uvx --from "git+https://github.com/FP-DevTools/repo-standard-kit.git@${{ steps.resolve-ref.outputs.ref }}" repo-check "${args[@]}"

@@ -30,6 +30,60 @@ Options:
 Exit codes: `0` aligned, `1` a `shall` rule was violated (or a `should` rule
 under `--strict`), `2` usage error.
 
+## Consumption Surfaces
+
+Three ways to run `repo-check` against a repository, from lowest to highest
+commitment.
+
+### Ad hoc
+
+No setup: the command shown above, or pinned to a released version:
+
+```bash
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v0.4.0" repo-check
+```
+
+### Local pre-commit hook
+
+This repository ships `.pre-commit-hooks.yaml`, so `pre-commit` can install
+and run `repo-check` without the consuming repository declaring it as a
+dependency. Add to the consuming repository's `.pre-commit-config.yaml`:
+
+```yaml
+repos:
+  - repo: https://github.com/FP-DevTools/repo-standard-kit
+    rev: v0.4.0
+    hooks:
+      - id: repo-check
+```
+
+Pin `rev` to a released tag and bump it deliberately — `pre-commit
+autoupdate` turns that into a one-line PR. The hook always runs (it inspects
+the whole tree, not the files staged in a commit) and does not fail the
+commit for `should` findings unless `args: [--strict]` is added.
+
+### Reusable CI workflow
+
+This repository's `.github/workflows/compliance.yml` triggers on
+`workflow_call`. A consuming repository adds its own workflow that calls it:
+
+```yaml
+name: Compliance
+
+on:
+  pull_request:
+
+jobs:
+  compliance:
+    uses: FP-DevTools/repo-standard-kit/.github/workflows/compliance.yml@v0.4.0
+```
+
+The called workflow installs `repo-check` at the same ref it was called
+with, so nothing needs to be kept in sync by hand. Pass `with: { ref: ... }`
+to override that resolution if it ever proves unreliable, and `with: {
+strict: true }` or `with: { check-enforcement: true }` to opt into the
+stricter modes described above.
+
 ## How It Stays Honest
 
 The rule catalogue is not hand-maintained prose duplicating the spec. It is
