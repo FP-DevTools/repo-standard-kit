@@ -1,4 +1,4 @@
-# repo-bootstrap-kit
+# repo-standard-kit
 
 Portable development standards, starter kits, and bootstrap tooling for modern
 software repositories.
@@ -53,7 +53,7 @@ define the intent and rules.
 The recommended workflow is to run the initializer directly with `uvx`:
 
 ```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-bootstrap-kit.git" repo-init --profile python-single --repo-name widget-service
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-init --profile python-single --repo-name widget-service
 ```
 
 `uvx` is the short form of `uv tool run`. It installs the bootstrap package
@@ -65,13 +65,13 @@ of this repository that `uv` resolves.
 Pin a standards version by adding a Git ref:
 
 ```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-bootstrap-kit.git@v0.1.0" repo-init --profile python-single --repo-name widget-service
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v0.1.0" repo-init --profile python-single --repo-name widget-service
 ```
 
 For repeated use, install the tool once:
 
 ```bash
-uv tool install --from "git+ssh://git@github.com/FP-DevTools/repo-bootstrap-kit.git" repo-bootstrap-kit
+uv tool install --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-standard-kit
 ```
 
 That gives you:
@@ -105,7 +105,7 @@ repository. Generate or template the target repository separately.
 For a workspace repository, use the workspace profile:
 
 ```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-bootstrap-kit.git" repo-init --profile python-workspace --repo-name widget-platform
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-init --profile python-workspace --repo-name widget-platform
 ```
 
 If you prefer HTTPS instead of SSH, use the same command shape with the HTTPS
