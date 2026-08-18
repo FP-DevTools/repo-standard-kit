@@ -716,6 +716,30 @@ def test_version_pin_examples_match_the_package_version() -> None:
     assert not stale, f"stale version-pin examples: {stale}"
 
 
+@pytest.mark.parametrize("profile", STARTER_KIT_PROFILES)
+def test_starter_kit_repo_check_hook_pin_matches_the_package_version(
+    profile: str,
+) -> None:
+    """The wired-in repo-check pre-commit hook must pin this same version."""
+    pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    version_match = re.search(r'^version = "([^"]+)"', pyproject, re.MULTILINE)
+    assert version_match, "could not read version from pyproject.toml"
+    version = version_match.group(1)
+
+    text = (starter_kit_dir(profile) / ".pre-commit-config.yaml").read_text(
+        encoding="utf-8"
+    )
+    rev_match = re.search(
+        r"repo: https://github\.com/FP-DevTools/repo-standard-kit"
+        r"\s*\n\s*rev: v([0-9][^\s]*)",
+        text,
+    )
+    assert rev_match, f"{profile} starter kit does not wire in the repo-check hook"
+    assert rev_match.group(1) == version, (
+        f"{profile} starter kit pins v{rev_match.group(1)}, package is {version}"
+    )
+
+
 @pytest.mark.parametrize(
     "pyproject_path",
     [
