@@ -50,7 +50,8 @@ Use these documents together:
 - `docs/git-workflow.md`
 - `docs/repo-layout.md`
 - `docs/bootstrap-workflow.md`
-- `profiles/python.md`
+- `profiles/python-single.md`
+- `profiles/python-workspace.md`
 
 ## Required `AGENTS.md` Sections
 

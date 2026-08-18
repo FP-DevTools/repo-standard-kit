@@ -11,14 +11,7 @@ operating boundaries.
 - Primary focus: repository standards and Python-first starter assets
 - Secondary focus: future JavaScript/TypeScript profile scaffolding
 - Normative quality gates: `spec.md`
-- Key directories:
-  - `src/`: implementation code for bootstrap tooling
-  - `tests/`: automated verification for the tooling
-  - `docs/`: normative standards
-  - `profiles/`: language-specific standards
-  - `templates/`: reusable file templates
-  - `starter-kits/`: starter repository skeletons
-  - `examples/`: concrete filled examples
+- Directory responsibilities: see Repository Layout below
 
 ## Human And Agent Responsibilities
 
@@ -66,7 +59,6 @@ Run from repository root:
 ## Coding Standards
 
 - Keep reusable Python logic under `src/`
-- Keep `tools/` wrappers thin and orchestration-focused
 - Type production function signatures
 - Keep starter assets and tests aligned with the documented standard
 
@@ -78,12 +70,13 @@ Run from repository root:
 
 ## Repository Layout
 
-- `src/`: bootstrap implementation
+- `src/repo_standard/`: bootstrap implementation
+- `src/repo_standard/starter_kits/`: starter repo skeletons, the single source
+  of starter assets for both source checkouts and installed builds
 - `tests/`: automated tests
 - `docs/`: normative standards
 - `profiles/`: language-specific profiles
-- `templates/`: reusable templates
-- `starter-kits/`: starter repo skeletons
+- `templates/`: reusable templates for adopting the standard in an existing repo
 - `examples/`: filled examples
 
 ## Documentation Rules

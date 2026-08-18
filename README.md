@@ -43,18 +43,22 @@ define the intent and rules.
 
 - `docs/`: standards and operating guidance
 - `profiles/`: language or repo-type specific standards
-- `templates/`: reusable templates for repo-level files
-- `starter-kits/`: copyable repository skeletons
+- `templates/`: reusable templates for adopting the standard in an existing repo
 - `src/repo_standard/`: packaged bootstrap implementation
+- `src/repo_standard/starter_kits/`: copyable repository skeletons
 - `examples/`: filled examples showing the standard in practice
 
 ## Bootstrap A New Python Repository
 
-The recommended workflow is to run the initializer directly with `uvx`:
+Run the initializer directly with `uvx`, from the parent directory of the
+repository you want to create:
 
 ```bash
 uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-init --profile python-single --repo-name widget-service
 ```
+
+Use `--profile python-workspace` instead for a monorepo with per-package
+projects under `packages/`.
 
 `uvx` is the short form of `uv tool run`. It installs the bootstrap package
 from this standards repository into an isolated tool environment, then runs
@@ -62,62 +66,34 @@ the packaged `repo-init` command. The generated repository derives its
 `AGENTS.md`, CI workflow, `pyproject.toml`, and starter files from the version
 of this repository that `uv` resolves.
 
+Then:
+
+1. Review the generated `AGENTS.md`, `README.md`, and CI workflow.
+2. Run the quality gates in the generated repository.
+3. Make the initial commit on `main`.
+
 Pin a standards version by adding a Git ref:
 
 ```bash
 uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v0.2.0" repo-init --profile python-single --repo-name widget-service
 ```
 
-For repeated use, install the tool once:
+For repeated use, install the tool once. That puts `repo-init` and
+`repo-add-package` on your path:
 
 ```bash
 uv tool install --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-standard-kit
 ```
 
-That gives you:
-
-- `repo-init`
-- `repo-add-package`
-
-Then either create and enter an empty target repository or working directory,
-or run `repo-init` from the parent directory with `--repo-name` so it creates
-the repository folder for you.
-
-Run the bootstrap tool:
-
-```bash
-repo-init --profile python-single
-```
-
-Or from the parent directory:
-
-```bash
-repo-init --profile python-single --repo-name widget-service
-```
-
-4. Review the generated `AGENTS.md`, `README.md`, and CI workflow.
-5. Run the quality gates in the generated repository.
-6. Make the initial commit on `main`.
+If you prefer HTTPS instead of SSH, use the same command shape with the HTTPS
+Git URL for this repository.
 
 Do not clone this standards repository as the starting point for a product
 repository. Generate or template the target repository separately.
 
-For a workspace repository, use the workspace profile:
-
-```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-init --profile python-workspace --repo-name widget-platform
-```
-
-If you prefer HTTPS instead of SSH, use the same command shape with the HTTPS
-Git URL for this repository.
-
-`--repo-name` is optional. By default, `repo-init` infers the repository name
-from the target directory name. If you provide `--repo-name` without
-`--output-dir`, `repo-init` creates `./<repo-name>` and bootstraps there.
-`--description` is also optional and can be refined later in `README.md`.
-If the target directory is not yet a Git repository, `repo-init` initializes
-one automatically on `main` before installing pre-commit hooks. You can add or
-change the remote afterward.
+See [docs/bootstrap-workflow.md](docs/bootstrap-workflow.md) for the full
+option reference, the workspace `repo-add-package` flow, and the expected
+generated output.
 
 ## Current Profiles
 
@@ -129,10 +105,11 @@ change the remote afterward.
 
 Use this repository in one of two ways:
 
-- New repository: bootstrap from `starter-kits/python-single/` or
-  `starter-kits/python-workspace/` via `repo-init`
+- New repository: bootstrap with `repo-init`, which renders the
+  `python-single` or `python-workspace` starter kit
 - Existing repository: adapt the repo to match the standard and populate
-  `AGENTS.md` using `templates/AGENTS.md`
+  `AGENTS.md` and `README.md` using `templates/AGENTS.md` and
+  `templates/README.md`
 
 ## Golden Path Example
 

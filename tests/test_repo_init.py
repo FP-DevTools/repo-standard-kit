@@ -54,32 +54,19 @@ MANDATORY_PRE_COMMIT_ENTRIES = [
 ]
 
 
-def collect_relative_files(root: Path) -> set[Path]:
-    return {
-        path.relative_to(root)
-        for path in root.rglob("*")
-        if path.is_file()
-        and not any(part in IGNORED_ARTIFACT_PARTS for part in path.parts)
-        and path.suffix != ".pyc"
-    }
+STARTER_KIT_PROFILES = ("python-single", "python-workspace")
+
+STARTER_KIT_ROOT = Path("src") / "repo_standard" / "starter_kits"
 
 
-def assert_directory_contents_match(source: Path, packaged: Path) -> None:
-    source_files = collect_relative_files(source)
-    packaged_files = collect_relative_files(packaged)
-    assert packaged_files == source_files
-    for relative_path in sorted(source_files):
-        assert (packaged / relative_path).read_text(encoding="utf-8") == (
-            source / relative_path
-        ).read_text(encoding="utf-8")
+def starter_kit_dir(profile: str) -> Path:
+    return Path(__file__).resolve().parents[1] / STARTER_KIT_ROOT / profile
 
 
 def test_bootstrap_repo_renders_python_single_starter(tmp_path: Path) -> None:
-    repo_root = Path(__file__).resolve().parents[1]
     output_dir = tmp_path / "demo-service"
 
     bootstrap_repo(
-        repo_root=repo_root,
         profile="python-single",
         repo_name="demo-service",
         package_name="demo_service",
@@ -120,11 +107,9 @@ def test_bootstrap_repo_renders_python_single_starter(tmp_path: Path) -> None:
 
 
 def test_bootstrap_repo_infers_package_name_for_python_single(tmp_path: Path) -> None:
-    repo_root = Path(__file__).resolve().parents[1]
     output_dir = tmp_path / "demo-service"
 
     bootstrap_repo(
-        repo_root=repo_root,
         profile="python-single",
         repo_name="demo-service",
         package_name=None,
@@ -140,11 +125,9 @@ def test_bootstrap_repo_infers_package_name_for_python_single(tmp_path: Path) ->
 
 
 def test_bootstrap_repo_renders_python_workspace_starter(tmp_path: Path) -> None:
-    repo_root = Path(__file__).resolve().parents[1]
     output_dir = tmp_path / "widget-platform"
 
     bootstrap_repo(
-        repo_root=repo_root,
         profile="python-workspace",
         repo_name="widget-platform",
         package_name=None,
@@ -177,33 +160,14 @@ def test_bootstrap_repo_renders_python_workspace_starter(tmp_path: Path) -> None
     assert not (output_dir / "src").exists()
 
 
-def test_packaged_starter_kits_match_source_assets() -> None:
-    repo_root = Path(__file__).resolve().parents[1]
-    for profile in ("python-single", "python-workspace"):
-        assert_directory_contents_match(
-            repo_root / "starter-kits" / profile,
-            repo_root / "src" / "repo_standard" / "starter_kits" / profile,
-        )
-
-
 def test_pre_commit_configs_use_mandatory_local_uv_managed_hooks() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     config_paths = [
         repo_root / ".pre-commit-config.yaml",
-        repo_root / "starter-kits" / "python-single" / ".pre-commit-config.yaml",
-        repo_root / "starter-kits" / "python-workspace" / ".pre-commit-config.yaml",
-        repo_root
-        / "src"
-        / "repo_standard"
-        / "starter_kits"
-        / "python-single"
-        / ".pre-commit-config.yaml",
-        repo_root
-        / "src"
-        / "repo_standard"
-        / "starter_kits"
-        / "python-workspace"
-        / ".pre-commit-config.yaml",
+        *(
+            starter_kit_dir(profile) / ".pre-commit-config.yaml"
+            for profile in STARTER_KIT_PROFILES
+        ),
     ]
 
     for config_path in config_paths:
@@ -217,12 +181,7 @@ def test_pre_commit_configs_use_mandatory_local_uv_managed_hooks() -> None:
 def test_tracked_starter_assets_do_not_contain_cache_artifacts() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     result = subprocess.run(
-        [
-            "git",
-            "ls-files",
-            "starter-kits",
-            "src/repo_standard/starter_kits",
-        ],
+        ["git", "ls-files", STARTER_KIT_ROOT.as_posix()],
         cwd=repo_root,
         check=True,
         capture_output=True,
@@ -270,11 +229,9 @@ def test_built_wheel_contains_clean_packaged_starter_kits(tmp_path: Path) -> Non
 def test_bootstrap_repo_uses_uv_build_backend_for_python_single(
     tmp_path: Path,
 ) -> None:
-    repo_root = Path(__file__).resolve().parents[1]
     output_dir = tmp_path / "demo-service"
 
     bootstrap_repo(
-        repo_root=repo_root,
         profile="python-single",
         repo_name="demo-service",
         package_name="demo_service",
@@ -296,34 +253,10 @@ def test_quality_workflows_use_mandatory_ci_gate_set() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     workflow_paths = [
         repo_root / ".github" / "workflows" / "quality.yml",
-        repo_root
-        / "starter-kits"
-        / "python-single"
-        / ".github"
-        / "workflows"
-        / "quality.yml",
-        repo_root
-        / "starter-kits"
-        / "python-workspace"
-        / ".github"
-        / "workflows"
-        / "quality.yml",
-        repo_root
-        / "src"
-        / "repo_standard"
-        / "starter_kits"
-        / "python-single"
-        / ".github"
-        / "workflows"
-        / "quality.yml",
-        repo_root
-        / "src"
-        / "repo_standard"
-        / "starter_kits"
-        / "python-workspace"
-        / ".github"
-        / "workflows"
-        / "quality.yml",
+        *(
+            starter_kit_dir(profile) / ".github" / "workflows" / "quality.yml"
+            for profile in STARTER_KIT_PROFILES
+        ),
     ]
 
     for workflow_path in workflow_paths:
