@@ -78,6 +78,43 @@ def _relative(root: Path, path: Path) -> str:
     return path.relative_to(root).as_posix()
 
 
+def _git_tracked_files(root: Path) -> list[Path] | None:
+    """Files git tracks under `root`, or `None` if `root` is not a git repo."""
+    if not (root / ".git").exists():
+        return None
+    try:
+        result = subprocess.run(
+            ["git", "ls-files"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return None
+    return [root / line for line in result.stdout.splitlines() if line]
+
+
+def _iter_scannable_files(root: Path) -> list[Path]:
+    """Files a full-tree rule should inspect.
+
+    Git-tracked files when `root` is a git repository — so caches, vendored
+    dependencies, and anything else nobody committed are never scanned,
+    however they happen to be named — falling back to a filtered walk only
+    for a repository that has no `.git` yet, such as freshly bootstrapped
+    output a test inspects before it has been committed.
+    """
+    tracked = _git_tracked_files(root)
+    if tracked is not None:
+        return [path for path in tracked if path.is_file()]
+    return [
+        path
+        for path in root.rglob("*")
+        if path.is_file()
+        and not any(part in _IGNORED_DIR_PARTS for part in path.relative_to(root).parts)
+    ]
+
+
 def _prose_width_scope(root: Path) -> list[Path]:
     """Files §13's prose width applies to: `docs/**`, `README.md`, `AGENTS.md`.
 
@@ -323,12 +360,7 @@ def _check_ruff_baseline(root: Path, rules: Rules) -> list[Finding]:
 def _check_no_placeholders(root: Path, rules: Rules) -> list[Finding]:
     """RSK011: no unresolved `__PLACEHOLDER__` tokens remain (repo-standard.md)."""
     findings = []
-    for path in root.rglob("*"):
-        rel_parts = path.relative_to(root).parts
-        if any(part in _IGNORED_DIR_PARTS for part in rel_parts):
-            continue
-        if not path.is_file():
-            continue
+    for path in _iter_scannable_files(root):
         text = _read(path)
         if text is None:
             continue
