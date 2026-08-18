@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import re
 import subprocess
 import zipfile
 from pathlib import Path
 
 import pytest
+from conftest import REPO_ROOT, mandatory_ci_commands, required_agents_sections
 
 from repo_standard.repo_init import (
     bootstrap_repo,
@@ -29,15 +31,7 @@ IGNORED_ARTIFACT_PARTS = {
     "__pycache__",
 }
 
-MANDATORY_CI_COMMANDS = [
-    "uv sync --locked",
-    "uv run pre-commit run --all-files",
-    "uv run ruff format --check .",
-    "uv run ruff check .",
-    "uv run ty check",
-    "uv run pytest",
-    "uv build",
-]
+MANDATORY_CI_COMMANDS = mandatory_ci_commands()
 
 MANDATORY_PRE_COMMIT_ENTRIES = [
     "uv run check-yaml",
@@ -559,3 +553,70 @@ def test_main_infers_workspace_repo_name_from_current_directory(
     assert "# widget-platform" in readme_text
     assert (workspace_dir / "packages" / ".gitkeep").exists()
     assert "Describe this repository." in readme_text
+
+
+def _headings(path: Path) -> list[str]:
+    return re.findall(
+        r"^##\s+(.+?)\s*$", path.read_text(encoding="utf-8"), re.MULTILINE
+    )
+
+
+@pytest.mark.parametrize(
+    "agents_path",
+    [
+        Path("AGENTS.md"),
+        Path("templates/AGENTS.md"),
+        *(
+            starter_kit_dir(p).relative_to(REPO_ROOT) / "AGENTS.md"
+            for p in STARTER_KIT_PROFILES
+        ),
+    ],
+    ids=["repo-root", "template", "starter-single", "starter-workspace"],
+)
+def test_shipped_agents_files_carry_every_required_section(agents_path: Path) -> None:
+    """Every AGENTS.md we ship carries the sections docs/repo-standard.md mandates."""
+    headings = _headings(REPO_ROOT / agents_path)
+    missing = [s for s in required_agents_sections() if s not in headings]
+    assert not missing, f"{agents_path} is missing required sections: {missing}"
+
+
+@pytest.mark.parametrize("profile", STARTER_KIT_PROFILES)
+def test_generated_agents_files_carry_every_required_section(
+    profile: str, tmp_path: Path
+) -> None:
+    output_dir = tmp_path / "generated"
+    bootstrap_repo(
+        profile=profile,
+        repo_name="generated",
+        package_name=None,
+        description="Generated repo",
+        repo_type="service",
+        python_version="3.12",
+        author="",
+        output_dir=output_dir,
+        no_install=True,
+    )
+    headings = _headings(output_dir / "AGENTS.md")
+    missing = [s for s in required_agents_sections() if s not in headings]
+    assert not missing, f"generated {profile} AGENTS.md is missing: {missing}"
+
+
+def test_gate_chain_is_defined_by_the_normative_document() -> None:
+    """The chain must come from docs/quality-gates.md, not a literal in this file."""
+    commands = mandatory_ci_commands()
+    assert commands[0] == "uv sync --locked", (
+        "the chain must start by verifying a reproducible environment"
+    )
+    assert commands[-1] == "uv build", "the chain must end with build validation"
+    assert len(commands) == len(set(commands)), "duplicate gate in the spec"
+
+
+def test_profiles_neither_add_nor_relax_gates() -> None:
+    """Both profiles claim to defer to the spec; hold them to it."""
+    for profile in STARTER_KIT_PROFILES:
+        text = (REPO_ROOT / "profiles" / f"{profile}.md").read_text(encoding="utf-8")
+        assert "docs/quality-gates.md" in text
+        restated = [c for c in mandatory_ci_commands() if c in text]
+        assert not restated, (
+            f"profiles/{profile}.md restates gates instead of deferring: {restated}"
+        )
