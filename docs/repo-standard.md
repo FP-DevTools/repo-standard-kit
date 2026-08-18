@@ -24,7 +24,7 @@ Every repository adopting this standard should provide:
   audited periodically
 - exact quality-gate commands
 - a CI workflow that runs the same quality gates
-- alignment with `spec.md` for mandatory local and CI quality gates
+- alignment with `docs/quality-gates.md` for mandatory local and CI quality gates
 - a documented repository layout
 - clear API, schema, or migration rules where relevant
 - `uv` as the default Python package manager and build backend
@@ -40,12 +40,15 @@ Every repository adopting this standard should provide:
   remain human-owned.
 - Reference `repo-standard-kit` explicitly in `README.md` and `AGENTS.md` so
   standards drift can be checked against it periodically.
+- Do not claim support for a language profile in starter kits, tooling, or
+  docs until that profile is fully documented and maintained. Python is the
+  only such profile today.
 
 ## Required Companion Documents
 
 Use these documents together:
 
-- `spec.md`
+- `docs/quality-gates.md`
 - `docs/agent-operating-model.md`
 - `docs/git-workflow.md`
 - `docs/repo-layout.md`

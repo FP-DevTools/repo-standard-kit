@@ -130,15 +130,64 @@ Optional:
 
 ## Expected Output
 
-The generated repository should contain:
+Every generated repository should contain a concrete `AGENTS.md`, a README
+stating the repository purpose and workflow entry points, a GitHub Actions
+workflow running the `docs/quality-gates.md` gate chain, `uv_build` metadata in
+each package `pyproject.toml`, and no unresolved template placeholders.
 
-- a concrete `AGENTS.md`
-- baseline Python tooling files
-- a GitHub Actions workflow for the `spec.md` quality gate chain
-- `uv_build` metadata in package `pyproject.toml` files
-- a standard single-package or workspace layout
-- a README with the repository purpose and workflow entry points
-- no unresolved template placeholders
+### `python-single`
+
+`repo-init --profile python-single --repo-name widget-service` produces:
+
+```text
+widget-service/
+  .github/workflows/quality.yml
+  .pre-commit-config.yaml
+  AGENTS.md
+  README.md
+  pyproject.toml
+  docs/adr/0001-template.md
+  docs/diagrams/README.md
+  src/widget_service/__init__.py
+  tests/test_smoke.py
+```
+
+The package directory is named from `--package-name`, or inferred from the
+repository name when that flag is omitted.
+
+### `python-workspace`
+
+`repo-init --profile python-workspace --repo-name widget-platform` produces the
+workspace shell with an empty `packages/` directory:
+
+```text
+widget-platform/
+  .github/workflows/quality.yml
+  .pre-commit-config.yaml
+  AGENTS.md
+  README.md
+  pyproject.toml
+  docs/adr/0001-template.md
+  docs/diagrams/README.md
+  packages/.gitkeep
+```
+
+Each later `repo-add-package --package-name widget_api` run adds:
+
+```text
+  packages/widget-api/
+    pyproject.toml
+    README.md
+    src/widget_api/__init__.py
+    tests/test_smoke.py
+```
+
+### What Good Looks Like
+
+- No unresolved placeholders remain in generated files
+- The package directory matches the requested package name
+- `AGENTS.md` is concrete enough to use immediately, with no generic filler
+- The repository passes the full `docs/quality-gates.md` chain
 
 By default, `repo-init` infers the repository name from the target directory.
 If you pass `--repo-name` without `--output-dir`, `repo-init` creates

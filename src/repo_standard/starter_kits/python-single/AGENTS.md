@@ -11,7 +11,7 @@
 - Runtime/build system: `uv` with `uv_build` in `pyproject.toml`
 - Repository type: `__REPO_TYPE__`
 - Standards source: [repo-standard-kit](https://github.com/FP-DevTools/repo-standard-kit) —
-  quality gates derive from its `spec.md`; review this repository against it
+  quality gates derive from its `docs/quality-gates.md`; review this repository against it
   periodically for standards drift
 - Key directories:
   - `src/`: production package code

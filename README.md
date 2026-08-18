@@ -21,13 +21,12 @@ This repository provides:
 - a thin bootstrap tool for generating a new repository from the starter kit
 - GitHub Actions CI that mirrors the documented local quality gates
 - `uv`-based dependency and build configuration for Python projects
-- a JavaScript/TypeScript profile scaffold for later expansion
 
 ## What Is Normative
 
 The normative source documents are:
 
-- `spec.md`
+- `docs/quality-gates.md`
 - `docs/repo-standard.md`
 - `docs/agent-operating-model.md`
 - `docs/git-workflow.md`
@@ -46,7 +45,6 @@ define the intent and rules.
 - `templates/`: reusable templates for adopting the standard in an existing repo
 - `src/repo_standard/`: packaged bootstrap implementation
 - `src/repo_standard/starter_kits/`: copyable repository skeletons
-- `examples/`: filled examples showing the standard in practice
 
 ## Bootstrap A New Python Repository
 
@@ -99,7 +97,9 @@ generated output.
 
 - `python-single`: one package rooted at `src/<package_name>/`
 - `python-workspace`: monorepo with per-package projects under `packages/`
-- `javascript-typescript`: scaffold only for future expansion
+
+Python is the only supported language today. Other languages are added only
+once a profile is fully documented and maintained.
 
 ## Adoption Paths
 
@@ -110,13 +110,6 @@ Use this repository in one of two ways:
 - Existing repository: adapt the repo to match the standard and populate
   `AGENTS.md` and `README.md` using `templates/AGENTS.md` and
   `templates/README.md`
-
-## Golden Path Example
-
-See [examples/python-service/walkthrough.md](examples/python-service/walkthrough.md)
-for a concrete service-oriented bootstrap flow and the expected generated shape.
-See [examples/python-workspace/walkthrough.md](examples/python-workspace/walkthrough.md)
-for the workspace bootstrap and package-add flow.
 
 ## Design Principles
 

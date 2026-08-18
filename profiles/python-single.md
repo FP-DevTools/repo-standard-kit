@@ -17,16 +17,13 @@ repo root.
 
 ## Quality Gates
 
-1. `uv sync --locked`
-2. `uv run pre-commit run --all-files`
-3. `uv run ruff format --check .`
-4. `uv run ruff check .`
-5. `uv run ty check`
-6. `uv run pytest`
-7. `uv build`
+`docs/quality-gates.md` defines the mandatory local and CI gate chain. Run it
+from the repository root. This profile adds no extra gates and relaxes none.
+
+For Python profiles, `uv run ty check` is the approved static type checking
+gate, equivalent to `mypy`.
 
 ## Bootstrap Behavior
 
 - `repo-init --profile python-single`
 - `--package-name` optional and inferred from `--repo-name` when omitted
-- CI should run the same mandatory gate chain defined by `spec.md`

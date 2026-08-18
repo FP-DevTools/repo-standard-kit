@@ -28,6 +28,6 @@ Add the first package with `repo-add-package --package-name your_pkg`.
 
 The mandatory quality gates and this README's structure derive from
 [repo-standard-kit](https://github.com/FP-DevTools/repo-standard-kit)
-(`spec.md`, `templates/README.md`). Keep this file's shape aligned with that
+(`docs/quality-gates.md`, `templates/README.md`). Keep this file's shape aligned with that
 template when you update it, and check this repository against it
 periodically for standards drift.

@@ -8,9 +8,8 @@ operating boundaries.
 
 ## Repository Context
 
-- Primary focus: repository standards and Python-first starter assets
-- Secondary focus: future JavaScript/TypeScript profile scaffolding
-- Normative quality gates: `spec.md`
+- Primary focus: repository standards and Python starter assets
+- Normative quality gates: `docs/quality-gates.md`
 - Directory responsibilities: see Repository Layout below
 
 ## Human And Agent Responsibilities
@@ -25,9 +24,8 @@ Humans own:
 Agents own:
 
 - writing and updating the standards docs
-- maintaining templates and starter assets
 - implementing bootstrap tooling
-- keeping examples aligned with the standard
+- keeping templates and starter assets aligned with the standard
 
 Agents must not:
 
@@ -39,7 +37,7 @@ Agents must not:
 ## Workflow
 
 1. Update the normative docs first when changing the standard.
-2. Update templates, starter kits, and examples in the same change.
+2. Update templates and starter kits in the same change.
 3. Validate the bootstrap tool against a temporary output directory.
 4. Keep changes small and focused by concern.
 
@@ -77,10 +75,9 @@ Run from repository root:
 - `docs/`: normative standards
 - `profiles/`: language-specific profiles
 - `templates/`: reusable templates for adopting the standard in an existing repo
-- `examples/`: filled examples
 
 ## Documentation Rules
 
 - Changes to standards must update the corresponding document in `docs/`
-- Changes to templates or starter kits must keep examples consistent
+- Changes to templates or starter kits must stay consistent with each other
 - New operating rules belong in docs before they appear in starter assets

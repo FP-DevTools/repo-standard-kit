@@ -28,9 +28,7 @@ build-backend = "uv_build"
 module-name = "repo_standard"
 source-include = [
   "docs/**",
-  "examples/**",
   "profiles/**",
-  "spec.md",
   "templates/**",
 ]
 source-exclude = [

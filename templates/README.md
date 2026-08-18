@@ -159,7 +159,7 @@ and must stay time-limited.
 - Upgrade a dependency: `uv lock --upgrade-package <package>` then
   `uv sync --locked`.
 - `uv run deptry .` and `uv run pip-audit` are recommended for dependency
-  hygiene and vulnerability scanning (see `spec.md`).
+  hygiene and vulnerability scanning (see `docs/quality-gates.md`).
 - Workspace repos: each package under `packages/<slug>/` declares its own
   dependencies; the root `pyproject.toml` is tooling-only.
 
