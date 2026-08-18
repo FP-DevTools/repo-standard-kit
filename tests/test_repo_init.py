@@ -620,3 +620,69 @@ def test_profiles_neither_add_nor_relax_gates() -> None:
         assert not restated, (
             f"profiles/{profile}.md restates gates instead of deferring: {restated}"
         )
+
+
+@pytest.mark.parametrize(
+    "agents_path",
+    [
+        Path("AGENTS.md"),
+        Path("templates/AGENTS.md"),
+        *(
+            starter_kit_dir(p).relative_to(REPO_ROOT) / "AGENTS.md"
+            for p in STARTER_KIT_PROFILES
+        ),
+    ],
+    ids=["repo-root", "template", "starter-single", "starter-workspace"],
+)
+def test_shipped_agents_files_state_the_exact_gate_chain(agents_path: Path) -> None:
+    """The contract requires exact gate commands in AGENTS.md; hold each copy to it."""
+    text = (REPO_ROOT / agents_path).read_text(encoding="utf-8")
+    missing = [c for c in mandatory_ci_commands() if c not in text]
+    assert not missing, f"{agents_path} omits mandatory gates: {missing}"
+
+
+def test_readme_template_defers_to_agents_for_the_gate_chain() -> None:
+    """The README template's Quality Gates section points at AGENTS.md.
+
+    Onboarding aids elsewhere in the template - the common-commands table, the
+    setup steps - may name individual commands. What must not exist is a second
+    authoritative copy of the chain competing with the one AGENTS.md carries.
+    """
+    text = (REPO_ROOT / "templates" / "README.md").read_text(encoding="utf-8")
+    heading = "### Quality Gates"
+    assert heading in text, "templates/README.md lost its Quality Gates section"
+    section = text.split(heading, 1)[1].split("\n### ", 1)[0]
+
+    restated = [c for c in mandatory_ci_commands() if c in section]
+    assert not restated, (
+        "templates/README.md restates the gate chain instead of deferring to "
+        f"AGENTS.md: {restated}"
+    )
+    assert "AGENTS.md" in section, (
+        "the Quality Gates section must point at AGENTS.md for the chain"
+    )
+
+
+def test_quality_gates_sections_are_sequentially_numbered() -> None:
+    """Other documents cite this spec by section number; numbering must stay stable."""
+    text = (REPO_ROOT / "docs" / "quality-gates.md").read_text(encoding="utf-8")
+    numbers = [int(n) for n in re.findall(r"^##\s+(\d+)\.\s", text, re.MULTILINE)]
+    assert numbers, "quality-gates.md lost its numbered sections"
+    assert numbers == list(range(1, len(numbers) + 1)), (
+        f"sections must run 1..N with no gaps or reordering, got {numbers}"
+    )
+
+
+def test_every_cited_spec_section_exists() -> None:
+    """A §N reference anywhere in the repo must resolve to a real section."""
+    spec = (REPO_ROOT / "docs" / "quality-gates.md").read_text(encoding="utf-8")
+    existing = {int(n) for n in re.findall(r"^##\s+(\d+)\.\s", spec, re.MULTILINE)}
+
+    dangling: list[str] = []
+    for path in REPO_ROOT.rglob("*.md"):
+        if any(part in {".venv", "dist", "node_modules"} for part in path.parts):
+            continue
+        for cited in re.findall(r"§(\d+)", path.read_text(encoding="utf-8")):
+            if int(cited) not in existing:
+                dangling.append(f"{path.relative_to(REPO_ROOT)} cites §{cited}")
+    assert not dangling, f"dangling spec citations: {dangling}"
