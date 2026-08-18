@@ -380,7 +380,17 @@ def test_compliance_workflow_is_reusable_and_pinned_to_setup_uv() -> None:
     assert "workflow_call" in workflow[True]
     assert workflow["permissions"] == {"contents": "read"}
 
+    # `ref` must be required, with no default: a called reusable workflow has
+    # no reliable way to read its own `uses: ...@ref` pin from the inside, so
+    # the caller states it explicitly instead of this workflow guessing.
+    ref_input = workflow[True]["workflow_call"]["inputs"]["ref"]
+    assert ref_input["required"] is True
+    assert "default" not in ref_input
+
     text = workflow_path.read_text(encoding="utf-8")
     assert "astral-sh/setup-uv@v5" in text
     assert "actions/checkout@v5" in text
-    assert "git+https://github.com/FP-DevTools/repo-standard-kit.git" in text
+    assert (
+        "git+https://github.com/FP-DevTools/repo-standard-kit.git@${{ inputs.ref }}"
+        in text
+    )

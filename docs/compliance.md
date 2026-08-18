@@ -76,11 +76,15 @@ on:
 jobs:
   compliance:
     uses: FP-DevTools/repo-standard-kit/.github/workflows/compliance.yml@v0.4.0
+    with:
+      ref: v0.4.0
 ```
 
-The called workflow installs `repo-check` at the same ref it was called
-with, so nothing needs to be kept in sync by hand. Pass `with: { ref: ... }`
-to override that resolution if it ever proves unreliable, and `with: {
+`ref` is required and must match the pin in `uses:`. GitHub Actions does not
+give a called reusable workflow a reliable way to read that pin from inside
+itself — an earlier version of this workflow tried the `GITHUB_WORKFLOW_REF`
+self-resolution trick and it silently installed the wrong ref in a live
+cross-repo test, so the caller states it explicitly instead. Add `with: {
 strict: true }` or `with: { check-enforcement: true }` to opt into the
 stricter modes described above.
 
