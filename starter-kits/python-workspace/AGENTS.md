@@ -11,7 +11,9 @@
 - Primary language(s): `Python`
 - Runtime/build system: `uv` with shared root tooling and `uv_build` for package projects
 - Repository type: `workspace`
-- Normative quality gates: `spec.md` from the standards repository
+- Standards source: [repo-bootstrap-kit](https://github.com/FP-DevTools/repo-bootstrap-kit) —
+  quality gates derive from its `spec.md`; review this repository against it
+  periodically for standards drift
 - Key directories:
   - `packages/`: independently structured package projects
   - `docs/`: durable repository knowledge
@@ -71,6 +73,8 @@ Run from repo root:
 - Update root `README.md` when workspace usage changes
 - Add ADRs for significant workspace or package-boundary decisions
 - Document package-specific public usage in package-local READMEs
+- Keep the `repo-bootstrap-kit` reference in `README.md` and `AGENTS.md`
+  current, and check this repository against it periodically
 
 ## Repository Layout
 

@@ -108,7 +108,8 @@ a new contributor needs first.
 This README's structure follows the
 [repo-bootstrap-kit](https://github.com/FP-DevTools/repo-bootstrap-kit)
 standard (`templates/README.md`). Keep this file's shape aligned with that
-template when you update it.
+template when you update it, and check this repository against it
+periodically for standards drift.
 
 ### Set Up Your Dev Environment
 
