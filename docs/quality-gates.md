@@ -334,3 +334,41 @@ Repository maintainers are responsible for:
 - Keeping the quality gates operational;
 - Reviewing the effectiveness of the gates periodically;
 - Adjusting thresholds and tooling as the repository evolves.
+
+---
+
+## 13. Formatting Baseline
+
+Passing the formatting and linting gates of section 5 is not sufficient on its
+own. Two repositories can both pass while disagreeing about what formatted code
+looks like. This section fixes the configuration those gates run with.
+
+### Ruff configuration
+
+Every adopting repository shall configure Ruff with at least:
+
+```toml
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "PT"]
+```
+
+`line-length = 88` matches Ruff's own default and is stated explicitly so that
+it reads as a decision rather than an inherited default. The selected families
+are pycodestyle errors, Pyflakes, import sorting, flake8-bugbear, pyupgrade,
+and flake8-pytest-style.
+
+A repository may select additional rule families. It shall not drop one of the
+families above without recording an exemption under section 11.
+
+### Prose width
+
+Markdown under `docs/`, along with `README.md` and `AGENTS.md`, should wrap at
+the same 88 columns, so documentation and code share one measure and diffs stay
+reviewable line by line.
+
+Four things are exempt, because wrapping them harms them: fenced code blocks,
+table rows, link reference definitions, and any line whose length comes from a
+single unbreakable token such as a URL.

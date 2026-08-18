@@ -6,7 +6,15 @@ import zipfile
 from pathlib import Path
 
 import pytest
-from conftest import REPO_ROOT, mandatory_ci_commands, required_agents_sections
+from conftest import (
+    PROSE_WIDTH,
+    REPO_ROOT,
+    documented_ruff_baseline,
+    mandatory_ci_commands,
+    prose_offenders,
+    required_agents_sections,
+    ruff_config_of,
+)
 
 from repo_standard.repo_init import (
     bootstrap_repo,
@@ -706,3 +714,47 @@ def test_version_pin_examples_match_the_package_version() -> None:
             if pinned != version:
                 stale.append(f"{name} pins v{pinned}, package is {version}")
     assert not stale, f"stale version-pin examples: {stale}"
+
+
+@pytest.mark.parametrize(
+    "pyproject_path",
+    [
+        Path("pyproject.toml"),
+        *(
+            starter_kit_dir(p).relative_to(REPO_ROOT) / "pyproject.toml"
+            for p in STARTER_KIT_PROFILES
+        ),
+    ],
+    ids=["repo-root", "starter-single", "starter-workspace"],
+)
+def test_ruff_config_matches_the_documented_baseline(pyproject_path: Path) -> None:
+    """Passing the format gate is not enough; the config behind it must be the same."""
+    documented = documented_ruff_baseline()
+    actual = ruff_config_of(REPO_ROOT / pyproject_path)
+
+    assert actual.line_length == documented.line_length, (
+        f"{pyproject_path} sets line-length {actual.line_length}, "
+        f"baseline requires {documented.line_length}"
+    )
+    missing = set(documented.select) - set(actual.select)
+    assert not missing, (
+        f"{pyproject_path} drops required rule families: {sorted(missing)}"
+    )
+
+
+def test_markdown_wraps_at_the_documented_prose_width() -> None:
+    """The prose width in the formatting baseline applies to the docs we ship."""
+    tracked = subprocess.run(
+        ["git", "ls-files", "*.md"],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.split()
+
+    over_long = [
+        f"{name}:{line} ({width} cols)"
+        for name in tracked
+        for line, width in prose_offenders(REPO_ROOT / name)
+    ]
+    assert not over_long, f"prose exceeds {PROSE_WIDTH} columns: {over_long}"
