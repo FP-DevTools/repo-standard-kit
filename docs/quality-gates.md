@@ -84,10 +84,21 @@ Verifies that dependency resolution is reproducible.
 
 ---
 
+### Local gate verification
+
+```bash
+uv run pre-commit run --all-files
+```
+
+Confirms in CI that the mandatory local gates of section 4 were applied, so a
+bypassed local hook cannot reach `main`.
+
+---
+
 ### Formatting
 
 ```bash
-uv run ruff format --check
+uv run ruff format --check .
 ```
 
 Ensures a consistent code style.
@@ -97,7 +108,7 @@ Ensures a consistent code style.
 ### Linting
 
 ```bash
-uv run ruff check
+uv run ruff check .
 ```
 
 Ensures compliance with repository coding standards.
