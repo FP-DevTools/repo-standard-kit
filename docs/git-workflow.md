@@ -7,14 +7,6 @@ Use trunk-based development with pull requests.
 ## Branching Rules
 
 - `main` is the primary long-lived integration branch and is always releasable
-- a repository may also maintain `develop` as a second long-lived
-  integration branch, to stage a multi-phase feature whose parts are not
-  individually releasable, when additive changes on `main` are not viable.
-  Prefer landing on `main` directly; reach for `develop` only when a feature
-  cannot yet stand on its own
-- when a repository maintains `develop`, short-lived branches for that
-  feature target `develop`, and `develop` merges to `main` as a single
-  reviewed pull request once the staged work is complete
 - work happens on short-lived branches
 - use one branch per objective
 - branch prefixes:
@@ -24,6 +16,26 @@ Use trunk-based development with pull requests.
   - `docs/`
   - `chore/`
 
+## Staging Multi-Phase Work
+
+Prefer additive changes or feature flags directly on `main` for incomplete
+work. When a feature's parts are not individually releasable and that is not
+viable, a repository may maintain `develop` as a second long-lived
+integration branch to stage it. Using `develop` at all is optional per
+repository; a repository that keeps `main` as its only long-lived branch is
+equally aligned with this standard.
+
+When a repository does maintain `develop`:
+
+- short-lived branches for that feature target `develop`, not `main`
+- the staged work reaches `main` one of two ways, chosen once per feature
+  and not mixed partway through:
+  - `develop` merges to `main` directly, as a single reviewed pull request,
+    once the staged work is complete; or
+  - a release branch cut from `develop`'s tip carries its accumulated
+    commits forward, plus the release-finalizing work (a version bump, a
+    changelog entry), to `main` in its own reviewed pull request
+
 ## Parallel Collaboration
 
 - prefer small PRs over long-lived branches
@@ -31,8 +43,6 @@ Use trunk-based development with pull requests.
 - rebase private branches frequently to reduce drift
 - avoid multiple concurrent branches changing the same subsystem without
   coordination
-- prefer feature flags or additive changes on `main` for incomplete work over
-  a `develop` branch; reach for `develop` only when even that is not viable
 
 ## History Rules
 

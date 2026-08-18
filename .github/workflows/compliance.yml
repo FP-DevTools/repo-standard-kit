@@ -1,0 +1,48 @@
+name: Compliance
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: >-
+          repo-standard-kit ref to install. Must match the ref pinned in
+          `uses: .../compliance.yml@ref` — GitHub Actions does not expose a
+          reliable way for a called reusable workflow to read that pin from
+          inside itself, so the caller states it explicitly.
+        type: string
+        required: true
+      strict:
+        description: "Treat 'should' findings as failures too."
+        type: boolean
+        default: false
+      check-enforcement:
+        description: >-
+          Also check branch protection (§10). Needs gh and auth in the
+          caller's job.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  repo-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Run repo-check
+        shell: bash
+        run: |
+          args=(--format text)
+          if [ "${{ inputs.strict }}" = "true" ]; then
+            args+=(--strict)
+          fi
+          if [ "${{ inputs.check-enforcement }}" = "true" ]; then
+            args+=(--check-enforcement)
+          fi
+          uvx --from "git+https://github.com/FP-DevTools/repo-standard-kit.git@${{ inputs.ref }}" repo-check "${args[@]}"
