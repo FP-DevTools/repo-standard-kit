@@ -5,10 +5,13 @@ software repositories.
 
 ## Purpose
 
-This repository defines a practical operating model for building repositories
-with humans and agents working together. It is designed to make good defaults
-easy to adopt when creating a new repository and easy to reference when
-maintaining an existing one.
+`repo-standard-kit` packages a repository development standard together with the
+starter assets and tooling that put it into practice, so good defaults are cheap
+to adopt in a new repository and easy to check against in an existing one.
+
+This README is a guide to using the kit. It is **not normative**: the rules live
+in [docs/repo-standard.md](docs/repo-standard.md) and the companion documents it
+indexes. Where this README and the standard differ, the standard governs.
 
 This repository provides:
 
@@ -22,29 +25,26 @@ This repository provides:
 - GitHub Actions CI that mirrors the documented local quality gates
 - `uv`-based dependency and build configuration for Python projects
 
-## What Is Normative
+## The Standard
 
-The normative source documents are:
+[docs/repo-standard.md](docs/repo-standard.md) is the normative entry point. It
+states the contract a repository must satisfy and indexes the companion
+documents covering quality gates, the agent operating model, Git workflow,
+repository layout, bootstrapping, and the Python profiles.
 
-- `docs/quality-gates.md`
-- `docs/repo-standard.md`
-- `docs/agent-operating-model.md`
-- `docs/git-workflow.md`
-- `docs/repo-layout.md`
-- `docs/bootstrap-workflow.md`
-- `profiles/python-single.md`
-- `profiles/python-workspace.md`
-
-Templates and starter kits implement those standards, but the documents above
+Templates and starter kits implement that standard; the documents it indexes
 define the intent and rules.
 
-## Repository Layout
+## What Is In This Repo
 
-- `docs/`: standards and operating guidance
+- `docs/`: the standard and its companion documents
 - `profiles/`: language or repo-type specific standards
 - `templates/`: reusable templates for adopting the standard in an existing repo
 - `src/repo_standard/`: packaged bootstrap implementation
 - `src/repo_standard/starter_kits/`: copyable repository skeletons
+
+For the layout the standard prescribes for *your* repository, see
+[docs/repo-layout.md](docs/repo-layout.md).
 
 ## Bootstrap A New Python Repository
 
@@ -113,8 +113,16 @@ Use this repository in one of two ways:
 
 ## Design Principles
 
-- Portable: no workspace-specific filesystem assumptions
-- Practical: exact commands and concrete file layouts, not abstract policy only
-- Collaborative: explicit human and agent responsibility boundaries
-- Typed: strong typing expectations for Python code
-- Small-batch: trunk-based PR workflow for parallel work
+Why the standard is shaped the way it is. These are rationale, not rules — each
+is enforced by the document named beside it.
+
+- **Portable**: no workspace-specific filesystem assumptions, so the standard
+  travels between organizations — `docs/repo-standard.md`
+- **Practical**: exact commands and concrete file layouts, not abstract policy —
+  `docs/quality-gates.md`
+- **Collaborative**: explicit human and agent responsibility boundaries —
+  `docs/agent-operating-model.md`
+- **Typed**: strong typing expectations for Python code —
+  `docs/quality-gates.md`, `profiles/python-single.md`
+- **Small-batch**: short-lived branches and small PRs for parallel work —
+  `docs/git-workflow.md`

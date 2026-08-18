@@ -9,6 +9,8 @@ operating boundaries.
 ## Repository Context
 
 - Primary focus: repository standards and Python starter assets
+- Normative entry point: `docs/repo-standard.md`, which indexes every other
+  normative document
 - Normative quality gates: `docs/quality-gates.md`
 - Directory responsibilities: see Repository Layout below
 
