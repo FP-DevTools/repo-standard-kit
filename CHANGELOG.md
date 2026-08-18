@@ -36,6 +36,9 @@ the changes listed under **Adopters must**.
   repository needs GitHub Team or higher. On GitHub Free a private repository
   cannot require any check and is not aligned with the specification. Recorded
   in `docs/adr/0001-enforcement-requires-a-paid-github-plan.md`.
+- `docs/adr/` and `docs/diagrams/` in this repository, which its own canonical
+  layout in `docs/repo-layout.md` prescribes and both starter kits generate for
+  every new repository, but which it did not have.
 - `LICENSE`, and the matching `license` metadata in `pyproject.toml`.
 - `CHANGELOG.md` with the compatibility policy above.
 - Expected generated trees for both profiles in `docs/bootstrap-workflow.md`,
