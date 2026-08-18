@@ -661,3 +661,28 @@ def test_readme_template_defers_to_agents_for_the_gate_chain() -> None:
     assert "AGENTS.md" in section, (
         "the Quality Gates section must point at AGENTS.md for the chain"
     )
+
+
+def test_quality_gates_sections_are_sequentially_numbered() -> None:
+    """Other documents cite this spec by section number; numbering must stay stable."""
+    text = (REPO_ROOT / "docs" / "quality-gates.md").read_text(encoding="utf-8")
+    numbers = [int(n) for n in re.findall(r"^##\s+(\d+)\.\s", text, re.MULTILINE)]
+    assert numbers, "quality-gates.md lost its numbered sections"
+    assert numbers == list(range(1, len(numbers) + 1)), (
+        f"sections must run 1..N with no gaps or reordering, got {numbers}"
+    )
+
+
+def test_every_cited_spec_section_exists() -> None:
+    """A §N reference anywhere in the repo must resolve to a real section."""
+    spec = (REPO_ROOT / "docs" / "quality-gates.md").read_text(encoding="utf-8")
+    existing = {int(n) for n in re.findall(r"^##\s+(\d+)\.\s", spec, re.MULTILINE)}
+
+    dangling: list[str] = []
+    for path in REPO_ROOT.rglob("*.md"):
+        if any(part in {".venv", "dist", "node_modules"} for part in path.parts):
+            continue
+        for cited in re.findall(r"§(\d+)", path.read_text(encoding="utf-8")):
+            if int(cited) not in existing:
+                dangling.append(f"{path.relative_to(REPO_ROOT)} cites §{cited}")
+    assert not dangling, f"dangling spec citations: {dangling}"

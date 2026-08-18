@@ -55,6 +55,12 @@ the changes listed under **Adopters must**.
 - Tests asserting that every shipped `AGENTS.md` states the exact gate chain,
   and that the README template defers to `AGENTS.md` rather than keeping a
   second copy of it.
+- A "How to read this document" note in `docs/quality-gates.md` stating that
+  its numbered sections and normative keywords are deliberate, so that other
+  documents can cite it precisely, and that new sections are appended rather
+  than inserted.
+- Tests asserting that the spec's sections stay sequentially numbered and that
+  every `§N` citation in the repository resolves to a real section.
 - A `Change Control Notes` section in this repository's own `AGENTS.md`,
   which the contract required and it was missing.
 
