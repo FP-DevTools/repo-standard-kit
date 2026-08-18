@@ -72,6 +72,11 @@ including its `README.md`, templates, and starter kits, implements them.
 
 Where a companion document conflicts with this one, this document governs.
 
+`docs/quality-gates.md` is a specification: its sections are numbered so they
+can be cited precisely, and it uses "shall" and "should" as normative keywords.
+Every other document here is guidance and uses plain imperative voice. The
+difference is deliberate, not drift.
+
 ## Required `AGENTS.md` Sections
 
 Every target repository should include:

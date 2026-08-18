@@ -1,5 +1,15 @@
 # Quality Gates Specification
 
+> **How to read this document.** This is a specification, not guidance, and it
+> is written differently from the rest of `docs/` on purpose. Sections are
+> numbered so other documents can cite them precisely — `§10` in `CHANGELOG.md`
+> and in the ADRs means this document's section 10, and those references stay
+> valid as the text around them changes. "Shall" marks a requirement; "should"
+> marks a recommendation. The companion documents indexed by
+> `docs/repo-standard.md` are guidance and use plain imperative voice instead.
+> Renumbering a section here breaks existing citations, so add new sections at
+> the end rather than inserting them.
+
 ## 1. Purpose
 
 This specification defines the minimum quality requirements for repositories
