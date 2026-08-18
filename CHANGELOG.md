@@ -62,7 +62,11 @@ the changes listed under **Adopters must**.
   second long-lived integration branch, to stage a multi-phase feature whose
   parts are not individually releasable, when additive changes on `main`
   cannot carry the work instead. `main` remains the primary integration
-  branch and stays always releasable.
+  branch and stays always releasable. Using `develop` at all is optional.
+  When a repository does use it, staged work may reach `main` either by
+  merging `develop` directly, or via a release branch cut from `develop`'s
+  tip that also carries the release-finalizing work (a version bump, a
+  changelog entry) — the pattern this v0.4.0 release itself uses.
 
 ### Fixed
 
