@@ -82,6 +82,8 @@ After generation:
 8. Run `uv run pytest`
 9. Run `uv build`
 10. Make the initial commit on `main`
+11. Push an initial pull request, then configure branch protection on `main`
+    as specified in `docs/quality-gates.md` so the gates become binding
 
 ### Golden Path: Workspace
 

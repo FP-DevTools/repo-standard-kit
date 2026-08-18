@@ -34,6 +34,8 @@ Every repository adopting this standard should provide:
   audited periodically
 - exact quality-gate commands
 - a CI workflow that runs the same quality gates
+- branch protection on `main` that makes those gates binding rather than
+  advisory, as specified in `docs/quality-gates.md`
 - alignment with `docs/quality-gates.md` for mandatory local and CI quality gates
 - a documented repository layout
 - clear API, schema, or migration rules where relevant
