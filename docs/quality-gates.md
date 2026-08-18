@@ -229,7 +229,48 @@ A pull request may be merged into `main` only if:
 
 ---
 
-## 10. Exceptions
+## 10. Enforcement
+
+Running the gates is not the same as enforcing them. A workflow that executes
+on every pull request still permits a merge if nothing requires it to pass.
+
+Every repository adopting this specification shall protect `main` so the
+mandatory gates are binding rather than advisory.
+
+### Required branch protection
+
+On GitHub, protect `main` with:
+
+- **Require a pull request before merging**, with at least one approving
+  review and stale approvals dismissed on new commits.
+- **Require status checks to pass before merging**, selecting the `quality`
+  check produced by `.github/workflows/quality.yml`, with **Require branches
+  to be up to date before merging** enabled.
+- **Require conversation resolution before merging**.
+- **Do not allow bypassing the above settings**, including for repository
+  administrators.
+
+A status check becomes selectable only after the workflow has run at least
+once, so open an initial pull request before configuring protection.
+
+### Verification
+
+```bash
+gh api repos/<owner>/<repo>/branches/main/protection \
+  --jq '{checks: .required_status_checks.contexts,
+         reviews: .required_pull_request_reviews.required_approving_review_count,
+         enforce_admins: .enforce_admins.enabled}'
+```
+
+The `quality` check shall appear in `checks`, `reviews` shall be at least `1`,
+and `enforce_admins` shall be `true`.
+
+A repository that cannot produce this configuration is not aligned with this
+specification, regardless of whether its workflow passes.
+
+---
+
+## 11. Exceptions
 
 Temporary exemptions to these quality gates require:
 
@@ -241,7 +282,7 @@ Exemptions shall remain exceptional and time-limited.
 
 ---
 
-## 11. Ownership
+## 12. Ownership
 
 Repository maintainers are responsible for:
 
