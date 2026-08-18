@@ -10,7 +10,9 @@
 - Primary language(s): `Python`
 - Runtime/build system: `uv` with `uv_build` in `pyproject.toml`
 - Repository type: `__REPO_TYPE__`
-- Normative quality gates: `spec.md` from the standards repository
+- Standards source: [repo-standard-kit](https://github.com/FP-DevTools/repo-standard-kit) —
+  quality gates derive from its `spec.md`; review this repository against it
+  periodically for standards drift
 - Key directories:
   - `src/`: production package code
   - `tests/`: automated tests
@@ -70,6 +72,8 @@ Run from repo root:
 - Update `README.md` when setup or usage changes
 - Update `AGENTS.md` when operating rules change
 - Add ADRs for significant architecture decisions
+- Keep the `repo-standard-kit` reference in `README.md` and `AGENTS.md`
+  current, and check this repository against it periodically
 
 ## Repository Layout
 

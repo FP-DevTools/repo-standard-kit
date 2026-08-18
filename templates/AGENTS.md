@@ -9,6 +9,8 @@ Describe what this repository exists to do, for whom, and what is out of scope.
 - Repository name: `<repo-name>`
 - Primary language(s): `<languages>`
 - Runtime/build system: `<runtime>`
+- Standards source: [repo-standard-kit](https://github.com/FP-DevTools/repo-standard-kit) —
+  review this repository against it periodically for standards drift
 - Key directories:
   - `src/`: `<production-code-scope>`
   - `tests/`: `<test-scope>`
@@ -68,6 +70,8 @@ Run from repo root:
 - Update `README.md` when setup or usage changes
 - Update `AGENTS.md` when operating rules change
 - Add ADRs for significant architecture decisions
+- Keep the `repo-standard-kit` reference in `README.md` and `AGENTS.md`
+  current, and check this repository against it periodically
 
 ## Repository Layout
 

@@ -253,7 +253,7 @@ def test_built_wheel_contains_clean_packaged_starter_kits(tmp_path: Path) -> Non
         check=True,
     )
 
-    wheel_path = next(tmp_path.glob("repo_bootstrap_kit-*.whl"))
+    wheel_path = next(tmp_path.glob("repo_standard_kit-*.whl"))
     with zipfile.ZipFile(wheel_path) as wheel:
         names = set(wheel.namelist())
 

@@ -19,6 +19,9 @@ Every repository adopting this standard should provide:
 
 - a concrete `AGENTS.md`
 - a user-facing `README.md`
+- an explicit, linked reference to `repo-standard-kit` in both `README.md`
+  and `AGENTS.md`, so the repository's alignment with the standard can be
+  audited periodically
 - exact quality-gate commands
 - a CI workflow that runs the same quality gates
 - alignment with `spec.md` for mandatory local and CI quality gates
@@ -35,6 +38,8 @@ Every repository adopting this standard should provide:
   polish.
 - Keep operational boundaries explicit: product intent and release authority
   remain human-owned.
+- Reference `repo-standard-kit` explicitly in `README.md` and `AGENTS.md` so
+  standards drift can be checked against it periodically.
 
 ## Required Companion Documents
 

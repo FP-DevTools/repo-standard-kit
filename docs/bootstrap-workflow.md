@@ -19,7 +19,7 @@ Do not clone the standards repository as the base of a product repository.
 1. Run the initializer directly with `uvx`:
 
 ```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-bootstrap-kit.git" repo-init --profile python-single --repo-name widget-service
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-init --profile python-single --repo-name widget-service
 ```
 
 `uvx` is the short form of `uv tool run`. It installs the bootstrap package
@@ -41,13 +41,13 @@ the remote afterward as needed.
 For repeated use, install the tool once:
 
 ```bash
-uv tool install --from "git+ssh://git@github.com/FP-DevTools/repo-bootstrap-kit.git" repo-bootstrap-kit
+uv tool install --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-standard-kit
 ```
 
 Pin a standards version by adding a Git ref:
 
 ```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-bootstrap-kit.git@v0.1.0" repo-init --profile python-single --repo-name widget-service
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v0.1.0" repo-init --profile python-single --repo-name widget-service
 ```
 
 The generated repository derives its `AGENTS.md`, CI workflow, `pyproject.toml`,
@@ -58,14 +58,14 @@ and starter files from the version of this repository that `uv` resolves.
 From inside the empty target directory:
 
 ```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-bootstrap-kit.git" repo-init \
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-init \
   --profile python-single
 ```
 
 Or from the parent directory, let `repo-init` create the repository folder:
 
 ```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-bootstrap-kit.git" repo-init \
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-init \
   --profile python-single \
   --repo-name widget-service
 ```
@@ -88,14 +88,14 @@ After generation:
 From inside the empty workspace directory, bootstrap the workspace shell:
 
 ```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-bootstrap-kit.git" repo-init \
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-init \
   --profile python-workspace
 ```
 
 Or from the parent directory:
 
 ```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-bootstrap-kit.git" repo-init \
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-init \
   --profile python-workspace \
   --repo-name widget-platform
 ```
