@@ -107,11 +107,7 @@ def resolve_output_dir(output_dir_arg: str | None, repo_name: str | None) -> Pat
     return Path.cwd().resolve()
 
 
-def resolve_starter_dir(profile: str, repo_root: Path | None = None) -> Path:
-    if repo_root is not None:
-        candidate = repo_root / "starter-kits" / profile
-        if candidate.exists():
-            return candidate
+def resolve_starter_dir(profile: str) -> Path:
     return Path(__file__).resolve().parent / "starter_kits" / profile
 
 
@@ -244,7 +240,6 @@ def run_optional_installs(output_dir: Path) -> None:
 
 def bootstrap_repo(
     *,
-    repo_root: Path,
     profile: str,
     repo_name: str,
     package_name: str | None,
@@ -261,7 +256,7 @@ def bootstrap_repo(
     elif package_name is not None:
         raise ValueError("--package-name is only valid for python-single repos.")
 
-    starter_dir = resolve_starter_dir(profile, repo_root)
+    starter_dir = resolve_starter_dir(profile)
     ensure_output_dir(output_dir)
     copy_starter(starter_dir, output_dir)
 
@@ -287,14 +282,12 @@ def bootstrap_repo(
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    repo_root = Path(__file__).resolve().parents[2]
     output_dir = resolve_output_dir(args.output_dir, args.repo_name)
     if args.repo_name is not None:
         validate_repo_name(args.repo_name)
     repo_name = args.repo_name or infer_repo_name(output_dir)
 
     bootstrap_repo(
-        repo_root=repo_root,
         profile=args.profile,
         repo_name=repo_name,
         package_name=args.package_name,

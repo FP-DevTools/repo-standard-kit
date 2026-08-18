@@ -10,8 +10,8 @@
 - Primary language(s): `Python`
 - Runtime/build system: `uv` with `uv_build` in `pyproject.toml`
 - Repository type: `__REPO_TYPE__`
-- Standards source: [repo-standard-kit](https://github.com/FP-DevTools/repo-standard-kit) —
-  quality gates derive from its `spec.md`; review this repository against it
+- Standards source: [repo-standard-kit] — quality gates derive from its
+  [quality-gates spec][quality-gates]; review this repository against it
   periodically for standards drift
 - Key directories:
   - `src/`: production package code
@@ -86,3 +86,6 @@ Run from repo root:
 
 Document API, schema, or migration-specific rules here when the repository
 introduces them.
+
+[repo-standard-kit]: https://github.com/FP-DevTools/repo-standard-kit
+[quality-gates]: https://github.com/FP-DevTools/repo-standard-kit/blob/main/docs/quality-gates.md

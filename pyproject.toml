@@ -1,6 +1,6 @@
 [project]
 name = "repo-standard-kit"
-version = "0.1.0"
+version = "0.2.0"
 description = "Portable development standards, starter kits, and bootstrap tooling for software repositories."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -28,9 +28,7 @@ build-backend = "uv_build"
 module-name = "repo_standard"
 source-include = [
   "docs/**",
-  "examples/**",
   "profiles/**",
-  "spec.md",
   "templates/**",
 ]
 source-exclude = [

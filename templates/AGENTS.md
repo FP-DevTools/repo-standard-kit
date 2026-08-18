@@ -9,8 +9,9 @@ Describe what this repository exists to do, for whom, and what is out of scope.
 - Repository name: `<repo-name>`
 - Primary language(s): `<languages>`
 - Runtime/build system: `<runtime>`
-- Standards source: [repo-standard-kit](https://github.com/FP-DevTools/repo-standard-kit) —
-  review this repository against it periodically for standards drift
+- Standards source: [repo-standard-kit] — quality gates derive from its
+  [quality-gates spec][quality-gates]; review this repository against it
+  periodically for standards drift
 - Key directories:
   - `src/`: `<production-code-scope>`
   - `tests/`: `<test-scope>`
@@ -83,3 +84,6 @@ Run from repo root:
 ## Change Control Notes
 
 Document any repo-specific API, schema, migration, or operational constraints.
+
+[repo-standard-kit]: https://github.com/FP-DevTools/repo-standard-kit
+[quality-gates]: https://github.com/FP-DevTools/repo-standard-kit/blob/main/docs/quality-gates.md

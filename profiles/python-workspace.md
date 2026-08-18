@@ -18,19 +18,12 @@ Use this profile for monorepos with per-package projects under `packages/`.
 
 ## Quality Gates
 
-Run from workspace root:
-
-1. `uv sync --locked`
-2. `uv run pre-commit run --all-files`
-3. `uv run ruff format --check .`
-4. `uv run ruff check .`
-5. `uv run ty check`
-6. `uv run pytest`
-7. `uv build`
+`docs/quality-gates.md` defines the mandatory local and CI gate chain. Run it
+once from the workspace root so it covers every package. This profile adds no
+extra gates and relaxes none.
 
 ## Bootstrap Behavior
 
 - `repo-init --profile python-workspace`
 - starts with an empty `packages/` directory
 - add packages later with `repo-add-package`
-- CI should run the same mandatory gate chain defined by `spec.md`

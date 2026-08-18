@@ -2,7 +2,8 @@
 
 ## 1. Purpose
 
-This specification defines the minimum quality requirements for repositories using LLM-assisted development.
+This specification defines the minimum quality requirements for repositories
+using LLM-assisted development.
 
 The objective is to ensure that all changes merged into `main` remain:
 
@@ -138,7 +139,8 @@ Verifies that distributable artifacts can be produced successfully.
 
 ## 6. Generated Artifact Consistency
 
-If a repository contains generated artifacts, CI shall verify that generated outputs remain synchronized with their sources.
+If a repository contains generated artifacts, CI shall verify that generated
+outputs remain synchronized with their sources.
 
 Examples include:
 

@@ -5,10 +5,13 @@ software repositories.
 
 ## Purpose
 
-This repository defines a practical operating model for building repositories
-with humans and agents working together. It is designed to make good defaults
-easy to adopt when creating a new repository and easy to reference when
-maintaining an existing one.
+`repo-standard-kit` packages a repository development standard together with the
+starter assets and tooling that put it into practice, so good defaults are cheap
+to adopt in a new repository and easy to check against in an existing one.
+
+This README is a guide to using the kit. It is **not normative**: the rules live
+in [docs/repo-standard.md](docs/repo-standard.md) and the companion documents it
+indexes. Where this README and the standard differ, the standard governs.
 
 This repository provides:
 
@@ -21,40 +24,39 @@ This repository provides:
 - a thin bootstrap tool for generating a new repository from the starter kit
 - GitHub Actions CI that mirrors the documented local quality gates
 - `uv`-based dependency and build configuration for Python projects
-- a JavaScript/TypeScript profile scaffold for later expansion
 
-## What Is Normative
+## The Standard
 
-The normative source documents are:
+[docs/repo-standard.md](docs/repo-standard.md) is the normative entry point. It
+states the contract a repository must satisfy and indexes the companion
+documents covering quality gates, the agent operating model, Git workflow,
+repository layout, bootstrapping, and the Python profiles.
 
-- `spec.md`
-- `docs/repo-standard.md`
-- `docs/agent-operating-model.md`
-- `docs/git-workflow.md`
-- `docs/repo-layout.md`
-- `docs/bootstrap-workflow.md`
-- `profiles/python-single.md`
-- `profiles/python-workspace.md`
-
-Templates and starter kits implement those standards, but the documents above
+Templates and starter kits implement that standard; the documents it indexes
 define the intent and rules.
 
-## Repository Layout
+## What Is In This Repo
 
-- `docs/`: standards and operating guidance
+- `docs/`: the standard and its companion documents
 - `profiles/`: language or repo-type specific standards
-- `templates/`: reusable templates for repo-level files
-- `starter-kits/`: copyable repository skeletons
+- `templates/`: reusable templates for adopting the standard in an existing repo
 - `src/repo_standard/`: packaged bootstrap implementation
-- `examples/`: filled examples showing the standard in practice
+- `src/repo_standard/starter_kits/`: copyable repository skeletons
+
+For the layout the standard prescribes for *your* repository, see
+[docs/repo-layout.md](docs/repo-layout.md).
 
 ## Bootstrap A New Python Repository
 
-The recommended workflow is to run the initializer directly with `uvx`:
+Run the initializer directly with `uvx`, from the parent directory of the
+repository you want to create:
 
 ```bash
 uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-init --profile python-single --repo-name widget-service
 ```
+
+Use `--profile python-workspace` instead for a monorepo with per-package
+projects under `packages/`.
 
 `uvx` is the short form of `uv tool run`. It installs the bootstrap package
 from this standards repository into an isolated tool environment, then runs
@@ -62,89 +64,65 @@ the packaged `repo-init` command. The generated repository derives its
 `AGENTS.md`, CI workflow, `pyproject.toml`, and starter files from the version
 of this repository that `uv` resolves.
 
+Then:
+
+1. Review the generated `AGENTS.md`, `README.md`, and CI workflow.
+2. Run the quality gates in the generated repository.
+3. Make the initial commit on `main`.
+
 Pin a standards version by adding a Git ref:
 
 ```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v0.1.0" repo-init --profile python-single --repo-name widget-service
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v0.2.0" repo-init --profile python-single --repo-name widget-service
 ```
 
-For repeated use, install the tool once:
+For repeated use, install the tool once. That puts `repo-init` and
+`repo-add-package` on your path:
 
 ```bash
 uv tool install --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-standard-kit
 ```
 
-That gives you:
-
-- `repo-init`
-- `repo-add-package`
-
-Then either create and enter an empty target repository or working directory,
-or run `repo-init` from the parent directory with `--repo-name` so it creates
-the repository folder for you.
-
-Run the bootstrap tool:
-
-```bash
-repo-init --profile python-single
-```
-
-Or from the parent directory:
-
-```bash
-repo-init --profile python-single --repo-name widget-service
-```
-
-4. Review the generated `AGENTS.md`, `README.md`, and CI workflow.
-5. Run the quality gates in the generated repository.
-6. Make the initial commit on `main`.
+If you prefer HTTPS instead of SSH, use the same command shape with the HTTPS
+Git URL for this repository.
 
 Do not clone this standards repository as the starting point for a product
 repository. Generate or template the target repository separately.
 
-For a workspace repository, use the workspace profile:
-
-```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-init --profile python-workspace --repo-name widget-platform
-```
-
-If you prefer HTTPS instead of SSH, use the same command shape with the HTTPS
-Git URL for this repository.
-
-`--repo-name` is optional. By default, `repo-init` infers the repository name
-from the target directory name. If you provide `--repo-name` without
-`--output-dir`, `repo-init` creates `./<repo-name>` and bootstraps there.
-`--description` is also optional and can be refined later in `README.md`.
-If the target directory is not yet a Git repository, `repo-init` initializes
-one automatically on `main` before installing pre-commit hooks. You can add or
-change the remote afterward.
+See [docs/bootstrap-workflow.md](docs/bootstrap-workflow.md) for the full
+option reference, the workspace `repo-add-package` flow, and the expected
+generated output.
 
 ## Current Profiles
 
 - `python-single`: one package rooted at `src/<package_name>/`
 - `python-workspace`: monorepo with per-package projects under `packages/`
-- `javascript-typescript`: scaffold only for future expansion
+
+Python is the only supported language today. Other languages are added only
+once a profile is fully documented and maintained.
 
 ## Adoption Paths
 
 Use this repository in one of two ways:
 
-- New repository: bootstrap from `starter-kits/python-single/` or
-  `starter-kits/python-workspace/` via `repo-init`
+- New repository: bootstrap with `repo-init`, which renders the
+  `python-single` or `python-workspace` starter kit
 - Existing repository: adapt the repo to match the standard and populate
-  `AGENTS.md` using `templates/AGENTS.md`
-
-## Golden Path Example
-
-See [examples/python-service/walkthrough.md](examples/python-service/walkthrough.md)
-for a concrete service-oriented bootstrap flow and the expected generated shape.
-See [examples/python-workspace/walkthrough.md](examples/python-workspace/walkthrough.md)
-for the workspace bootstrap and package-add flow.
+  `AGENTS.md` and `README.md` using `templates/AGENTS.md` and
+  `templates/README.md`
 
 ## Design Principles
 
-- Portable: no workspace-specific filesystem assumptions
-- Practical: exact commands and concrete file layouts, not abstract policy only
-- Collaborative: explicit human and agent responsibility boundaries
-- Typed: strong typing expectations for Python code
-- Small-batch: trunk-based PR workflow for parallel work
+Why the standard is shaped the way it is. These are rationale, not rules — each
+is enforced by the document named beside it.
+
+- **Portable**: no workspace-specific filesystem assumptions, so the standard
+  travels between organizations — `docs/repo-standard.md`
+- **Practical**: exact commands and concrete file layouts, not abstract policy —
+  `docs/quality-gates.md`
+- **Collaborative**: explicit human and agent responsibility boundaries —
+  `docs/agent-operating-model.md`
+- **Typed**: strong typing expectations for Python code —
+  `docs/quality-gates.md`, `profiles/python-single.md`
+- **Small-batch**: short-lived branches and small PRs for parallel work —
+  `docs/git-workflow.md`
