@@ -115,12 +115,18 @@ jobs:
   compliance:
     uses: FP-DevTools/repo-standard-kit/.github/workflows/compliance.yml@<full-sha>
     with:
-      ref: v1.0.0
+      standard-ref: v1.0.0
 ```
 
-The caller supplies `ref` because a called workflow cannot reliably infer the
-ref used by its caller. Pin the reusable workflow itself to a full commit SHA,
-and confirm the caller emits the required `compliance` status.
+The reusable workflow itself SHALL be pinned to a full commit SHA. That
+immutable `uses:` reference selects the workflow implementation the caller
+trusts. The distinct `standard-ref` input selects the released
+`repo-standard-kit` revision whose packaged checker and compiled policy are
+executed; a human-readable immutable release tag such as `v1.0.0` is permitted.
+The workflow passes that input through the environment, validates it against a
+narrow Git-ref character allowlist, and never interpolates caller-controlled
+inputs directly into Bash source. Confirm the caller emits the required
+`compliance` status.
 
 ## Canonical Policy And Generation
 
@@ -154,8 +160,10 @@ remediation. Markdown explains policy but supplies no executable values.
 - Pre-commit is parsed structurally. RSK007 matches hook IDs, normalized entry
   and argument tokens, and policy-owned material fields such as filters and
   `pass_filenames`.
-- AGENTS.md remains a heading and literal-contract check. There is no
-  subjective prose scoring.
+- RSK003 compares the standalone inline-code list entries under
+  `## Quality Gates` with the exact ordered chain for the resolved profile.
+  Commands elsewhere in AGENTS.md do not count, and unrelated section prose is
+  not scored.
 - RSK020 requires the quality job's effective permissions to exactly match the
   policy-owned `contents: read` mapping; extra read scopes and all write scopes
   fail. RSK021 requires full SHA pins for remote actions and reusable workflows

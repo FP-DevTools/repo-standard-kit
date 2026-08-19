@@ -4,12 +4,10 @@ on:
   pull_request:
   workflow_call:
     inputs:
-      ref:
+      standard-ref:
         description: >-
-          repo-standard-kit ref to install. Must match the ref pinned in
-          `uses: .../compliance.yml@ref` — GitHub Actions does not expose a
-          reliable way for a called reusable workflow to read that pin from
-          inside itself, so the caller states it explicitly.
+          Released repo-standard-kit ref whose packaged checker and compiled
+          policy should execute.
         type: string
         required: true
       strict:
@@ -39,16 +37,26 @@ jobs:
 
       - name: Run repo-check
         shell: bash
+        env:
+          REPO_STANDARD_REF: ${{ inputs.standard-ref }}
+          STRICT: ${{ inputs.strict }}
+          CHECK_ENFORCEMENT: ${{ inputs.check-enforcement }}
         run: |
           args=(--format text)
-          if [ "${{ inputs.strict }}" = "true" ]; then
+          if [ "$STRICT" = "true" ]; then
             args+=(--strict)
           fi
-          if [ "${{ inputs.check-enforcement }}" = "true" ]; then
+          if [ "$CHECK_ENFORCEMENT" = "true" ]; then
             args+=(--check-enforcement)
           fi
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
             uv run --locked --no-dev repo-check . "${args[@]}"
           else
-            uvx --from "git+https://github.com/FP-DevTools/repo-standard-kit.git@${{ inputs.ref }}" repo-check . "${args[@]}"
+            if [[ ! "$REPO_STANDARD_REF" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+              echo "Invalid repo-standard-kit ref" >&2
+              exit 2
+            fi
+            uvx \
+              --from "git+https://github.com/FP-DevTools/repo-standard-kit.git@$REPO_STANDARD_REF" \
+              repo-check . "${args[@]}"
           fi

@@ -8,6 +8,7 @@ import zipfile
 from pathlib import Path
 
 import pytest
+import yaml
 from conftest import (
     REPO_ROOT,
     documented_ruff_policy,
@@ -95,7 +96,7 @@ def test_bootstrap_repo_renders_python_single_starter(tmp_path: Path) -> None:
     assert pyproject_text.count("[tool.repo-standard]") == 1
     assert 'profile = "python-single"' in pyproject_text
     assert 'standard = "1"' in pyproject_text
-    for command in MANDATORY_CI_COMMANDS:
+    for command in mandatory_ci_commands("python-single"):
         assert command in agents_text
         assert command in workflow_text
     for entry in MANDATORY_PRE_COMMIT_ENTRIES:
@@ -158,7 +159,7 @@ def test_bootstrap_repo_renders_python_workspace_starter(tmp_path: Path) -> None
         "profile": "python-workspace",
         "standard": "1",
     }
-    for command in MANDATORY_CI_COMMANDS:
+    for command in mandatory_ci_commands("python-workspace"):
         assert command in agents_text
         assert command in workflow_text
     for entry in MANDATORY_PRE_COMMIT_ENTRIES:
@@ -348,6 +349,39 @@ def test_compliance_workflows_emit_an_independent_required_status() -> None:
         assert "repo-standard-kit.git@v1.0.0" in workflow_path.read_text(
             encoding="utf-8"
         )
+
+
+def test_reusable_compliance_workflow_keeps_inputs_out_of_shell_source() -> None:
+    workflow_path = REPO_ROOT / ".github" / "workflows" / "compliance.yml"
+    workflow_text = workflow_path.read_text(encoding="utf-8")
+    workflow = yaml.safe_load(workflow_text)
+    run_step = next(
+        step
+        for step in workflow["jobs"]["compliance"]["steps"]
+        if step.get("name") == "Run repo-check"
+    )
+
+    assert run_step["env"] == {
+        "REPO_STANDARD_REF": "${{ inputs.standard-ref }}",
+        "STRICT": "${{ inputs.strict }}",
+        "CHECK_ENFORCEMENT": "${{ inputs.check-enforcement }}",
+    }
+    run = run_step["run"]
+    assert "${{ inputs." not in run
+    assert "$REPO_STANDARD_REF" in run
+    assert '$STRICT" = "true' in run
+    assert '$CHECK_ENFORCEMENT" = "true' in run
+
+
+def test_reusable_compliance_workflow_validates_standard_ref() -> None:
+    workflow_text = (REPO_ROOT / ".github" / "workflows" / "compliance.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert '[[ ! "$REPO_STANDARD_REF" =~ ^[A-Za-z0-9._/-]+$ ]]' in workflow_text
+    assert 'echo "Invalid repo-standard-kit ref" >&2' in workflow_text
+    assert "exit 2" in workflow_text
+    assert "repo-standard-kit.git@$REPO_STANDARD_REF" in workflow_text
 
 
 def test_root_pyproject_uses_uv_build_backend() -> None:
@@ -694,12 +728,15 @@ def test_generated_agents_files_carry_every_required_section(
 
 def test_gate_chain_is_defined_by_the_normative_document() -> None:
     """The chain must come from docs/quality-gates.md, not a literal in this file."""
-    commands = mandatory_ci_commands()
-    assert commands[0] == "uv sync --locked", (
-        "the chain must start by verifying a reproducible environment"
-    )
-    assert commands[-1] == "uv build", "the chain must end with build validation"
-    assert len(commands) == len(set(commands)), "duplicate gate in the spec"
+    for profile in STARTER_KIT_PROFILES:
+        commands = mandatory_ci_commands(profile)
+        assert commands[0] == "uv sync --locked", (
+            "the chain must start by verifying a reproducible environment"
+        )
+        assert commands[-1].startswith("uv build"), (
+            "the chain must end with build validation"
+        )
+        assert len(commands) == len(set(commands)), "duplicate gate in the spec"
 
 
 def test_profiles_neither_add_nor_relax_gates() -> None:
@@ -714,21 +751,23 @@ def test_profiles_neither_add_nor_relax_gates() -> None:
 
 
 @pytest.mark.parametrize(
-    "agents_path",
+    ("agents_path", "profile"),
     [
-        Path("AGENTS.md"),
-        Path("templates/AGENTS.md"),
+        (Path("AGENTS.md"), "python-single"),
+        (Path("templates/AGENTS.md"), "python-single"),
         *(
-            starter_kit_dir(p).relative_to(REPO_ROOT) / "AGENTS.md"
+            (starter_kit_dir(p).relative_to(REPO_ROOT) / "AGENTS.md", p)
             for p in STARTER_KIT_PROFILES
         ),
     ],
     ids=["repo-root", "template", "starter-single", "starter-workspace"],
 )
-def test_shipped_agents_files_state_the_exact_gate_chain(agents_path: Path) -> None:
+def test_shipped_agents_files_state_the_exact_gate_chain(
+    agents_path: Path, profile: str
+) -> None:
     """The contract requires exact gate commands in AGENTS.md; hold each copy to it."""
     text = (REPO_ROOT / agents_path).read_text(encoding="utf-8")
-    missing = [c for c in mandatory_ci_commands() if c not in text]
+    missing = [c for c in mandatory_ci_commands(profile) if c not in text]
     assert not missing, f"{agents_path} omits mandatory gates: {missing}"
 
 
