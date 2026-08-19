@@ -71,10 +71,17 @@ Local checks should remain lightweight and fast.
 
 This standard treats `ty` as the approved equivalent to `mypy` for Python
 starter repositories, and `pymarkdown` as the approved Markdown linter.
-Markdown structural linting shall not re-check prose width — section 13
-already owns that, with exemptions the linter's own line-length rule does
-not know about, so a repository shall disable it there (`md013` for
-`pymarkdown`) rather than run two disagreeing checks.
+Markdown structural linting shall run with its line-length rule (`md013`)
+disabled — section 13 recommends a prose width but does not mandate one
+(see below), so this gate shall not turn that recommendation into a block.
+A repository may enable `md013` locally if it wants to enforce prose width,
+paired with `--exclude <pattern>` for generated or vendored Markdown that
+was never written to any prose convention. `md033` (no inline HTML) and
+`md036` (emphasis instead of heading) shall also run disabled by default:
+both false-positive on conventions this standard itself relies on —
+`<angle-bracket>` fill-in-the-blank placeholders in `templates/`, and
+`__DUNDER__`-shaped bootstrap tokens, which are valid Markdown
+strong-emphasis syntax before a starter kit is rendered.
 
 ### Recommended tools
 
@@ -361,10 +368,12 @@ beyond both lists above.
 
 ### Prose width
 
-Markdown under `docs/`, along with `README.md` and `AGENTS.md`, should wrap at
-the same 88 columns, so documentation and code share one measure and diffs stay
-reviewable line by line.
-
-Four things are exempt, because wrapping them harms them: fenced code blocks,
-table rows, link reference definitions, and any line whose length comes from a
-single unbreakable token such as a URL.
+Markdown under `docs/`, along with `README.md` and `AGENTS.md`, should wrap
+at the same 88 columns as the Ruff baseline above, so documentation and code
+share one measure and diffs stay reviewable line by line — the same
+recommended-not-required treatment section 4 gives `pymarkdown`'s `md013`
+rule. A repository that enables it locally gets `md013`'s own defaults for
+free: fenced code blocks, link reference definitions, and a line whose
+length comes from one unbreakable token such as a URL are already exempt.
+It does not exempt table rows — keep them within the limit too, or exclude
+the file.

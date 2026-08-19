@@ -19,7 +19,6 @@ from repo_standard.repo_init import PLACEHOLDERS
 
 CI_GATES_SECTION = "## 5. CI Pull Request Gates"
 FORMATTING_SECTION = "## 13. Formatting Baseline"
-PROSE_WIDTH = 88
 REQUIRED_SECTIONS_HEADING = "## Required `AGENTS.md` Sections"
 
 # The exact bootstrap placeholder vocabulary `repo_init.py` substitutes, not
@@ -129,32 +128,6 @@ def ruff_config_of(pyproject_path: Path) -> RuffBaseline:
     )
 
 
-def prose_offenders(path: Path, limit: int = PROSE_WIDTH) -> list[tuple[int, int]]:
-    """Over-long markdown lines, ignoring what cannot reasonably be wrapped.
-
-    Exempt, per the formatting baseline: fenced code blocks, table rows, link
-    reference definitions, and lines whose length comes from one unbreakable
-    token such as a URL.
-    """
-    offenders: list[tuple[int, int]] = []
-    in_fence = False
-    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-        stripped = line.lstrip()
-        if stripped.startswith("```"):
-            in_fence = not in_fence
-            continue
-        if in_fence or len(line) <= limit:
-            continue
-        if stripped.startswith("|"):
-            continue
-        if stripped.startswith("[") and "]: http" in line:
-            continue
-        if max((len(word) for word in line.split()), default=0) > limit - 20:
-            continue
-        offenders.append((number, len(line)))
-    return offenders
-
-
 class Rules(NamedTuple):
     """The frozen, machine-readable form of the normative documents.
 
@@ -168,7 +141,6 @@ class Rules(NamedTuple):
     ruff_mandatory_select: tuple[str, ...]
     ruff_recommended_line_length: int
     ruff_recommended_select: tuple[str, ...]
-    prose_width: int
     mandatory_pre_commit_entries: tuple[str, ...]
     known_placeholder_tokens: tuple[str, ...]
 
@@ -180,7 +152,6 @@ class Rules(NamedTuple):
             "ruff_mandatory_select": list(self.ruff_mandatory_select),
             "ruff_recommended_line_length": self.ruff_recommended_line_length,
             "ruff_recommended_select": list(self.ruff_recommended_select),
-            "prose_width": self.prose_width,
             "mandatory_pre_commit_entries": list(self.mandatory_pre_commit_entries),
             "known_placeholder_tokens": list(self.known_placeholder_tokens),
         }
@@ -194,7 +165,6 @@ class Rules(NamedTuple):
             ruff_mandatory_select=tuple(data["ruff_mandatory_select"]),
             ruff_recommended_line_length=data["ruff_recommended_line_length"],
             ruff_recommended_select=tuple(data["ruff_recommended_select"]),
-            prose_width=data["prose_width"],
             mandatory_pre_commit_entries=tuple(data["mandatory_pre_commit_entries"]),
             known_placeholder_tokens=tuple(data["known_placeholder_tokens"]),
         )
@@ -219,7 +189,6 @@ def build_rules(repo_root: Path) -> Rules:
         ruff_mandatory_select=ruff_policy.mandatory_select,
         ruff_recommended_line_length=ruff_policy.recommended_line_length,
         ruff_recommended_select=ruff_policy.recommended_select,
-        prose_width=PROSE_WIDTH,
         mandatory_pre_commit_entries=MANDATORY_PRE_COMMIT_ENTRIES,
         known_placeholder_tokens=KNOWN_PLACEHOLDER_TOKENS,
     )

@@ -128,13 +128,12 @@ behind `--check-enforcement`.
 | `RSK004` | `README.md` exists | Repository Contract | shall |
 | `RSK005` | Both reference repo-standard-kit | `repo-standard.md` | shall |
 | `RSK006` | `quality.yml` runs the full gate chain | §5 | shall |
-| `RSK007` | Mandatory pre-commit hooks present (incl. `ty check`, `pymarkdown`) | §4 | shall |
-| `RSK008` | `pyproject.toml` uses `uv_build` where a build-system is declared | Repository Contract | shall |
+| `RSK007` | Mandatory pre-commit hooks present | §4 | shall |
+| `RSK008` | Build-system, if declared, is `uv_build` | Repository Contract | shall |
 | `RSK009` | `uv.lock` is present | Repository Contract | shall |
-| `RSK010` | Ruff `line-length` declared and mandatory rule families selected | §13 | shall |
+| `RSK010` | Ruff `line-length` declared; mandatory families selected | §13 | shall |
 | `RSK011` | No unresolved `__PLACEHOLDER__` tokens | `repo-standard.md` | shall |
 | `RSK012` | `docs/adr/` exists | `repo-layout.md` | should |
-| `RSK013` | `docs/`, `README.md`, `AGENTS.md` wrap at the prose width | §13 | should |
 | `RSK014` | Branch protection configured on `main` | §10 | platform |
 | `RSK015` | Ruff `line-length` matches the recommended value (`88`) | §13 | should |
 | `RSK016` | Recommended rule family `PT` is selected | §13 | should |

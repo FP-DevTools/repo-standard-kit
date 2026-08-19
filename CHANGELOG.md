@@ -38,14 +38,17 @@ the changes listed under **Adopters must**.
   §11 exemption.
 - §4 now mandates Markdown structural linting as a local pre-commit gate
   (`uv run pymarkdown --config .pymarkdown.json scan`), approving
-  `pymarkdown` as the tool. Configured to disable `md013` (line-length,
-  already owned by §13), `md024` restricted to sibling headings (Keep a
-  Changelog-style files repeat "### Added" once per version section by
-  design), `md036` (collides with `__DUNDER__`-shaped placeholder tokens,
-  which are valid Markdown strong-emphasis syntax), and `md033` (collides
-  with `templates/`'s `<angle-bracket>` human-fill-in-the-blank
-  convention). It does not lint the contents of fenced code blocks, so it
-  cannot conflict with Ruff's ownership of Python formatting and linting.
+  `pymarkdown` as the tool. Configured to disable `md024` restricted to
+  sibling headings (Keep a Changelog-style files repeat "### Added" once
+  per version section by design), and `md036`/`md033` disabled entirely
+  (both false-positive on conventions this standard itself relies on —
+  `__DUNDER__`-shaped bootstrap tokens, which are valid Markdown
+  strong-emphasis syntax, and `templates/`'s `<angle-bracket>`
+  fill-in-the-blank placeholders). It does not lint the contents of fenced
+  code blocks, so it cannot conflict with Ruff's ownership of Python
+  formatting and linting. `md013` (line-length) ships configured
+  (`line_length: 88`) but disabled by default — see the `RSK013` retirement
+  below.
 
 ### Fixed
 
@@ -85,6 +88,26 @@ the changes listed under **Adopters must**.
   implicit default, that `should` findings are non-blocking everywhere
   `repo-check` runs (the CLI, the pre-commit hook, and the reusable CI
   workflow all agree on this).
+- **§13 prose width downgraded from a `shall` to a `should`, matching how
+  the Ruff `line-length` *value* already worked.** Checking `md013`
+  ourselves via `repo_standard.compliance.spec.prose_offenders` duplicated
+  what a real linter already does correctly — verified empirically: its
+  defaults already exempt fenced code, link reference definitions, and
+  unbreakable long tokens, matching the custom exemptions exactly. Its one
+  real gap (table rows can't be exempted via config) turned out to be a
+  smaller, more honest tradeoff than maintaining bespoke line-wrapping
+  logic. A repository may enable `md013` locally to enforce prose width;
+  this standard no longer mandates it.
+
+### Removed
+
+- `RSK013` (Markdown prose width) and the underlying
+  `prose_offenders`/`PROSE_WIDTH` implementation in
+  `repo_standard.compliance.spec`, along with this repository's own
+  `test_markdown_wraps_at_the_documented_prose_width` test — retired in
+  favor of `pymarkdown`'s `md013`, per the `should`-not-`shall` change
+  above. `repo-check` no longer reports a prose-width finding at all;
+  a repository that wants one runs `pymarkdown` with `md013` enabled.
 
 ### Adopters must
 
@@ -103,6 +126,9 @@ the changes listed under **Adopters must**.
   old seven steps remains aligned (`RSK006` checks for a subset, not an
   exact match); removing the now-redundant standalone steps is recommended
   cleanup, not required.
+- Nothing for the retired `RSK013` — a repository loses a `should`-level
+  finding, not a requirement. Enabling `md013` locally to keep enforcing
+  prose width is a choice, not something this release asks for.
 
 ## [0.4.0] - 2026-08-18
 

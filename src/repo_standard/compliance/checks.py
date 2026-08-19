@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from repo_standard.compliance.spec import Rules, prose_offenders
+from repo_standard.compliance.spec import Rules
 
 RULES_JSON_PATH = Path(__file__).resolve().parent / "rules.json"
 
@@ -113,29 +113,6 @@ def _iter_scannable_files(root: Path) -> list[Path]:
         if path.is_file()
         and not any(part in _IGNORED_DIR_PARTS for part in path.relative_to(root).parts)
     ]
-
-
-def _prose_width_scope(root: Path) -> list[Path]:
-    """Files §13's prose width applies to: `docs/**`, `README.md`, `AGENTS.md`.
-
-    Not every tracked Markdown file — a repository's `docs/` tree commonly
-    sits alongside generated, non-prose Markdown (diff summaries, changelogs
-    pulled from elsewhere) that §13 was never written to cover.
-    """
-    files = [
-        path for name in ("README.md", "AGENTS.md") if (path := root / name).is_file()
-    ]
-    docs_dir = root / "docs"
-    if docs_dir.is_dir():
-        files.extend(
-            path
-            for path in docs_dir.rglob("*.md")
-            if path.is_file()
-            and not any(
-                part in _IGNORED_DIR_PARTS for part in path.relative_to(root).parts
-            )
-        )
-    return files
 
 
 # --- individual rule checks -------------------------------------------------
@@ -456,23 +433,6 @@ def _check_adr_dir(root: Path, rules: Rules) -> list[Finding]:
     return [Finding("RSK012", "should", "docs/adr", None, "docs/adr/ is missing.")]
 
 
-def _check_prose_width(root: Path, rules: Rules) -> list[Finding]:
-    """RSK013: docs/, README.md, and AGENTS.md wrap at the prose width (§13)."""
-    findings = []
-    for path in _prose_width_scope(root):
-        for line_number, width in prose_offenders(path, rules.prose_width):
-            findings.append(
-                Finding(
-                    "RSK013",
-                    "should",
-                    _relative(root, path),
-                    line_number,
-                    f"Line exceeds {rules.prose_width} columns ({width}).",
-                )
-            )
-    return findings
-
-
 def _git_remote_url(root: Path) -> str | None:
     try:
         result = subprocess.run(
@@ -600,7 +560,6 @@ _STRUCTURAL_CHECKS = (
     _check_ruff_recommended_select,
     _check_no_placeholders,
     _check_adr_dir,
-    _check_prose_width,
 )
 
 

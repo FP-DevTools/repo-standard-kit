@@ -28,7 +28,6 @@
     "uv run ty check",
     "uv run pymarkdown --config .pymarkdown.json scan"
   ],
-  "prose_width": 88,
   "required_agents_sections": [
     "Repository Purpose",
     "Repository Context",

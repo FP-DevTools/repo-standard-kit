@@ -7,11 +7,9 @@ from pathlib import Path
 
 import pytest
 from conftest import (
-    PROSE_WIDTH,
     REPO_ROOT,
     documented_ruff_policy,
     mandatory_ci_commands,
-    prose_offenders,
     required_agents_sections,
     ruff_config_of,
 )
@@ -774,21 +772,3 @@ def test_ruff_config_matches_the_documented_baseline(pyproject_path: Path) -> No
         f"{pyproject_path} drops recommended rule families: "
         f"{sorted(missing_recommended)}"
     )
-
-
-def test_markdown_wraps_at_the_documented_prose_width() -> None:
-    """The prose width in the formatting baseline applies to the docs we ship."""
-    tracked = subprocess.run(
-        ["git", "ls-files", "*.md"],
-        cwd=REPO_ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.split()
-
-    over_long = [
-        f"{name}:{line} ({width} cols)"
-        for name in tracked
-        for line, width in prose_offenders(REPO_ROOT / name)
-    ]
-    assert not over_long, f"prose exceeds {PROSE_WIDTH} columns: {over_long}"

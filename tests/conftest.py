@@ -20,10 +20,8 @@ if str(SRC) not in sys.path:
 
 from repo_standard.compliance import spec  # noqa: E402
 
-PROSE_WIDTH = spec.PROSE_WIDTH
 RuffBaseline = spec.RuffBaseline
 RuffPolicy = spec.RuffPolicy
-prose_offenders = spec.prose_offenders
 ruff_config_of = spec.ruff_config_of
 
 QUALITY_GATES_DOC = REPO_ROOT / "docs" / "quality-gates.md"
