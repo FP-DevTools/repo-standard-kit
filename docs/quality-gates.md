@@ -1,14 +1,15 @@
 # Quality Gates Specification
 
-> **How to read this document.** This is a specification, not guidance, and it
-> is written differently from the rest of `docs/` on purpose. Sections are
-> numbered so other documents can cite them precisely — `§10` in `CHANGELOG.md`
-> and in the ADRs means this document's section 10, and those references stay
-> valid as the text around them changes. "Shall" marks a requirement; "should"
-> marks a recommendation. The companion documents indexed by
-> `docs/repo-standard.md` are guidance and use plain imperative voice instead.
-> Renumbering a section here breaks existing citations, so add new sections at
-> the end rather than inserting them.
+This document is part of the normative repository standard.
+
+Its numbered sections provide stable cross-reference targets. The normative
+keywords defined in `docs/repo-standard.md` apply here. Renumbering a section
+breaks existing citations, so add new sections at the end rather than inserting
+them.
+
+Machine-enforced values and check configuration are defined by
+`policy/base.yaml` and `policy/profiles/`. This document explains the intent and
+required behavior; it is not parsed to derive executable policy.
 
 ## 1. Purpose
 

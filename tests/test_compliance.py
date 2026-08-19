@@ -215,6 +215,19 @@ def test_generated_policy_artifacts_are_current_and_deterministic() -> None:
     ) == render_reference(source)
 
 
+def test_quality_gates_uses_the_shared_normative_vocabulary() -> None:
+    text = (REPO_ROOT / "docs" / "quality-gates.md").read_text(encoding="utf-8")
+    assert "This document is part of the normative repository standard." in text
+    assert "it is not parsed to derive executable policy." in text
+    obsolete_wording = (
+        "This is a specification, not guidance",
+        "written differently from the rest of `docs/`",
+        "are guidance and use plain imperative voice instead",
+        "quality-gates is the only specification",
+    )
+    assert not any(phrase in text for phrase in obsolete_wording)
+
+
 def test_every_typed_check_kind_has_exactly_one_runtime_handler() -> None:
     assert set(CHECK_SCHEMAS) == set(CHECK_HANDLERS)
 
