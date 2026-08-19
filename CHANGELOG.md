@@ -47,6 +47,10 @@ the changes listed under **Adopters must**.
   material hook fields, permissions, and action pins.
 - GitHub Actions Dependabot configuration in this repository and both starter
   kits so immutable pins receive automated update proposals.
+- Independent pull-request `compliance` jobs in this repository and both
+  starter kits. RSK014 now requires both `quality` and `compliance`: quality
+  proves the gate chain passes, while compliance prevents the chain and wider
+  repository standard from drifting unnoticed.
 
 - §4 now mandates static type checking as a local pre-commit gate
   (`uv run ty check`), so it can be verified in CI exclusively through the
@@ -158,13 +162,12 @@ the changes listed under **Adopters must**.
 - **§13 relaxed: `PT` is now a recommended rule family, not a mandatory
   one.** Dropping it no longer needs a §11 exemption. `RSK016` reports it
   as a `should`.
-- `docs/compliance.md`: documents that `repo-check`'s three consumption
-  surfaces are alternatives, not additive — wiring in both the pre-commit
-  hook and the reusable CI workflow runs the same check twice for the same
-  pull request. States explicitly, as a design invariant rather than an
-  implicit default, that `should` findings are non-blocking everywhere
-  `repo-check` runs (the CLI, the pre-commit hook, and the reusable CI
-  workflow all agree on this).
+- `docs/compliance.md` now distinguishes optional early pre-commit feedback
+  from the independently required `compliance` CI status. Starter repositories
+  intentionally run the structural check in pre-commit and as a separate
+  protected status so removing or weakening the quality workflow cannot pass
+  unnoticed. `should` findings remain non-blocking everywhere `repo-check`
+  runs.
 - **§13 prose width downgraded from a `shall` to a `should`, matching how
   the Ruff `line-length` *value* already worked.** Checking `md013`
   ourselves via `repo_standard.compliance.spec.prose_offenders` duplicated
@@ -195,8 +198,10 @@ the changes listed under **Adopters must**.
 - Add `[tool.repo-standard]` to `pyproject.toml` with
   `profile = "python-single"` or `profile = "python-workspace"`, and
   `standard = "1"`.
-- Give the standard `quality` job effective `contents: read` permissions and
-  remove unnecessary write permissions.
+- Give the standard `quality` job effective permissions exactly equivalent to
+  `contents: read`.
+- Add a pull-request compliance workflow that emits a `compliance` status, and
+  require both `quality` and `compliance` in branch protection or rulesets.
 - Replace mutable remote action and reusable-workflow refs in the quality job
   with full 40-character commit SHAs. Retain version comments and add a
   GitHub Actions Dependabot entry so those pins remain maintainable.

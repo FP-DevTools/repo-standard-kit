@@ -1,6 +1,7 @@
 name: Compliance
 
 on:
+  pull_request:
   workflow_call:
     inputs:
       ref:
@@ -26,7 +27,8 @@ permissions:
   contents: read
 
 jobs:
-  repo-check:
+  compliance:
+    name: compliance
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -45,4 +47,8 @@ jobs:
           if [ "${{ inputs.check-enforcement }}" = "true" ]; then
             args+=(--check-enforcement)
           fi
-          uvx --from "git+https://github.com/FP-DevTools/repo-standard-kit.git@${{ inputs.ref }}" repo-check "${args[@]}"
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            uv run --locked repo-check . "${args[@]}"
+          else
+            uvx --from "git+https://github.com/FP-DevTools/repo-standard-kit.git@${{ inputs.ref }}" repo-check . "${args[@]}"
+          fi

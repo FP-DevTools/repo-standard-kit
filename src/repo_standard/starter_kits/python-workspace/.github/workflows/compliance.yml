@@ -1,0 +1,24 @@
+name: Compliance
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  compliance:
+    name: compliance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+
+      - name: Check repository compliance
+        run: >-
+          uvx --from
+          "git+https://github.com/FP-DevTools/repo-standard-kit.git@v1.0.0"
+          repo-check .

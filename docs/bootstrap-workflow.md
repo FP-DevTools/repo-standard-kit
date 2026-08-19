@@ -146,6 +146,7 @@ each package `pyproject.toml`, and no unresolved template placeholders.
 ```text
 widget-service/
   .github/dependabot.yml
+  .github/workflows/compliance.yml
   .github/workflows/quality.yml
   .pre-commit-config.yaml
   .pymarkdown.json
@@ -170,6 +171,7 @@ workspace shell with an empty `packages/` directory:
 ```text
 widget-platform/
   .github/dependabot.yml
+  .github/workflows/compliance.yml
   .github/workflows/quality.yml
   .pre-commit-config.yaml
   .pymarkdown.json
@@ -202,6 +204,8 @@ Each later `repo-add-package --package-name widget_api` run adds:
 - `[tool.repo-standard]` declares the generated profile and standard major
 - The quality workflow grants only `contents: read` and pins remote actions to
   full commit SHAs; Dependabot is configured to propose GitHub Actions updates
+- Separate `quality` and `compliance` status checks run on pull requests and
+  are suitable for branch-protection enforcement
 
 By default, `repo-init` infers the repository name from the target directory.
 If you pass `--repo-name` without `--output-dir`, `repo-init` creates

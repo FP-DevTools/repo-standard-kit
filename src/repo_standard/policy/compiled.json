@@ -462,7 +462,8 @@
           "require_conversation_resolution": true,
           "require_up_to_date": true,
           "required_status_checks": [
-            "quality"
+            "quality",
+            "compliance"
           ]
         },
         "kind": "branch_protection"
@@ -474,13 +475,13 @@
         "python-single",
         "python-workspace"
       ],
-      "rationale": "Passing workflows are advisory unless merges require them.",
-      "remediation": "Protect main with pull request reviews, stale approval dismissal, strict quality checks, conversation resolution, and administrator enforcement.",
+      "rationale": "Quality proves the gate chain passes; compliance independently prevents that chain and the rest of the standard from drifting unnoticed.",
+      "remediation": "Protect main with pull request reviews, stale approval dismissal, strict quality and compliance checks, conversation resolution, and administrator enforcement.",
       "source": {
         "document": "docs/quality-gates.md",
         "section": "10. Enforcement"
       },
-      "title": "Main branch protection enforces quality"
+      "title": "Main branch protection enforces quality and compliance"
     },
     {
       "check": {

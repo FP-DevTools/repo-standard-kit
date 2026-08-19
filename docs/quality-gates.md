@@ -114,6 +114,13 @@ is inspected; comments, echoed strings, unrelated fields, and commands hidden
 inside a shell-wrapper string do not count. Whitespace, comments, multiline
 commands, and equivalent command formatting are normalized before comparison.
 
+Every pull request shall also run an independent `compliance` job that checks
+the repository against repo-standard-kit. The separate status prevents a
+quality workflow from weakening or removing required gates while still
+reporting success. Quality proves that the declared gate chain passes;
+compliance proves that the declared chain and repository structure still match
+the standard.
+
 RSK020 enforces at the **required** level that the quality job's effective
 `GITHUB_TOKEN` permissions are exactly:
 
@@ -278,6 +285,10 @@ on every pull request still permits a merge if nothing requires it to pass.
 Every repository adopting this specification shall protect `main` so the
 mandatory gates are binding rather than advisory.
 
+The ruleset contract is identical across adopting repositories and profiles.
+The required status context names are exactly `quality` and `compliance`;
+repositories shall not substitute repository-specific names.
+
 RSK014 checks this platform configuration at the **required** level only when
 `--check-enforcement` is explicitly requested. It accepts classic branch
 protection or active repository and organization rulesets. If a platform
@@ -312,9 +323,10 @@ that enforce:
 
 - **Require a pull request before merging**, with at least one approving
   review and stale approvals dismissed on new commits.
-- **Require status checks to pass before merging**, selecting the `quality`
-  check produced by `.github/workflows/quality.yml`, with **Require branches
-  to be up to date before merging** enabled.
+- **Require status checks to pass before merging**, selecting both the
+  `quality` check produced by `.github/workflows/quality.yml` and the separate
+  `compliance` check, with **Require branches to be up to date before
+  merging** enabled.
 - **Require conversation resolution before merging**.
 - **Do not allow bypassing the above settings**, including for repository
   administrators.
@@ -340,9 +352,9 @@ gh api repos/<owner>/<repo>/branches/main/protection \
          enforce_admins: .enforce_admins.enabled}'
 ```
 
-The `quality` check shall appear in `checks`, `reviews` shall be at least `1`,
-and `strict`, `dismiss_stale`, `conversation_resolution`, and `enforce_admins`
-shall all be `true`.
+The `quality` and `compliance` checks shall appear in `checks`, `reviews` shall
+be at least `1`, and `strict`, `dismiss_stale`, `conversation_resolution`, and
+`enforce_admins` shall all be `true`.
 
 When the classic endpoint reports `Branch not protected`, inspect the effective
 active rulesets instead:

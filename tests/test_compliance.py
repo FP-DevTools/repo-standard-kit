@@ -279,7 +279,7 @@ def test_invalid_rsk020_policy_permissions_are_rejected(
 def test_rsk014_policy_represents_every_required_protection_property() -> None:
     assert POLICY.rule("RSK014").check.config == {
         "branch": "main",
-        "required_status_checks": ["quality"],
+        "required_status_checks": ["quality", "compliance"],
         "minimum_reviews": 1,
         "dismiss_stale_approvals": True,
         "require_up_to_date": True,
@@ -640,7 +640,10 @@ def _compliant_branch_protection() -> dict[str, object]:
             "required_approving_review_count": 1,
             "dismiss_stale_reviews": True,
         },
-        "required_status_checks": {"contexts": ["quality"], "strict": True},
+        "required_status_checks": {
+            "contexts": ["quality", "compliance"],
+            "strict": True,
+        },
         "required_conversation_resolution": {"enabled": True},
         "enforce_admins": {"enabled": True},
     }
@@ -688,7 +691,10 @@ def _compliant_ruleset_rules(
             "type": "required_status_checks",
             "parameters": {
                 "strict_required_status_checks_policy": True,
-                "required_status_checks": [{"context": "quality"}],
+                "required_status_checks": [
+                    {"context": "quality"},
+                    {"context": "compliance"},
+                ],
             },
             **metadata,
         },
@@ -769,9 +775,15 @@ def _mock_ruleset_queries(
         ),
         (
             lambda response: response["required_status_checks"].update(
-                {"contexts": []}
+                {"contexts": ["compliance"]}
             ),
             "main omits required status checks: quality.",
+        ),
+        (
+            lambda response: response["required_status_checks"].update(
+                {"contexts": ["quality"]}
+            ),
+            "main omits required status checks: compliance.",
         ),
         (
             lambda response: response["required_status_checks"].update(
@@ -846,8 +858,16 @@ def test_fully_compliant_repository_ruleset_passes(
             "main does not dismiss stale approvals.",
         ),
         (
-            lambda rules: rules[1]["parameters"].update({"required_status_checks": []}),
+            lambda rules: rules[1]["parameters"].update(
+                {"required_status_checks": [{"context": "compliance"}]}
+            ),
             "main omits required status checks: quality.",
+        ),
+        (
+            lambda rules: rules[1]["parameters"].update(
+                {"required_status_checks": [{"context": "quality"}]}
+            ),
+            "main omits required status checks: compliance.",
         ),
         (
             lambda rules: rules[1]["parameters"].update(

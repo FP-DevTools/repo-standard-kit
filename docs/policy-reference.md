@@ -170,7 +170,7 @@ Rationale: A stable ADR location encourages durable architecture records.
 
 Remediation: Add docs/adr/ and an ADR template or first decision record.
 
-### RSK014: Main branch protection enforces quality
+### RSK014: Main branch protection enforces quality and compliance
 
 - Level: `required`
 - Profiles: `python-single`, `python-workspace`
@@ -178,9 +178,9 @@ Remediation: Add docs/adr/ and an ADR template or first decision record.
 - Enforcement: `platform`
 - Check kind: `branch_protection`
 
-Rationale: Passing workflows are advisory unless merges require them.
+Rationale: Quality proves the gate chain passes; compliance independently prevents that chain and the rest of the standard from drifting unnoticed.
 
-Remediation: Protect main with pull request reviews, stale approval dismissal, strict quality checks, conversation resolution, and administrator enforcement.
+Remediation: Protect main with pull request reviews, stale approval dismissal, strict quality and compliance checks, conversation resolution, and administrator enforcement.
 
 ### RSK015: Ruff line length uses the recommended baseline
 

@@ -145,10 +145,13 @@ standards drift.
 
 The mandatory gate chain is listed in `AGENTS.md`, which is the one place this
 repository states it, and runs in CI on every PR to `main`
-(`.github/workflows/quality.yml`). Run it locally before pushing.
+(`.github/workflows/quality.yml`). A separate
+`.github/workflows/compliance.yml` job checks that the repository and quality
+workflow still match repo-standard-kit. Run the gate chain locally before
+pushing.
 
-No PR merges into `main` unless all mandatory gates pass, and branch protection
-enforces that rather than convention — see the
+No PR merges into `main` unless both `quality` and `compliance` pass, and
+branch protection enforces that rather than convention — see the
 [quality-gates spec][quality-gates]. Temporary exemptions require explicit
 justification in the PR and maintainer approval, and must stay time-limited.
 

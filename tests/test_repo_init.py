@@ -90,6 +90,7 @@ def test_bootstrap_repo_renders_python_single_starter(tmp_path: Path) -> None:
     assert 'importlib.import_module("demo_service")' in smoke_test_text
     assert "## First 10 Minutes" in readme_text
     assert (output_dir / ".github" / "workflows" / "quality.yml").exists()
+    assert (output_dir / ".github" / "workflows" / "compliance.yml").exists()
     assert (output_dir / ".github" / "dependabot.yml").exists()
     assert pyproject_text.count("[tool.repo-standard]") == 1
     assert 'profile = "python-single"' in pyproject_text
@@ -151,6 +152,7 @@ def test_bootstrap_repo_renders_python_workspace_starter(tmp_path: Path) -> None
 
     assert "Python workspace" in readme_text
     assert (output_dir / ".github" / "workflows" / "quality.yml").exists()
+    assert (output_dir / ".github" / "workflows" / "compliance.yml").exists()
     assert (output_dir / ".github" / "dependabot.yml").exists()
     assert pyproject_data["tool"]["repo-standard"] == {
         "profile": "python-workspace",
@@ -243,6 +245,14 @@ def test_built_wheel_contains_clean_packaged_starter_kits(tmp_path: Path) -> Non
 
     assert "repo_standard/starter_kits/python-single/AGENTS.md" in names
     assert "repo_standard/starter_kits/python-workspace/AGENTS.md" in names
+    assert (
+        "repo_standard/starter_kits/python-single/.github/workflows/compliance.yml"
+        in names
+    )
+    assert (
+        "repo_standard/starter_kits/python-workspace/.github/workflows/compliance.yml"
+        in names
+    )
     assert "repo_standard/policy/compiled.json" in names
     assert any(name.endswith(".dist-info/entry_points.txt") for name in names)
     assert not any(
@@ -310,6 +320,34 @@ def test_quality_workflows_use_mandatory_ci_gate_set() -> None:
         workflow_text = workflow_path.read_text(encoding="utf-8")
         for command in MANDATORY_CI_COMMANDS:
             assert command in workflow_text
+
+
+def test_compliance_workflows_emit_an_independent_required_status() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    workflow_paths = [
+        repo_root / ".github" / "workflows" / "compliance.yml",
+        *(
+            starter_kit_dir(profile) / ".github" / "workflows" / "compliance.yml"
+            for profile in STARTER_KIT_PROFILES
+        ),
+    ]
+
+    for workflow_path in workflow_paths:
+        assert workflow_path.name == "compliance.yml"
+        workflow_text = workflow_path.read_text(encoding="utf-8")
+        assert "  pull_request:\n" in workflow_text
+        assert "permissions:\n  contents: read\n" in workflow_text
+        assert "  compliance:\n    name: compliance\n" in workflow_text
+        assert re.search(r"uses: actions/checkout@[0-9a-f]{40}", workflow_text)
+        assert re.search(r"uses: astral-sh/setup-uv@[0-9a-f]{40}", workflow_text)
+
+    root_workflow = workflow_paths[0].read_text(encoding="utf-8")
+    assert "  workflow_call:\n" in root_workflow
+    assert "uv run --locked repo-check ." in root_workflow
+    for workflow_path in workflow_paths[1:]:
+        assert "repo-standard-kit.git@v1.0.0" in workflow_path.read_text(
+            encoding="utf-8"
+        )
 
 
 def test_root_pyproject_uses_uv_build_backend() -> None:
@@ -783,6 +821,10 @@ def test_starter_kit_repo_check_hook_pin_matches_the_package_version(
     assert rev_match.group(1) == version, (
         f"{profile} starter kit pins v{rev_match.group(1)}, package is {version}"
     )
+    compliance = (
+        starter_kit_dir(profile) / ".github" / "workflows" / "compliance.yml"
+    ).read_text(encoding="utf-8")
+    assert f"repo-standard-kit.git@v{version}" in compliance
 
 
 @pytest.mark.parametrize(

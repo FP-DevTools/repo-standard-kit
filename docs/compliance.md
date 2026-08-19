@@ -76,10 +76,24 @@ Owner, expiry, and reference metadata are deferred beyond v1.
 
 ## Consumption Surfaces
 
-Choose one automated surface so the same full-tree check is not repeated twice
-on every pull request.
+Every pull request shall produce an independently enforceable `compliance`
+status. This CI check does not replace `quality`: compliance verifies the
+standard-owned structure, while quality executes the declared gate chain.
 
-### Pre-commit
+The starter kits and this standards repository all use the canonical
+`.github/workflows/compliance.yml` name and emit a `compliance` job. The
+standards repository's workflow also remains callable by adopters. A repository
+may instead call that reusable workflow from its canonical file, provided the
+resulting required status is named `compliance`.
+
+Together with the `quality` job, this gives every adopting repository the same
+two required status names and therefore the same branch-protection ruleset.
+
+### Optional pre-commit feedback
+
+The pre-commit hook provides earlier local feedback. When it is configured,
+the quality workflow repeats the structural check before the independently
+required compliance job; that defense-in-depth duplication is intentional.
 
 ```yaml
 repos:
@@ -89,7 +103,7 @@ repos:
       - id: repo-check
 ```
 
-### Reusable workflow
+### Required CI workflow
 
 ```yaml
 name: Compliance
@@ -105,7 +119,8 @@ jobs:
 ```
 
 The caller supplies `ref` because a called workflow cannot reliably infer the
-ref used by its caller. Pin the reusable workflow itself to a full commit SHA.
+ref used by its caller. Pin the reusable workflow itself to a full commit SHA,
+and confirm the caller emits the required `compliance` status.
 
 ## Canonical Policy And Generation
 
