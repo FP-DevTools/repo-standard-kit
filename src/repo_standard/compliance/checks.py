@@ -433,6 +433,22 @@ def _check_adr_dir(root: Path, rules: Rules) -> list[Finding]:
     return [Finding("RSK012", "should", "docs/adr", None, "docs/adr/ is missing.")]
 
 
+def _check_changelog_exists(root: Path, rules: Rules) -> list[Finding]:
+    """RSK017: `CHANGELOG.md` exists (repo-layout.md)."""
+    if (root / "CHANGELOG.md").is_file():
+        return []
+    return [
+        Finding("RSK017", "should", "CHANGELOG.md", None, "CHANGELOG.md is missing.")
+    ]
+
+
+def _check_license_exists(root: Path, rules: Rules) -> list[Finding]:
+    """RSK018: `LICENSE` exists (repo-layout.md)."""
+    if (root / "LICENSE").is_file():
+        return []
+    return [Finding("RSK018", "should", "LICENSE", None, "LICENSE is missing.")]
+
+
 def _git_remote_url(root: Path) -> str | None:
     try:
         result = subprocess.run(
@@ -560,6 +576,8 @@ _STRUCTURAL_CHECKS = (
     _check_ruff_recommended_select,
     _check_no_placeholders,
     _check_adr_dir,
+    _check_changelog_exists,
+    _check_license_exists,
 )
 
 

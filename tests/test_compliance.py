@@ -96,6 +96,10 @@ def _minimal_repo(tmp_path: Path) -> Path:
     )
     (root / "uv.lock").write_text("", encoding="utf-8")
     (root / "docs" / "adr").mkdir(parents=True)
+    (root / "CHANGELOG.md").write_text(
+        "# Changelog\n\n## [Unreleased]\n", encoding="utf-8"
+    )
+    (root / "LICENSE").write_text("Proprietary.\n", encoding="utf-8")
 
     return root
 
@@ -291,6 +295,22 @@ def test_missing_adr_dir_reports_rsk012_as_should(tmp_path: Path) -> None:
     root = _minimal_repo(tmp_path)
     (root / "docs" / "adr").rmdir()
     findings = [f for f in check_repo(root, RULES) if f.rule_id == "RSK012"]
+    assert len(findings) == 1
+    assert findings[0].severity == "should"
+
+
+def test_missing_changelog_reports_rsk017_as_should(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    (root / "CHANGELOG.md").unlink()
+    findings = [f for f in check_repo(root, RULES) if f.rule_id == "RSK017"]
+    assert len(findings) == 1
+    assert findings[0].severity == "should"
+
+
+def test_missing_license_reports_rsk018_as_should(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    (root / "LICENSE").unlink()
+    findings = [f for f in check_repo(root, RULES) if f.rule_id == "RSK018"]
     assert len(findings) == 1
     assert findings[0].severity == "should"
 

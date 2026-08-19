@@ -6,6 +6,8 @@ Use this layout by default for Python repositories:
 
 - `AGENTS.md`
 - `README.md`
+- `CHANGELOG.md`
+- `LICENSE`
 - `pyproject.toml`
 - `.pre-commit-config.yaml`
 - `src/<package_name>/`

@@ -137,6 +137,8 @@ behind `--check-enforcement`.
 | `RSK014` | Branch protection configured on `main` | §10 | platform |
 | `RSK015` | Ruff `line-length` matches the recommended value (`88`) | §13 | should |
 | `RSK016` | Recommended rule family `PT` is selected | §13 | should |
+| `RSK017` | `CHANGELOG.md` exists | `repo-layout.md` | should |
+| `RSK018` | `LICENSE` exists | `repo-layout.md` | should |
 
 ## What This Cannot Check
 

@@ -36,6 +36,19 @@ the changes listed under **Adopters must**.
   `RSK015` (declared Ruff `line-length` matches the recommended `88`) and
   `RSK016` (the recommended `PT` rule family is selected). Neither needs a
   §11 exemption.
+- `CHANGELOG.md` added to `docs/repo-layout.md`'s canonical layout,
+  `should`-level like `docs/adr/`. New `RSK017` (`should`) checks for it.
+  Both starter kits ship a minimal `CHANGELOG.md`, matching how they
+  already ship a `docs/adr/0001-template.md` for the same-severity
+  `RSK012`. `docs/bootstrap-workflow.md`'s expected-output trees updated
+  to match (also adding `.pymarkdown.json`, which they'd missed since it
+  was introduced).
+- `LICENSE` added to `docs/repo-layout.md`'s canonical layout, also
+  `should`-level. New `RSK018` checks for it. Unlike `CHANGELOG.md`, the
+  starter kits do not ship one — license text is a real per-repository
+  choice (`templates/README.md` already treats it as one, via a
+  `<license-name>` placeholder), not something with a universally correct
+  default the way an empty changelog or ADR template has.
 - §4 now mandates Markdown structural linting as a local pre-commit gate
   (`uv run pymarkdown --config .pymarkdown.json scan`), approving
   `pymarkdown` as the tool. Configured to disable `md024` restricted to
@@ -129,6 +142,10 @@ the changes listed under **Adopters must**.
 - Nothing for the retired `RSK013` — a repository loses a `should`-level
   finding, not a requirement. Enabling `md013` locally to keep enforcing
   prose width is a choice, not something this release asks for.
+- Nothing for `RSK017`. `CHANGELOG.md` is a `should`, like `docs/adr/`; a
+  repository without one remains aligned.
+- Nothing for `RSK018`. `LICENSE` is a `should`; a repository without one
+  remains aligned.
 
 ## [0.4.0] - 2026-08-18
 

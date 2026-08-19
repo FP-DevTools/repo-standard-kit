@@ -145,7 +145,9 @@ each package `pyproject.toml`, and no unresolved template placeholders.
 widget-service/
   .github/workflows/quality.yml
   .pre-commit-config.yaml
+  .pymarkdown.json
   AGENTS.md
+  CHANGELOG.md
   README.md
   pyproject.toml
   docs/adr/0001-template.md
@@ -166,7 +168,9 @@ workspace shell with an empty `packages/` directory:
 widget-platform/
   .github/workflows/quality.yml
   .pre-commit-config.yaml
+  .pymarkdown.json
   AGENTS.md
+  CHANGELOG.md
   README.md
   pyproject.toml
   docs/adr/0001-template.md
