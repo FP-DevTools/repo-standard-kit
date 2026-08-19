@@ -35,10 +35,21 @@ CHECK_SCHEMAS: dict[str, tuple[set[str], set[str]]] = {
     "ruff_line_length": ({"path", "value"}, set()),
     "ruff_select": ({"path", "values"}, set()),
     "no_placeholders": ({"placeholders"}, set()),
-    "branch_protection": ({"branch", "status_check", "minimum_reviews"}, set()),
+    "branch_protection": (
+        {
+            "branch",
+            "required_status_checks",
+            "minimum_reviews",
+            "dismiss_stale_approvals",
+            "require_up_to_date",
+            "require_conversation_resolution",
+            "enforce_admins",
+        },
+        set(),
+    ),
     "repo_metadata": ({"path", "standard_major"}, set()),
     "github_workflow_permissions": ({"path", "job"}, set()),
-    "github_workflow_pins": ({"path", "job"}, set()),
+    "github_workflow_pins": ({"path"}, set()),
 }
 
 
@@ -209,7 +220,6 @@ def _validate_check_config(kind: str, config: dict[str, Any], location: str) -> 
         "pattern",
         "backend",
         "branch",
-        "status_check",
         "job",
         "trigger",
         "standard_major",
@@ -221,6 +231,7 @@ def _validate_check_config(kind: str, config: dict[str, Any], location: str) -> 
         "values",
         "paths",
         "required_select",
+        "required_status_checks",
         "allow_missing_profiles",
     ):
         if key in config:
@@ -236,8 +247,15 @@ def _validate_check_config(kind: str, config: dict[str, Any], location: str) -> 
         for token, field in placeholders.items():
             _string(token, f"{location}.placeholders key")
             _string(field, f"{location}.placeholders.{token}")
-    if "require_line_length" in config:
-        _boolean(config["require_line_length"], f"{location}.require_line_length")
+    for key in (
+        "require_line_length",
+        "dismiss_stale_approvals",
+        "require_up_to_date",
+        "require_conversation_resolution",
+        "enforce_admins",
+    ):
+        if key in config:
+            _boolean(config[key], f"{location}.{key}")
     for key in ("value", "minimum_reviews"):
         if key in config:
             _integer(config[key], f"{location}.{key}")

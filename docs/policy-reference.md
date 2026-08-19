@@ -180,7 +180,7 @@ Remediation: Add docs/adr/ and an ADR template or first decision record.
 
 Rationale: Passing workflows are advisory unless merges require them.
 
-Remediation: Protect main with quality checks, review, and administrator enforcement.
+Remediation: Protect main with pull request reviews, stale approval dismissal, strict quality checks, conversation resolution, and administrator enforcement.
 
 ### RSK015: Ruff line length uses the recommended baseline
 
@@ -262,9 +262,9 @@ Remediation: Set effective quality-job permissions to contents read with no writ
 - Enforcement: `structural`
 - Check kind: `github_workflow_pins`
 
-Rationale: Full commit pins prevent upstream tag movement from changing trusted code.
+Rationale: Full commit pins prevent upstream tag movement from changing trusted workflow code.
 
-Remediation: Pin every remote action and reusable workflow to a 40-character SHA.
+Remediation: Pin every remote action and reusable workflow in the quality workflow to a 40-character SHA.
 
 ## Retired Rule IDs
 

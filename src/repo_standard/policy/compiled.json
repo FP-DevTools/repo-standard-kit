@@ -456,8 +456,14 @@
       "check": {
         "config": {
           "branch": "main",
+          "dismiss_stale_approvals": true,
+          "enforce_admins": true,
           "minimum_reviews": 1,
-          "status_check": "quality"
+          "require_conversation_resolution": true,
+          "require_up_to_date": true,
+          "required_status_checks": [
+            "quality"
+          ]
         },
         "kind": "branch_protection"
       },
@@ -469,7 +475,7 @@
         "python-workspace"
       ],
       "rationale": "Passing workflows are advisory unless merges require them.",
-      "remediation": "Protect main with quality checks, review, and administrator enforcement.",
+      "remediation": "Protect main with pull request reviews, stale approval dismissal, strict quality checks, conversation resolution, and administrator enforcement.",
       "source": {
         "document": "docs/quality-gates.md",
         "section": "10. Enforcement"
@@ -619,7 +625,6 @@
     {
       "check": {
         "config": {
-          "job": "quality",
           "path": ".github/workflows/quality.yml"
         },
         "kind": "github_workflow_pins"
@@ -631,8 +636,8 @@
         "python-single",
         "python-workspace"
       ],
-      "rationale": "Full commit pins prevent upstream tag movement from changing trusted code.",
-      "remediation": "Pin every remote action and reusable workflow to a 40-character SHA.",
+      "rationale": "Full commit pins prevent upstream tag movement from changing trusted workflow code.",
+      "remediation": "Pin every remote action and reusable workflow in the quality workflow to a 40-character SHA.",
       "source": {
         "document": "docs/quality-gates.md",
         "section": "5. CI Pull Request Gates"

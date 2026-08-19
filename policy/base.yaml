@@ -285,10 +285,15 @@ rules:
       kind: branch_protection
       config:
         branch: main
-        status_check: quality
+        required_status_checks:
+          - quality
         minimum_reviews: 1
+        dismiss_stale_approvals: true
+        require_up_to_date: true
+        require_conversation_resolution: true
+        enforce_admins: true
     rationale: Passing workflows are advisory unless merges require them.
-    remediation: Protect main with quality checks, review, and administrator enforcement.
+    remediation: Protect main with pull request reviews, stale approval dismissal, strict quality checks, conversation resolution, and administrator enforcement.
 
   - id: RSK015
     title: Ruff line length uses the recommended baseline
@@ -398,6 +403,5 @@ rules:
       kind: github_workflow_pins
       config:
         path: .github/workflows/quality.yml
-        job: quality
-    rationale: Full commit pins prevent upstream tag movement from changing trusted code.
-    remediation: Pin every remote action and reusable workflow to a 40-character SHA.
+    rationale: Full commit pins prevent upstream tag movement from changing trusted workflow code.
+    remediation: Pin every remote action and reusable workflow in the quality workflow to a 40-character SHA.

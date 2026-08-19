@@ -215,8 +215,40 @@ def test_generated_policy_artifacts_are_current_and_deterministic() -> None:
     ) == render_reference(source)
 
 
+def test_quality_gates_uses_the_shared_normative_vocabulary() -> None:
+    text = (REPO_ROOT / "docs" / "quality-gates.md").read_text(encoding="utf-8")
+    assert "This document is part of the normative repository standard." in text
+    assert "it is not parsed to derive executable policy." in text
+    obsolete_wording = (
+        "This is a specification, not guidance",
+        "written differently from the rest of `docs/`",
+        "are guidance and use plain imperative voice instead",
+        "quality-gates is the only specification",
+    )
+    assert not any(phrase in text for phrase in obsolete_wording)
+
+
 def test_every_typed_check_kind_has_exactly_one_runtime_handler() -> None:
     assert set(CHECK_SCHEMAS) == set(CHECK_HANDLERS)
+
+
+def test_rsk021_policy_is_workflow_scoped() -> None:
+    assert POLICY.rule("RSK021").check.config == {
+        "path": ".github/workflows/quality.yml"
+    }
+    assert CHECK_SCHEMAS["github_workflow_pins"] == ({"path"}, set())
+
+
+def test_rsk014_policy_represents_every_required_protection_property() -> None:
+    assert POLICY.rule("RSK014").check.config == {
+        "branch": "main",
+        "required_status_checks": ["quality"],
+        "minimum_reviews": 1,
+        "dismiss_stale_approvals": True,
+        "require_up_to_date": True,
+        "require_conversation_resolution": True,
+        "enforce_admins": True,
+    }
 
 
 def test_standard_package_version_and_source_distribution_inputs_agree() -> None:
@@ -404,6 +436,7 @@ def test_sha_local_and_docker_action_references_are_accepted(tmp_path: Path) -> 
 def test_rsk021_scans_every_job_in_the_quality_workflow(tmp_path: Path) -> None:
     root = _minimal_repo(tmp_path)
     path = root / ".github" / "workflows" / "quality.yml"
+    sha = "b" * 40
     with path.open("a", encoding="utf-8") as stream:
         stream.write(
             "  auxiliary:\n"
@@ -412,6 +445,13 @@ def test_rsk021_scans_every_job_in_the_quality_workflow(tmp_path: Path) -> None:
             "      - uses: owner/tool@main\n"
         )
     assert "RSK021" in _rule_ids(check_repo(root, POLICY))
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            "owner/tool@main", f"owner/tool@{sha}"
+        ),
+        encoding="utf-8",
+    )
+    assert "RSK021" not in _rule_ids(check_repo(root, POLICY))
 
 
 # --- pre-commit structure -------------------------------------------------
@@ -513,6 +553,166 @@ def test_rule_applicability_filters_by_resolved_profile(tmp_path: Path) -> None:
 
 
 # --- exceptions, output, command errors, and dogfood ---------------------
+
+
+def _compliant_branch_protection() -> dict[str, object]:
+    return {
+        "required_pull_request_reviews": {
+            "required_approving_review_count": 1,
+            "dismiss_stale_reviews": True,
+        },
+        "required_status_checks": {"contexts": ["quality"], "strict": True},
+        "required_conversation_resolution": {"enabled": True},
+        "enforce_admins": {"enabled": True},
+    }
+
+
+def _mock_branch_protection_query(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    stdout: str = "",
+    stderr: str = "",
+    returncode: int = 0,
+) -> None:
+    def fake_run(
+        command: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        if command[:3] == ["git", "remote", "get-url"]:
+            return subprocess.CompletedProcess(
+                command, 0, "https://github.com/org/repo.git\n", ""
+            )
+        assert command[:2] == ["gh", "api"]
+        return subprocess.CompletedProcess(command, returncode, stdout, stderr)
+
+    monkeypatch.setattr(checks.subprocess, "run", fake_run)
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    [
+        (
+            lambda response: response.update({"required_pull_request_reviews": None}),
+            "main does not require pull request reviews.",
+        ),
+        (
+            lambda response: response["required_pull_request_reviews"].update(
+                {"required_approving_review_count": 0}
+            ),
+            "main requires too few approving reviews.",
+        ),
+        (
+            lambda response: response["required_pull_request_reviews"].update(
+                {"dismiss_stale_reviews": False}
+            ),
+            "main does not dismiss stale approvals.",
+        ),
+        (
+            lambda response: response["required_status_checks"].update(
+                {"contexts": []}
+            ),
+            "main omits required status checks: quality.",
+        ),
+        (
+            lambda response: response["required_status_checks"].update(
+                {"strict": False}
+            ),
+            "main does not require branches to be up to date.",
+        ),
+        (
+            lambda response: response["required_conversation_resolution"].update(
+                {"enabled": False}
+            ),
+            "main does not require conversation resolution.",
+        ),
+        (
+            lambda response: response["enforce_admins"].update({"enabled": False}),
+            "main allows administrator bypass.",
+        ),
+    ],
+)
+def test_each_required_branch_protection_property_is_enforced(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutate: Callable[[dict[str, object]], None],
+    message: str,
+) -> None:
+    root = _minimal_repo(tmp_path)
+    response = _compliant_branch_protection()
+    mutate(response)
+    _mock_branch_protection_query(monkeypatch, stdout=json.dumps(response))
+    findings = [
+        finding
+        for finding in check_repo(root, POLICY, include_platform=True)
+        if finding.rule_id == "RSK014"
+    ]
+    assert [finding.message for finding in findings] == [message]
+    assert findings[0].status == "violation"
+
+
+def test_fully_compliant_branch_protection_passes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _minimal_repo(tmp_path)
+    _mock_branch_protection_query(
+        monkeypatch, stdout=json.dumps(_compliant_branch_protection())
+    )
+    assert "RSK014" not in _rule_ids(check_repo(root, POLICY, include_platform=True))
+
+
+def test_malformed_branch_protection_json_is_indeterminate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _minimal_repo(tmp_path)
+    _mock_branch_protection_query(monkeypatch, stdout="{")
+    [finding] = [
+        finding
+        for finding in check_repo(root, POLICY, include_platform=True)
+        if finding.rule_id == "RSK014"
+    ]
+    assert finding.status == "indeterminate"
+
+
+@pytest.mark.parametrize(
+    "stderr",
+    [
+        "gh: authentication required (HTTP 401)",
+        "gh: failed to connect to api.github.com",
+        "gh: Resource not accessible by personal access token (HTTP 403)",
+    ],
+)
+def test_branch_protection_auth_and_network_failures_are_indeterminate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    stderr: str,
+) -> None:
+    root = _minimal_repo(tmp_path)
+    _mock_branch_protection_query(monkeypatch, stderr=stderr, returncode=1)
+    [finding] = [
+        finding
+        for finding in check_repo(root, POLICY, include_platform=True)
+        if finding.rule_id == "RSK014"
+    ]
+    assert finding.status == "indeterminate"
+
+
+def test_unsupported_branch_protection_response_is_a_violation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _minimal_repo(tmp_path)
+    _mock_branch_protection_query(
+        monkeypatch,
+        stderr=(
+            "gh: Upgrade to GitHub Pro or make this repository public to enable "
+            "this feature. (HTTP 403)"
+        ),
+        returncode=1,
+    )
+    [finding] = [
+        finding
+        for finding in check_repo(root, POLICY, include_platform=True)
+        if finding.rule_id == "RSK014"
+    ]
+    assert finding.status == "violation"
 
 
 def test_only_known_nonempty_ignore_reasons_suppress(tmp_path: Path) -> None:
