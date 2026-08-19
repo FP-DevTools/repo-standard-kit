@@ -269,9 +269,10 @@ Every repository adopting this specification shall protect `main` so the
 mandatory gates are binding rather than advisory.
 
 RSK014 checks this platform configuration at the **required** level only when
-`--check-enforcement` is explicitly requested. If the platform command cannot
-run or its response cannot be interpreted, `repo-check` returns an
-indeterminate command error; it never treats unavailable evidence as a pass.
+`--check-enforcement` is explicitly requested. It accepts classic branch
+protection or active repository and organization rulesets. If a platform
+command cannot run or its response cannot be interpreted, `repo-check` returns
+an indeterminate command error; it never treats unavailable evidence as a pass.
 
 ### Platform prerequisite
 
@@ -296,7 +297,8 @@ settle later. Public repositories have branch protection on every plan.
 
 ### Required branch protection
 
-On GitHub, protect `main` with:
+On GitHub, protect `main` with classic branch protection or active rulesets
+that enforce:
 
 - **Require a pull request before merging**, with at least one approving
   review and stale approvals dismissed on new commits.
@@ -306,6 +308,12 @@ On GitHub, protect `main` with:
 - **Require conversation resolution before merging**.
 - **Do not allow bypassing the above settings**, including for repository
   administrators.
+
+For rulesets, leave the bypass actor list empty. RSK014 evaluates all active
+rules returned for `main`, follows their repository or organization ruleset
+IDs, and verifies the detailed bypass actor lists. GitHub omits bypass actors
+when the caller cannot inspect them; that response is indeterminate, not a
+pass.
 
 A status check becomes selectable only after the workflow has run at least
 once, so open an initial pull request before configuring protection.
@@ -325,6 +333,19 @@ gh api repos/<owner>/<repo>/branches/main/protection \
 The `quality` check shall appear in `checks`, `reviews` shall be at least `1`,
 and `strict`, `dismiss_stale`, `conversation_resolution`, and `enforce_admins`
 shall all be `true`.
+
+When the classic endpoint reports `Branch not protected`, inspect the effective
+active rulesets instead:
+
+```bash
+gh api --paginate repos/<owner>/<repo>/rules/branches/main
+gh api repos/<owner>/<repo>/rulesets/<ruleset-id>
+```
+
+The effective rules shall provide the same review, status-check, strictness,
+and conversation-resolution settings, and every contributing ruleset shall
+have an empty `bypass_actors` list. Organization-owned rulesets use
+`gh api orgs/<organization>/rulesets/<ruleset-id>` for the detail query.
 
 A `403` response carrying the documented upgrade message means the repository
 is on a plan that does not support branch protection; see the platform

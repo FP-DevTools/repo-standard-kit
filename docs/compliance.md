@@ -15,7 +15,8 @@ Options:
 
 - `--format text|json` selects human-readable or stable machine output.
 - `--profile auto|python-single|python-workspace` selects an explicit override.
-- `--check-enforcement` also queries branch protection for RSK014.
+- `--check-enforcement` also queries classic branch protection or effective
+  active rulesets for RSK014.
 - `--strict` promotes recommended findings to failures.
 
 Exit code `0` means no blocking findings. Exit code `1` means a required rule
@@ -145,7 +146,9 @@ remediation. Markdown explains policy but supplies no executable values.
   quality workflow; local and Docker actions are exempt.
 - RSK014 checks pull request reviews, stale approval dismissal, required status
   checks, strict up-to-date branches, conversation resolution, and
-  administrator enforcement when platform checks are requested.
+  administrator enforcement when platform checks are requested. If classic
+  branch protection is absent, it evaluates active repository and organization
+  rulesets and requires visible, empty bypass actor lists.
 
 ## What This Cannot Check
 
