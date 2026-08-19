@@ -591,9 +591,7 @@ def _mock_branch_protection_query(
     ("mutate", "message"),
     [
         (
-            lambda response: response.update(
-                {"required_pull_request_reviews": None}
-            ),
+            lambda response: response.update({"required_pull_request_reviews": None}),
             "main does not require pull request reviews.",
         ),
         (
@@ -658,9 +656,7 @@ def test_fully_compliant_branch_protection_passes(
     _mock_branch_protection_query(
         monkeypatch, stdout=json.dumps(_compliant_branch_protection())
     )
-    assert "RSK014" not in _rule_ids(
-        check_repo(root, POLICY, include_platform=True)
-    )
+    assert "RSK014" not in _rule_ids(check_repo(root, POLICY, include_platform=True))
 
 
 def test_malformed_branch_protection_json_is_indeterminate(
