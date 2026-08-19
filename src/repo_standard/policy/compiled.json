@@ -458,7 +458,7 @@
           "branch": "main",
           "dismiss_stale_approvals": true,
           "enforce_admins": true,
-          "minimum_reviews": 1,
+          "minimum_reviews": 0,
           "require_conversation_resolution": true,
           "require_up_to_date": true,
           "required_status_checks": [
@@ -476,7 +476,7 @@
         "python-workspace"
       ],
       "rationale": "Quality proves the gate chain passes; compliance independently prevents that chain and the rest of the standard from drifting unnoticed.",
-      "remediation": "Protect main with pull request reviews, stale approval dismissal, strict quality and compliance checks, conversation resolution, and administrator enforcement.",
+      "remediation": "Protect main with pull request protection, stale approval dismissal, strict quality and compliance checks, conversation resolution, and administrator enforcement.",
       "source": {
         "document": "docs/quality-gates.md",
         "section": "10. Enforcement"
@@ -647,6 +647,29 @@
         "section": "5. CI Pull Request Gates"
       },
       "title": "Quality workflow pins remote actions immutably"
+    },
+    {
+      "check": {
+        "config": {
+          "branch": "main",
+          "minimum_reviews": 1
+        },
+        "kind": "branch_protection_minimum_reviews"
+      },
+      "enforcement": "platform",
+      "id": "RSK022",
+      "level": "recommended",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "An independent approval improves change review when another maintainer is available.",
+      "remediation": "Require at least one approving review when repository staffing permits.",
+      "source": {
+        "document": "docs/quality-gates.md",
+        "section": "10. Enforcement"
+      },
+      "title": "Main branch protection recommends an approving review"
     }
   ],
   "schema_version": 1,

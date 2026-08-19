@@ -280,12 +280,36 @@ def test_rsk014_policy_represents_every_required_protection_property() -> None:
     assert POLICY.rule("RSK014").check.config == {
         "branch": "main",
         "required_status_checks": ["quality", "compliance"],
-        "minimum_reviews": 1,
+        "minimum_reviews": 0,
         "dismiss_stale_approvals": True,
         "require_up_to_date": True,
         "require_conversation_resolution": True,
         "enforce_admins": True,
     }
+
+
+def test_rsk022_recommends_one_approving_review() -> None:
+    rule = POLICY.rule("RSK022")
+    assert rule.level == "recommended"
+    assert rule.check.config == {"branch": "main", "minimum_reviews": 1}
+    assert CHECK_SCHEMAS["branch_protection_minimum_reviews"] == (
+        {"branch", "minimum_reviews"},
+        set(),
+    )
+
+
+def test_negative_minimum_review_policy_is_rejected(tmp_path: Path) -> None:
+    root = _policy_checkout(tmp_path)
+
+    def mutation(data: dict[str, object]) -> None:
+        rules = data["rules"]
+        assert isinstance(rules, list)
+        rule = next(item for item in rules if item["id"] == "RSK022")
+        rule["check"]["config"]["minimum_reviews"] = -1
+
+    _mutate_base(root, mutation)
+    with pytest.raises(PolicyError, match="expected a non-negative integer"):
+        load_source_policy(root)
 
 
 def test_standard_package_version_and_source_distribution_inputs_agree() -> None:
@@ -759,13 +783,7 @@ def _mock_ruleset_queries(
     [
         (
             lambda response: response.update({"required_pull_request_reviews": None}),
-            "main does not require pull request reviews.",
-        ),
-        (
-            lambda response: response["required_pull_request_reviews"].update(
-                {"required_approving_review_count": 0}
-            ),
-            "main requires too few approving reviews.",
+            "main does not require pull requests.",
         ),
         (
             lambda response: response["required_pull_request_reviews"].update(
@@ -829,7 +847,27 @@ def test_fully_compliant_branch_protection_passes(
     _mock_branch_protection_query(
         monkeypatch, stdout=json.dumps(_compliant_branch_protection())
     )
-    assert "RSK014" not in _rule_ids(check_repo(root, POLICY, include_platform=True))
+    rule_ids = _rule_ids(check_repo(root, POLICY, include_platform=True))
+    assert "RSK014" not in rule_ids
+    assert "RSK022" not in rule_ids
+
+
+def test_zero_approvals_passes_required_policy_but_reports_recommendation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _minimal_repo(tmp_path)
+    response = _compliant_branch_protection()
+    reviews = response["required_pull_request_reviews"]
+    assert isinstance(reviews, dict)
+    reviews["required_approving_review_count"] = 0
+    _mock_branch_protection_query(monkeypatch, stdout=json.dumps(response))
+    findings = check_repo(root, POLICY, include_platform=True)
+    assert not any(finding.rule_id == "RSK014" for finding in findings)
+    [finding] = [finding for finding in findings if finding.rule_id == "RSK022"]
+    assert finding.level == "recommended"
+    assert finding.severity == "should"
+    assert finding.status == "violation"
+    assert finding.message == "main requires too few approving reviews."
 
 
 def test_fully_compliant_repository_ruleset_passes(
@@ -837,7 +875,9 @@ def test_fully_compliant_repository_ruleset_passes(
 ) -> None:
     root = _minimal_repo(tmp_path)
     calls = _mock_ruleset_queries(monkeypatch, rules=_compliant_ruleset_rules())
-    assert "RSK014" not in _rule_ids(check_repo(root, POLICY, include_platform=True))
+    rule_ids = _rule_ids(check_repo(root, POLICY, include_platform=True))
+    assert "RSK014" not in rule_ids
+    assert "RSK022" not in rule_ids
     assert ["gh", "api", "--paginate", "--slurp"] == calls[2][:4]
     assert calls[3][-1] == "repos/org/repo/rulesets/42"
 
@@ -845,12 +885,6 @@ def test_fully_compliant_repository_ruleset_passes(
 @pytest.mark.parametrize(
     ("mutate", "message"),
     [
-        (
-            lambda rules: rules[0]["parameters"].update(
-                {"required_approving_review_count": 0}
-            ),
-            "main requires too few approving reviews.",
-        ),
         (
             lambda rules: rules[0]["parameters"].update(
                 {"dismiss_stale_reviews_on_push": False}
@@ -900,6 +934,21 @@ def test_each_required_ruleset_property_is_enforced(
     ]
     assert [finding.message for finding in findings] == [message]
     assert findings[0].status == "violation"
+
+
+def test_zero_approval_ruleset_passes_rsk014_but_reports_rsk022(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _minimal_repo(tmp_path)
+    rules = _compliant_ruleset_rules()
+    rules[0]["parameters"]["required_approving_review_count"] = 0
+    _mock_ruleset_queries(monkeypatch, rules=rules)
+    findings = check_repo(root, POLICY, include_platform=True)
+    assert not any(finding.rule_id == "RSK014" for finding in findings)
+    [finding] = [finding for finding in findings if finding.rule_id == "RSK022"]
+    assert finding.level == "recommended"
+    assert finding.severity == "should"
+    assert finding.message == "main requires too few approving reviews."
 
 
 def test_ruleset_bypass_actor_reports_admin_violation(

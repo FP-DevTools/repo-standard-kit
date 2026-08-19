@@ -160,11 +160,13 @@ remediation. Markdown explains policy but supplies no executable values.
   policy-owned `contents: read` mapping; extra read scopes and all write scopes
   fail. RSK021 requires full SHA pins for remote actions and reusable workflows
   in every job in the quality workflow; local and Docker actions are exempt.
-- RSK014 checks pull request reviews, stale approval dismissal, required status
-  checks, strict up-to-date branches, conversation resolution, and
-  administrator enforcement when platform checks are requested. If classic
-  branch protection is absent, it evaluates active repository and organization
-  rulesets and requires visible, empty bypass actor lists.
+- RSK014 requires pull request protection, stale approval dismissal, required
+  status checks, strict up-to-date branches, conversation resolution, and
+  administrator enforcement when platform checks are requested, but permits a
+  zero approval count. RSK022 separately recommends at least one approving
+  review. If classic branch protection is absent, both checks evaluate active
+  repository and organization rulesets; RSK014 also requires visible, empty
+  bypass actor lists.
 
 ## What This Cannot Check
 

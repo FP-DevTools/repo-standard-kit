@@ -778,6 +778,22 @@ def _ruleset_branch_protection(
         ]
 
     rules = [rule for page in pages for rule in page]
+    needs_pull_request_rule = any(
+        key in config
+        for key in (
+            "minimum_reviews",
+            "dismiss_stale_approvals",
+            "require_conversation_resolution",
+        )
+    )
+    needs_status_check_rule = any(
+        key in config for key in ("required_status_checks", "require_up_to_date")
+    )
+    relevant_types = set()
+    if needs_pull_request_rule:
+        relevant_types.add("pull_request")
+    if needs_status_check_rule:
+        relevant_types.add("required_status_checks")
     relevant_rules: list[dict[str, Any]] = []
     ruleset_sources: set[tuple[str, str, int]] = set()
     for rule in rules:
@@ -791,7 +807,7 @@ def _ruleset_branch_protection(
                     status="indeterminate",
                 )
             ]
-        if rule.get("type") not in {"pull_request", "required_status_checks"}:
+        if rule.get("type") not in relevant_types:
             continue
         parameters = rule.get("parameters")
         source_type = rule.get("ruleset_source_type")
@@ -817,49 +833,52 @@ def _ruleset_branch_protection(
         ruleset_sources.add((source_type, source, ruleset_id))
 
     bypass_actors: list[Any] = []
-    for source_type, source, ruleset_id in sorted(ruleset_sources):
-        detail_endpoint = _ruleset_detail_endpoint(
-            owner_repo, source_type, source, ruleset_id
-        )
-        if detail_endpoint is None:
-            return [
-                Issue(
-                    ".",
-                    f"Unsupported ruleset source type: {source_type}.",
-                    source_type,
-                    "Repository or Organization",
-                    status="indeterminate",
-                )
-            ]
-        detail_result, detail_error = _gh_api(context, detail_endpoint)
-        if detail_error is not None:
-            return [detail_error]
-        assert detail_result is not None
-        if detail_result.returncode != 0:
-            stderr = detail_result.stderr.strip()
-            return [
-                _platform_query_failure(
-                    "Ruleset detail query failed",
-                    stderr,
-                    "ruleset bypass actors",
-                    unsupported_is_violation=False,
-                )
-            ]
-        detail, detail_error = _json_response(detail_result, "ruleset detail response")
-        if detail_error is not None:
-            return [detail_error]
-        actors = detail.get("bypass_actors") if isinstance(detail, dict) else None
-        if not isinstance(actors, list):
-            return [
-                Issue(
-                    ".",
-                    "Could not obtain ruleset bypass actors.",
-                    actors,
-                    "bypass actor list",
-                    status="indeterminate",
-                )
-            ]
-        bypass_actors.extend(actors)
+    if "enforce_admins" in config:
+        for source_type, source, ruleset_id in sorted(ruleset_sources):
+            detail_endpoint = _ruleset_detail_endpoint(
+                owner_repo, source_type, source, ruleset_id
+            )
+            if detail_endpoint is None:
+                return [
+                    Issue(
+                        ".",
+                        f"Unsupported ruleset source type: {source_type}.",
+                        source_type,
+                        "Repository or Organization",
+                        status="indeterminate",
+                    )
+                ]
+            detail_result, detail_error = _gh_api(context, detail_endpoint)
+            if detail_error is not None:
+                return [detail_error]
+            assert detail_result is not None
+            if detail_result.returncode != 0:
+                stderr = detail_result.stderr.strip()
+                return [
+                    _platform_query_failure(
+                        "Ruleset detail query failed",
+                        stderr,
+                        "ruleset bypass actors",
+                        unsupported_is_violation=False,
+                    )
+                ]
+            detail, detail_error = _json_response(
+                detail_result, "ruleset detail response"
+            )
+            if detail_error is not None:
+                return [detail_error]
+            actors = detail.get("bypass_actors") if isinstance(detail, dict) else None
+            if not isinstance(actors, list):
+                return [
+                    Issue(
+                        ".",
+                        "Could not obtain ruleset bypass actors.",
+                        actors,
+                        "bypass actor list",
+                        status="indeterminate",
+                    )
+                ]
+            bypass_actors.extend(actors)
 
     pull_request_rules = [
         rule for rule in relevant_rules if rule["type"] == "pull_request"
@@ -872,27 +891,45 @@ def _ruleset_branch_protection(
     conversation_resolution: list[bool] = []
     for rule in pull_request_rules:
         parameters = rule["parameters"]
-        reviews = parameters.get("required_approving_review_count")
-        stale = parameters.get("dismiss_stale_reviews_on_push")
-        resolution = parameters.get("required_review_thread_resolution")
-        if (
-            isinstance(reviews, bool)
-            or not isinstance(reviews, int)
-            or not isinstance(stale, bool)
-            or not isinstance(resolution, bool)
-        ):
-            return [
-                Issue(
-                    ".",
-                    "Could not interpret pull request ruleset parameters.",
-                    parameters,
-                    "review count, stale dismissal, and thread resolution",
-                    status="indeterminate",
-                )
-            ]
-        review_counts.append(reviews)
-        dismiss_stale.append(stale)
-        conversation_resolution.append(resolution)
+        if "minimum_reviews" in config:
+            reviews = parameters.get("required_approving_review_count")
+            if isinstance(reviews, bool) or not isinstance(reviews, int):
+                return [
+                    Issue(
+                        ".",
+                        "Could not interpret required approving review count.",
+                        reviews,
+                        config["minimum_reviews"],
+                        status="indeterminate",
+                    )
+                ]
+            review_counts.append(reviews)
+        if "dismiss_stale_approvals" in config:
+            stale = parameters.get("dismiss_stale_reviews_on_push")
+            if not isinstance(stale, bool):
+                return [
+                    Issue(
+                        ".",
+                        "Could not interpret stale approval dismissal.",
+                        stale,
+                        config["dismiss_stale_approvals"],
+                        status="indeterminate",
+                    )
+                ]
+            dismiss_stale.append(stale)
+        if "require_conversation_resolution" in config:
+            resolution = parameters.get("required_review_thread_resolution")
+            if not isinstance(resolution, bool):
+                return [
+                    Issue(
+                        ".",
+                        "Could not interpret required review thread resolution.",
+                        resolution,
+                        config["require_conversation_resolution"],
+                        status="indeterminate",
+                    )
+                ]
+            conversation_resolution.append(resolution)
 
     contexts: set[str] = set()
     strict_checks: list[bool] = []
@@ -920,23 +957,35 @@ def _ruleset_branch_protection(
         contexts.update(check["context"] for check in checks)
         strict_checks.append(strict)
 
-    protection = {
-        "required_pull_request_reviews": (
-            {
-                "required_approving_review_count": max(review_counts),
-                "dismiss_stale_reviews": any(dismiss_stale),
-            }
-            if review_counts
-            else None
-        ),
-        "required_status_checks": (
-            {"contexts": sorted(contexts), "strict": any(strict_checks)}
-            if strict_checks
-            else None
-        ),
-        "required_conversation_resolution": {"enabled": any(conversation_resolution)},
-        "enforce_admins": {"enabled": not bypass_actors and bool(relevant_rules)},
-    }
+    protection: dict[str, Any] = {}
+    if needs_pull_request_rule:
+        review_protection: dict[str, Any] | None = None
+        if pull_request_rules:
+            review_protection = {}
+            if "minimum_reviews" in config:
+                review_protection["required_approving_review_count"] = max(
+                    review_counts
+                )
+            if "dismiss_stale_approvals" in config:
+                review_protection["dismiss_stale_reviews"] = any(dismiss_stale)
+        protection["required_pull_request_reviews"] = review_protection
+    if needs_status_check_rule:
+        status_checks: dict[str, Any] | None = None
+        if status_check_rules:
+            status_checks = {}
+            if "required_status_checks" in config:
+                status_checks["contexts"] = sorted(contexts)
+            if "require_up_to_date" in config:
+                status_checks["strict"] = any(strict_checks)
+        protection["required_status_checks"] = status_checks
+    if "require_conversation_resolution" in config:
+        protection["required_conversation_resolution"] = {
+            "enabled": any(conversation_resolution)
+        }
+    if "enforce_admins" in config:
+        protection["enforce_admins"] = {
+            "enabled": not bypass_actors and bool(relevant_rules)
+        }
     return _branch_protection_issues(protection, config)
 
 
@@ -991,138 +1040,147 @@ def _branch_protection_issues(
     branch = config["branch"]
     issues: list[Issue] = []
 
-    review_protection = protection.get("required_pull_request_reviews")
-    if review_protection is None:
-        issues.append(
-            Issue(
-                ".",
-                f"{branch} does not require pull request reviews.",
-                review_protection,
-                "pull request review protection",
-            )
-        )
-    elif not isinstance(review_protection, dict):
-        issues.append(
-            Issue(
-                ".",
-                "Could not interpret pull request review protection.",
-                review_protection,
-                "pull request review protection object",
-                status="indeterminate",
-            )
-        )
-    else:
-        reviews = review_protection.get("required_approving_review_count")
-        if isinstance(reviews, bool) or not isinstance(reviews, int):
+    if "minimum_reviews" in config or "dismiss_stale_approvals" in config:
+        review_protection = protection.get("required_pull_request_reviews")
+        if review_protection is None:
             issues.append(
                 Issue(
                     ".",
-                    "Could not interpret required approving review count.",
-                    reviews,
-                    config["minimum_reviews"],
-                    status="indeterminate",
+                    f"{branch} does not require pull requests.",
+                    review_protection,
+                    "pull request review protection",
                 )
             )
-        elif reviews < config["minimum_reviews"]:
+        elif not isinstance(review_protection, dict):
             issues.append(
                 Issue(
                     ".",
-                    f"{branch} requires too few approving reviews.",
-                    reviews,
-                    config["minimum_reviews"],
-                )
-            )
-        dismiss_stale = review_protection.get("dismiss_stale_reviews")
-        if not isinstance(dismiss_stale, bool):
-            issues.append(
-                Issue(
-                    ".",
-                    "Could not interpret stale approval dismissal.",
-                    dismiss_stale,
-                    config["dismiss_stale_approvals"],
-                    status="indeterminate",
-                )
-            )
-        elif dismiss_stale != config["dismiss_stale_approvals"]:
-            issues.append(
-                Issue(
-                    ".",
-                    f"{branch} does not dismiss stale approvals.",
-                    dismiss_stale,
-                    config["dismiss_stale_approvals"],
-                )
-            )
-
-    status_checks = protection.get("required_status_checks")
-    if status_checks is None:
-        issues.append(
-            Issue(
-                ".",
-                f"{branch} does not require status checks.",
-                status_checks,
-                config["required_status_checks"],
-            )
-        )
-    elif not isinstance(status_checks, dict):
-        issues.append(
-            Issue(
-                ".",
-                "Could not interpret required status checks.",
-                status_checks,
-                "required status checks object",
-                status="indeterminate",
-            )
-        )
-    else:
-        contexts = status_checks.get("contexts")
-        if not isinstance(contexts, list) or not all(
-            isinstance(context, str) for context in contexts
-        ):
-            issues.append(
-                Issue(
-                    ".",
-                    "Could not interpret required status check contexts.",
-                    contexts,
-                    config["required_status_checks"],
+                    "Could not interpret pull request review protection.",
+                    review_protection,
+                    "pull request review protection object",
                     status="indeterminate",
                 )
             )
         else:
-            missing_contexts = [
-                context
-                for context in config["required_status_checks"]
-                if context not in contexts
-            ]
-            if missing_contexts:
-                issues.append(
-                    Issue(
-                        ".",
-                        f"{branch} omits required status checks: "
-                        f"{', '.join(missing_contexts)}.",
-                        contexts,
-                        config["required_status_checks"],
+            if "minimum_reviews" in config:
+                reviews = review_protection.get("required_approving_review_count")
+                if isinstance(reviews, bool) or not isinstance(reviews, int):
+                    issues.append(
+                        Issue(
+                            ".",
+                            "Could not interpret required approving review count.",
+                            reviews,
+                            config["minimum_reviews"],
+                            status="indeterminate",
+                        )
                     )
-                )
-        strict = status_checks.get("strict")
-        if not isinstance(strict, bool):
+                elif reviews < config["minimum_reviews"]:
+                    issues.append(
+                        Issue(
+                            ".",
+                            f"{branch} requires too few approving reviews.",
+                            reviews,
+                            config["minimum_reviews"],
+                        )
+                    )
+            if "dismiss_stale_approvals" in config:
+                dismiss_stale = review_protection.get("dismiss_stale_reviews")
+                if not isinstance(dismiss_stale, bool):
+                    issues.append(
+                        Issue(
+                            ".",
+                            "Could not interpret stale approval dismissal.",
+                            dismiss_stale,
+                            config["dismiss_stale_approvals"],
+                            status="indeterminate",
+                        )
+                    )
+                elif dismiss_stale != config["dismiss_stale_approvals"]:
+                    issues.append(
+                        Issue(
+                            ".",
+                            f"{branch} does not dismiss stale approvals.",
+                            dismiss_stale,
+                            config["dismiss_stale_approvals"],
+                        )
+                    )
+
+    if "required_status_checks" in config or "require_up_to_date" in config:
+        status_checks = protection.get("required_status_checks")
+        if status_checks is None:
+            expected = config.get(
+                "required_status_checks", {"strict": config["require_up_to_date"]}
+            )
             issues.append(
                 Issue(
                     ".",
-                    "Could not interpret the up-to-date branch requirement.",
-                    strict,
-                    config["require_up_to_date"],
+                    f"{branch} does not require status checks.",
+                    status_checks,
+                    expected,
+                )
+            )
+        elif not isinstance(status_checks, dict):
+            issues.append(
+                Issue(
+                    ".",
+                    "Could not interpret required status checks.",
+                    status_checks,
+                    "required status checks object",
                     status="indeterminate",
                 )
             )
-        elif strict != config["require_up_to_date"]:
-            issues.append(
-                Issue(
-                    ".",
-                    f"{branch} does not require branches to be up to date.",
-                    strict,
-                    config["require_up_to_date"],
-                )
-            )
+        else:
+            if "required_status_checks" in config:
+                contexts = status_checks.get("contexts")
+                if not isinstance(contexts, list) or not all(
+                    isinstance(context, str) for context in contexts
+                ):
+                    issues.append(
+                        Issue(
+                            ".",
+                            "Could not interpret required status check contexts.",
+                            contexts,
+                            config["required_status_checks"],
+                            status="indeterminate",
+                        )
+                    )
+                else:
+                    missing_contexts = [
+                        context
+                        for context in config["required_status_checks"]
+                        if context not in contexts
+                    ]
+                    if missing_contexts:
+                        issues.append(
+                            Issue(
+                                ".",
+                                f"{branch} omits required status checks: "
+                                f"{', '.join(missing_contexts)}.",
+                                contexts,
+                                config["required_status_checks"],
+                            )
+                        )
+            if "require_up_to_date" in config:
+                strict = status_checks.get("strict")
+                if not isinstance(strict, bool):
+                    issues.append(
+                        Issue(
+                            ".",
+                            "Could not interpret the up-to-date branch requirement.",
+                            strict,
+                            config["require_up_to_date"],
+                            status="indeterminate",
+                        )
+                    )
+                elif strict != config["require_up_to_date"]:
+                    issues.append(
+                        Issue(
+                            ".",
+                            f"{branch} does not require branches to be up to date.",
+                            strict,
+                            config["require_up_to_date"],
+                        )
+                    )
 
     for response_key, config_key, message in (
         (
@@ -1136,6 +1194,8 @@ def _branch_protection_issues(
             f"{branch} allows administrator bypass.",
         ),
     ):
+        if config_key not in config:
+            continue
         setting = protection.get(response_key)
         if setting is None:
             issues.append(Issue(".", message, False, config[config_key]))
@@ -1290,6 +1350,7 @@ CHECK_HANDLERS: dict[str, CheckHandler] = {
     "ruff_select": _ruff_select,
     "no_placeholders": _no_placeholders,
     "branch_protection": _branch_protection,
+    "branch_protection_minimum_reviews": _branch_protection,
     "repo_metadata": _repo_metadata,
     "github_workflow_permissions": _github_workflow_permissions,
     "github_workflow_pins": _github_workflow_pins,

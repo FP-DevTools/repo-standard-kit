@@ -51,6 +51,8 @@ the changes listed under **Adopters must**.
   starter kits. RSK014 now requires both `quality` and `compliance`: quality
   proves the gate chain passes, while compliance prevents the chain and wider
   repository standard from drifting unnoticed.
+- RSK022 recommends one approving review when repository staffing permits,
+  without making that recommendation a default merge blocker.
 
 - §4 now mandates static type checking as a local pre-commit gate
   (`uv run ty check`), so it can be verified in CI exclusively through the
@@ -168,6 +170,10 @@ the changes listed under **Adopters must**.
   protected status so removing or weakening the quality workflow cannot pass
   unnoticed. `should` findings remain non-blocking everywhere `repo-check`
   runs.
+- **Section 10 approval count relaxed from required to recommended.** RSK014
+  still requires pull-request protection and every other documented enforcement
+  property, but accepts zero mandatory approvals. RSK022 reports fewer than one
+  approval as a non-blocking `should` finding unless strict mode is requested.
 - **§13 prose width downgraded from a `shall` to a `should`, matching how
   the Ruff `line-length` *value* already worked.** Checking `md013`
   ourselves via `repo_standard.compliance.spec.prose_offenders` duplicated
@@ -232,6 +238,8 @@ the changes listed under **Adopters must**.
   repository without one remains aligned.
 - Nothing for `RSK018`. `LICENSE` is a `should`; a repository without one
   remains aligned.
+- Nothing for the relaxed approval count. A zero-approval ruleset now satisfies
+  RSK014; requiring one approving review remains the RSK022 recommendation.
 - Add `--fix` to the `ruff check` pre-commit hook entry if not already
   present; `RSK007` now requires the exact
   `uv run ruff check --fix --force-exclude` entry, so a hook that still

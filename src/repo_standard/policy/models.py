@@ -48,6 +48,7 @@ CHECK_SCHEMAS: dict[str, tuple[set[str], set[str]]] = {
         },
         set(),
     ),
+    "branch_protection_minimum_reviews": ({"branch", "minimum_reviews"}, set()),
     "repo_metadata": ({"path", "standard_major"}, set()),
     "github_workflow_permissions": ({"path", "job", "permissions"}, set()),
     "github_workflow_pins": ({"path"}, set()),
@@ -272,6 +273,8 @@ def _validate_check_config(kind: str, config: dict[str, Any], location: str) -> 
     for key in ("value", "minimum_reviews"):
         if key in config:
             _integer(config[key], f"{location}.{key}")
+    if config.get("minimum_reviews", 0) < 0:
+        _fail(f"{location}.minimum_reviews", "expected a non-negative integer")
     if "commands_by_profile" in config:
         commands = _mapping(
             config["commands_by_profile"], f"{location}.commands_by_profile"

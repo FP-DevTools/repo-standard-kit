@@ -180,7 +180,7 @@ Remediation: Add docs/adr/ and an ADR template or first decision record.
 
 Rationale: Quality proves the gate chain passes; compliance independently prevents that chain and the rest of the standard from drifting unnoticed.
 
-Remediation: Protect main with pull request reviews, stale approval dismissal, strict quality and compliance checks, conversation resolution, and administrator enforcement.
+Remediation: Protect main with pull request protection, stale approval dismissal, strict quality and compliance checks, conversation resolution, and administrator enforcement.
 
 ### RSK015: Ruff line length uses the recommended baseline
 
@@ -265,6 +265,18 @@ Remediation: Set the quality job's effective permissions to exactly `contents: r
 Rationale: Full commit pins prevent upstream tag movement from changing trusted workflow code.
 
 Remediation: Pin every remote action and reusable workflow in the quality workflow to a 40-character SHA.
+
+### RSK022: Main branch protection recommends an approving review
+
+- Level: `recommended`
+- Profiles: `python-single`, `python-workspace`
+- Source: [`docs/quality-gates.md` — 10. Enforcement](../docs/quality-gates.md)
+- Enforcement: `platform`
+- Check kind: `branch_protection_minimum_reviews`
+
+Rationale: An independent approval improves change review when another maintainer is available.
+
+Remediation: Require at least one approving review when repository staffing permits.
 
 ## Retired Rule IDs
 

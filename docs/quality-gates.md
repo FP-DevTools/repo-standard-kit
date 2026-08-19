@@ -295,6 +295,13 @@ protection or active repository and organization rulesets. If a platform
 command cannot run or its response cannot be interpreted, `repo-check` returns
 an indeterminate command error; it never treats unavailable evidence as a pass.
 
+RSK014 requires pull-request protection but permits a minimum approval count of
+zero. RSK022 separately recommends at the **recommended** level that branch
+protection require at least one approving review. This recommendation remains
+non-blocking unless `repo-check` is run with `--strict`, so a sole-maintainer
+repository can keep the required CI enforcement without manufacturing a
+reviewer requirement it cannot routinely satisfy.
+
 ### Platform prerequisite
 
 Requiring a status check on a **private** repository needs GitHub Team or
@@ -321,8 +328,9 @@ settle later. Public repositories have branch protection on every plan.
 On GitHub, protect `main` with classic branch protection or active rulesets
 that enforce:
 
-- **Require a pull request before merging**, with at least one approving
-  review and stale approvals dismissed on new commits.
+- **Require a pull request before merging**, with stale approvals dismissed on
+  new commits. Requiring at least one approving review **SHOULD** be enabled
+  when another maintainer is available; RSK022 reports this recommendation.
 - **Require status checks to pass before merging**, selecting both the
   `quality` check produced by `.github/workflows/quality.yml` and the separate
   `compliance` check, with **Require branches to be up to date before
@@ -352,9 +360,10 @@ gh api repos/<owner>/<repo>/branches/main/protection \
          enforce_admins: .enforce_admins.enabled}'
 ```
 
-The `quality` and `compliance` checks shall appear in `checks`, `reviews` shall
-be at least `1`, and `strict`, `dismiss_stale`, `conversation_resolution`, and
-`enforce_admins` shall all be `true`.
+The `quality` and `compliance` checks shall appear in `checks`; RSK014 permits
+`reviews` to be `0`; and `strict`, `dismiss_stale`, `conversation_resolution`,
+and `enforce_admins` shall all be `true`. RSK022 recommends `reviews` be at
+least `1` when repository staffing permits.
 
 When the classic endpoint reports `Branch not protected`, inspect the effective
 active rulesets instead:
