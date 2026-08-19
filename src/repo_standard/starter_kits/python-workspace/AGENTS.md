@@ -42,7 +42,7 @@ Agents own:
 - Branch prefixes: `feat/`, `fix/`, `refactor/`, `docs/`, `chore/`
 - Merge through reviewed PRs only
 - Keep PRs package-scoped or clearly cross-cutting
-- CI should mirror the documented local quality gates
+- CI must mirror the documented local quality gates
 
 ## Quality Gates
 
@@ -52,6 +52,11 @@ Run from repo root:
 2. `uv run pre-commit run --all-files`
 3. `uv run pytest`
 4. `uv build`
+
+The quality workflow must grant effective `contents: read` permission with no
+write permissions, and pin every remote action or reusable workflow to a full
+40-character commit SHA. Keep version comments and GitHub Actions Dependabot
+configuration so those pins remain maintainable.
 
 ## Coding Standards
 

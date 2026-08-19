@@ -1,0 +1,646 @@
+{
+  "profiles": [
+    {
+      "description": "A repository producing one Python package from the root.",
+      "detection": {
+        "default": true,
+        "markers": [],
+        "priority": 10
+      },
+      "id": "python-single",
+      "schema_version": 1,
+      "title": "Python single-package repository"
+    },
+    {
+      "description": "A Python monorepo with per-package projects under packages/.",
+      "detection": {
+        "default": false,
+        "markers": [
+          {
+            "kind": "directory",
+            "path": "packages"
+          }
+        ],
+        "priority": 100
+      },
+      "id": "python-workspace",
+      "schema_version": 1,
+      "title": "Python workspace repository"
+    }
+  ],
+  "retired_rule_ids": [
+    "RSK013"
+  ],
+  "rules": [
+    {
+      "check": {
+        "config": {
+          "path": "AGENTS.md",
+          "path_type": "file"
+        },
+        "kind": "path_exists"
+      },
+      "enforcement": "structural",
+      "id": "RSK001",
+      "level": "required",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "Agents need one repository-local operating contract.",
+      "remediation": "Add a root AGENTS.md tailored to the repository.",
+      "source": {
+        "document": "docs/repo-standard.md",
+        "section": "Repository Contract"
+      },
+      "title": "AGENTS.md exists"
+    },
+    {
+      "check": {
+        "config": {
+          "headings": [
+            "Repository Purpose",
+            "Repository Context",
+            "Human And Agent Responsibilities",
+            "Workflow",
+            "Quality Gates",
+            "Coding Standards",
+            "Testing Policy",
+            "Documentation Rules",
+            "Repository Layout",
+            "Change Control Notes"
+          ],
+          "path": "AGENTS.md"
+        },
+        "kind": "markdown_headings"
+      },
+      "enforcement": "structural",
+      "id": "RSK002",
+      "level": "required",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "Stable headings make repository operating boundaries discoverable.",
+      "remediation": "Add every required level-two heading to AGENTS.md.",
+      "source": {
+        "document": "docs/repo-standard.md",
+        "section": "Required `AGENTS.md` Sections"
+      },
+      "title": "Required AGENTS.md sections are present"
+    },
+    {
+      "check": {
+        "config": {
+          "path": "AGENTS.md",
+          "values": [
+            "uv sync --locked",
+            "uv run pre-commit run --all-files",
+            "uv run pytest",
+            "uv build"
+          ]
+        },
+        "kind": "text_contains_all"
+      },
+      "enforcement": "structural",
+      "id": "RSK003",
+      "level": "required",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "Contributors need exact local commands that mirror CI.",
+      "remediation": "List the complete ordered gate chain in AGENTS.md.",
+      "source": {
+        "document": "docs/repo-standard.md",
+        "section": "Required `AGENTS.md` Sections"
+      },
+      "title": "AGENTS.md states the exact quality-gate chain"
+    },
+    {
+      "check": {
+        "config": {
+          "path": "README.md",
+          "path_type": "file"
+        },
+        "kind": "path_exists"
+      },
+      "enforcement": "structural",
+      "id": "RSK004",
+      "level": "required",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "Users need a stable entry point for repository purpose and use.",
+      "remediation": "Add a user-facing root README.md.",
+      "source": {
+        "document": "docs/repo-standard.md",
+        "section": "Repository Contract"
+      },
+      "title": "README.md exists"
+    },
+    {
+      "check": {
+        "config": {
+          "paths": [
+            "README.md",
+            "AGENTS.md"
+          ],
+          "pattern": "repo-standard-kit"
+        },
+        "kind": "text_pattern_each"
+      },
+      "enforcement": "structural",
+      "id": "RSK005",
+      "level": "required",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "Explicit references make standards drift auditable.",
+      "remediation": "Link repo-standard-kit from README.md and AGENTS.md.",
+      "source": {
+        "document": "docs/repo-standard.md",
+        "section": "Repository Contract"
+      },
+      "title": "Standard references are present"
+    },
+    {
+      "check": {
+        "config": {
+          "commands_by_profile": {
+            "python-single": [
+              "uv sync --locked",
+              "uv run pre-commit run --all-files",
+              "uv run pytest",
+              "uv build"
+            ],
+            "python-workspace": [
+              "uv sync --locked",
+              "uv run pre-commit run --all-files",
+              "uv run pytest",
+              "uv build --all-packages"
+            ]
+          },
+          "job": "quality",
+          "path": ".github/workflows/quality.yml",
+          "trigger": "pull_request"
+        },
+        "kind": "github_workflow_commands"
+      },
+      "enforcement": "structural",
+      "id": "RSK006",
+      "level": "required",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "Pull requests must execute the same reproducible gates as local work.",
+      "remediation": "Add the pull_request trigger, quality job, and complete commands.",
+      "source": {
+        "document": "docs/quality-gates.md",
+        "section": "5. CI Pull Request Gates"
+      },
+      "title": "Quality workflow executes the mandatory gate chain"
+    },
+    {
+      "check": {
+        "config": {
+          "hooks": [
+            {
+              "entry": "uv run check-yaml",
+              "id": "check-yaml",
+              "types": [
+                "yaml"
+              ]
+            },
+            {
+              "entry": "uv run check-toml",
+              "id": "check-toml",
+              "types": [
+                "toml"
+              ]
+            },
+            {
+              "entry": "uv run check-json",
+              "id": "check-json",
+              "types": [
+                "json"
+              ]
+            },
+            {
+              "entry": "uv run trailing-whitespace-fixer",
+              "id": "trailing-whitespace",
+              "types": [
+                "text"
+              ]
+            },
+            {
+              "entry": "uv run end-of-file-fixer",
+              "id": "end-of-file-fixer",
+              "types": [
+                "text"
+              ]
+            },
+            {
+              "entry": "uv run check-merge-conflict",
+              "id": "check-merge-conflict"
+            },
+            {
+              "entry": "uv run detect-private-key",
+              "id": "detect-private-key",
+              "types": [
+                "text"
+              ]
+            },
+            {
+              "entry": "uv run detect-secrets-hook",
+              "id": "detect-secrets",
+              "types": [
+                "text"
+              ]
+            },
+            {
+              "args": [
+                "--maxkb=1024"
+              ],
+              "entry": "uv run check-added-large-files",
+              "id": "check-added-large-files"
+            },
+            {
+              "entry": "uv run ruff check --fix --force-exclude",
+              "id": "ruff-check",
+              "require_serial": true,
+              "types_or": [
+                "python",
+                "pyi"
+              ]
+            },
+            {
+              "entry": "uv run ruff format --force-exclude",
+              "id": "ruff-format",
+              "require_serial": true,
+              "types_or": [
+                "python",
+                "pyi"
+              ]
+            },
+            {
+              "entry": "uv run ty check",
+              "id": "ty-check",
+              "pass_filenames": false,
+              "types": [
+                "python"
+              ]
+            },
+            {
+              "entry": "uv run pymarkdown --config .pymarkdown.json scan",
+              "id": "markdown-lint",
+              "types": [
+                "markdown"
+              ]
+            }
+          ],
+          "path": ".pre-commit-config.yaml"
+        },
+        "kind": "pre_commit_hooks"
+      },
+      "enforcement": "structural",
+      "id": "RSK007",
+      "level": "required",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "Structural matching prevents comments or unrelated text from impersonating hooks.",
+      "remediation": "Configure every required hook with the documented semantic fields.",
+      "source": {
+        "document": "docs/quality-gates.md",
+        "section": "4. Local Pre-Commit Gates"
+      },
+      "title": "Mandatory pre-commit hooks are configured structurally"
+    },
+    {
+      "check": {
+        "config": {
+          "allow_missing_profiles": [
+            "python-workspace"
+          ],
+          "backend": "uv_build",
+          "path": "pyproject.toml"
+        },
+        "kind": "uv_build_backend"
+      },
+      "enforcement": "structural",
+      "id": "RSK008",
+      "level": "required",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "One build backend keeps generated repositories reproducible.",
+      "remediation": "Configure uv_build, or keep a workspace root explicitly non-package.",
+      "source": {
+        "document": "docs/repo-standard.md",
+        "section": "Repository Contract"
+      },
+      "title": "Python packages use uv_build"
+    },
+    {
+      "check": {
+        "config": {
+          "path": "uv.lock",
+          "path_type": "file"
+        },
+        "kind": "path_exists"
+      },
+      "enforcement": "structural",
+      "id": "RSK009",
+      "level": "required",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "A committed lock file makes dependency resolution reproducible.",
+      "remediation": "Run uv lock or uv sync and commit uv.lock.",
+      "source": {
+        "document": "docs/repo-standard.md",
+        "section": "Repository Contract"
+      },
+      "title": "uv.lock exists"
+    },
+    {
+      "check": {
+        "config": {
+          "path": "pyproject.toml",
+          "require_line_length": true,
+          "required_select": [
+            "E",
+            "F",
+            "I",
+            "B",
+            "UP"
+          ]
+        },
+        "kind": "ruff_baseline"
+      },
+      "enforcement": "structural",
+      "id": "RSK010",
+      "level": "required",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "Explicit formatting and lint families prevent invisible default drift.",
+      "remediation": "Declare line-length and select E, F, I, B, and UP in Ruff config.",
+      "source": {
+        "document": "docs/quality-gates.md",
+        "section": "13. Formatting Baseline"
+      },
+      "title": "Required Ruff baseline is declared"
+    },
+    {
+      "check": {
+        "config": {
+          "placeholders": {
+            "__AUTHOR__": "author",
+            "__DESCRIPTION__": "description",
+            "__PACKAGE_NAME__": "package_name",
+            "__PYTHON_VERSION__": "python_version",
+            "__REPO_NAME__": "repo_name",
+            "__REPO_TYPE__": "repo_type"
+          }
+        },
+        "kind": "no_placeholders"
+      },
+      "enforcement": "structural",
+      "id": "RSK011",
+      "level": "required",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "Known starter placeholders indicate incomplete bootstrap output.",
+      "remediation": "Replace every known starter placeholder with repository-specific text.",
+      "source": {
+        "document": "docs/repo-standard.md",
+        "section": "Repository Contract"
+      },
+      "title": "Bootstrap placeholders are fully rendered"
+    },
+    {
+      "check": {
+        "config": {
+          "path": "docs/adr",
+          "path_type": "directory"
+        },
+        "kind": "path_exists"
+      },
+      "enforcement": "structural",
+      "id": "RSK012",
+      "level": "recommended",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "A stable ADR location encourages durable architecture records.",
+      "remediation": "Add docs/adr/ and an ADR template or first decision record.",
+      "source": {
+        "document": "docs/repo-layout.md",
+        "section": "Canonical Python Layout"
+      },
+      "title": "ADR directory exists"
+    },
+    {
+      "check": {
+        "config": {
+          "branch": "main",
+          "minimum_reviews": 1,
+          "status_check": "quality"
+        },
+        "kind": "branch_protection"
+      },
+      "enforcement": "platform",
+      "id": "RSK014",
+      "level": "required",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "Passing workflows are advisory unless merges require them.",
+      "remediation": "Protect main with quality checks, review, and administrator enforcement.",
+      "source": {
+        "document": "docs/quality-gates.md",
+        "section": "10. Enforcement"
+      },
+      "title": "Main branch protection enforces quality"
+    },
+    {
+      "check": {
+        "config": {
+          "path": "pyproject.toml",
+          "value": 88
+        },
+        "kind": "ruff_line_length"
+      },
+      "enforcement": "structural",
+      "id": "RSK015",
+      "level": "recommended",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "A shared width keeps formatting comparable across repositories.",
+      "remediation": "Prefer line-length = 88 unless the repository has a reason to differ.",
+      "source": {
+        "document": "docs/quality-gates.md",
+        "section": "13. Formatting Baseline"
+      },
+      "title": "Ruff line length uses the recommended baseline"
+    },
+    {
+      "check": {
+        "config": {
+          "path": "pyproject.toml",
+          "values": [
+            "PT"
+          ]
+        },
+        "kind": "ruff_select"
+      },
+      "enforcement": "structural",
+      "id": "RSK016",
+      "level": "recommended",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "Pytest-style linting keeps tests idiomatic and consistent.",
+      "remediation": "Add PT to tool.ruff.lint.select when compatible with the project.",
+      "source": {
+        "document": "docs/quality-gates.md",
+        "section": "13. Formatting Baseline"
+      },
+      "title": "Ruff selects recommended pytest rules"
+    },
+    {
+      "check": {
+        "config": {
+          "path": "CHANGELOG.md",
+          "path_type": "file"
+        },
+        "kind": "path_exists"
+      },
+      "enforcement": "structural",
+      "id": "RSK017",
+      "level": "recommended",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "A changelog gives users a stable compatibility record.",
+      "remediation": "Add CHANGELOG.md with an Unreleased section.",
+      "source": {
+        "document": "docs/repo-layout.md",
+        "section": "Canonical Python Layout"
+      },
+      "title": "CHANGELOG.md exists"
+    },
+    {
+      "check": {
+        "config": {
+          "path": "LICENSE",
+          "path_type": "file"
+        },
+        "kind": "path_exists"
+      },
+      "enforcement": "structural",
+      "id": "RSK018",
+      "level": "recommended",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "Explicit license terms remove ambiguity for users and contributors.",
+      "remediation": "Add the license text approved for the repository.",
+      "source": {
+        "document": "docs/repo-layout.md",
+        "section": "Canonical Python Layout"
+      },
+      "title": "LICENSE exists"
+    },
+    {
+      "check": {
+        "config": {
+          "path": "pyproject.toml",
+          "standard_major": "1"
+        },
+        "kind": "repo_metadata"
+      },
+      "enforcement": "structural",
+      "id": "RSK019",
+      "level": "required",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "Explicit metadata makes profile resolution stable as layouts evolve.",
+      "remediation": "Add tool.repo-standard with a valid profile and standard = \"1\".",
+      "source": {
+        "document": "docs/repo-standard.md",
+        "section": "Repository Contract"
+      },
+      "title": "Repository declares its standard profile and major version"
+    },
+    {
+      "check": {
+        "config": {
+          "job": "quality",
+          "path": ".github/workflows/quality.yml"
+        },
+        "kind": "github_workflow_permissions"
+      },
+      "enforcement": "structural",
+      "id": "RSK020",
+      "level": "required",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "Quality checks need source read access and no repository write access.",
+      "remediation": "Set effective quality-job permissions to contents read with no writes.",
+      "source": {
+        "document": "docs/quality-gates.md",
+        "section": "5. CI Pull Request Gates"
+      },
+      "title": "Quality workflow uses least-privilege permissions"
+    },
+    {
+      "check": {
+        "config": {
+          "job": "quality",
+          "path": ".github/workflows/quality.yml"
+        },
+        "kind": "github_workflow_pins"
+      },
+      "enforcement": "structural",
+      "id": "RSK021",
+      "level": "required",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "Full commit pins prevent upstream tag movement from changing trusted code.",
+      "remediation": "Pin every remote action and reusable workflow to a 40-character SHA.",
+      "source": {
+        "document": "docs/quality-gates.md",
+        "section": "5. CI Pull Request Gates"
+      },
+      "title": "Quality workflow pins remote actions immutably"
+    }
+  ],
+  "schema_version": 1,
+  "standard_major": "1",
+  "standard_version": "1.0.0"
+}

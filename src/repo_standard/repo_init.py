@@ -8,14 +8,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-PLACEHOLDERS = {
-    "__REPO_NAME__": "repo_name",
-    "__PACKAGE_NAME__": "package_name",
-    "__DESCRIPTION__": "description",
-    "__REPO_TYPE__": "repo_type",
-    "__PYTHON_VERSION__": "python_version",
-    "__AUTHOR__": "author",
-}
+from repo_standard.policy import load_compiled_policy
+
+_POLICY = load_compiled_policy()
+PLACEHOLDERS: dict[str, str] = dict(_POLICY.rule("RSK011").check.config["placeholders"])
 
 IGNORED_STARTER_ENTRIES = {
     "__pycache__",
@@ -30,9 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Create a new repository from the standard starter kits."
     )
-    parser.add_argument(
-        "--profile", choices=["python-single", "python-workspace"], required=True
-    )
+    parser.add_argument("--profile", choices=_POLICY.profile_ids, required=True)
     parser.add_argument("--repo-name")
     parser.add_argument("--package-name")
     parser.add_argument("--description", default="Describe this repository.")

@@ -27,6 +27,10 @@ module-name = "__PACKAGE_NAME__"
 [tool.ruff]
 line-length = 88
 
+[tool.repo-standard]
+profile = "python-single"
+standard = "1"
+
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "PT"]
 

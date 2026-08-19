@@ -35,6 +35,13 @@ backend PEP 517 provides for a project with no declared `[build-system]`.
 Before the first package exists, that step is a documented no-op rather than
 a failure.
 
+## Policy Declaration
+
+Declare `profile = "python-workspace"` and `standard = "1"` under
+`[tool.repo-standard]`. This explicit declaration wins over filesystem
+markers. When metadata is missing or invalid, the policy auto-detects this
+profile from the `packages/` directory so remaining checks can still run.
+
 ## Bootstrap Behavior
 
 - `repo-init --profile python-workspace`

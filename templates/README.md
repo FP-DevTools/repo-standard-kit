@@ -101,6 +101,15 @@ production code), and how they relate to `src/`.>
 
 ## Development
 
+This repository declares its machine-enforced standard contract in
+`pyproject.toml`:
+
+```toml
+[tool.repo-standard]
+profile = "<python-single or python-workspace>"
+standard = "1"
+```
+
 See `AGENTS.md` for the full repo-level contract (human/agent
 responsibilities, workflow rules, coding standards). This section covers what
 a new contributor needs first.

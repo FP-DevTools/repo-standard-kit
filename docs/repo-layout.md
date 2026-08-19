@@ -17,6 +17,12 @@ Use this layout by default for Python repositories:
 - `scripts/`
 - `examples/` when useful
 
+The core operating files above are governed by required rules in the main
+standard. The following layout aids are intentionally **recommended**:
+RSK012 checks `docs/adr/`, RSK017 checks `CHANGELOG.md`, and RSK018 checks
+`LICENSE`. Their absence is reported but is non-blocking unless strict checking
+is requested.
+
 ## Directory Responsibilities
 
 - `src/`: production code only

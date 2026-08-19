@@ -1,28 +1,23 @@
-"""Judge an arbitrary repository against a frozen `Rules` object.
-
-Pure filesystem inspection. `check_repo` never looks at its own installation
-directory — only at the `root` it is given — so the same logic runs against
-this checkout and against any repository that adopts the standard.
-
-Every rule traces to a normative sentence; see the docstring on each `_check_*`
-function for its source. What this module cannot check is documented in
-`docs/compliance.md`: prose quality, review judgement, and exception hygiene
-are not mechanically decidable.
-"""
+"""Check a repository by dispatching canonical policy check kinds."""
 
 from __future__ import annotations
 
 import json
 import re
+import shlex
 import subprocess
 import tomllib
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from repo_standard.compliance.spec import Rules
-
-RULES_JSON_PATH = Path(__file__).resolve().parent / "rules.json"
+from repo_standard.compliance.yaml_support import (
+    YamlDocument,
+    YamlParseError,
+    load_github_yaml,
+)
+from repo_standard.policy import Policy, Rule, load_compiled_policy
 
 _IGNORED_DIR_PARTS = {
     ".git",
@@ -36,35 +31,56 @@ _IGNORED_DIR_PARTS = {
     "dist",
     "build",
 }
-
-_KIT_REFERENCE_PATTERN = re.compile(r"repo-standard-kit")
 _GITHUB_REMOTE_PATTERN = re.compile(
     r"github\.com[:/](?P<owner_repo>[^/]+/[^/]+?)(?:\.git)?/?$"
 )
+_FULL_SHA = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
 @dataclass(frozen=True)
 class Finding:
-    """One rule violation: which rule, how severe, where, and why."""
+    """One actionable policy finding."""
 
     rule_id: str
-    severity: str  # "shall", "should", or "platform"
+    title: str
+    level: str
+    severity: str
     path: str
     line: int | None
     message: str
+    actual: Any
+    expected: Any
+    remediation: str
+    status: str = "violation"
 
 
-def load_rules() -> Rules:
-    """Load the frozen rule set shipped inside this package."""
-    data = json.loads(RULES_JSON_PATH.read_text(encoding="utf-8"))
-    return Rules.from_json(data)
+@dataclass(frozen=True)
+class Issue:
+    path: str
+    message: str
+    actual: Any = None
+    expected: Any = None
+    line: int | None = None
+    status: str = "violation"
 
 
-def detect_profile(root: Path) -> str:
-    """Autodetect a repository's profile: `packages/` means workspace."""
-    if (root / "packages").is_dir():
-        return "python-workspace"
-    return "python-single"
+@dataclass(frozen=True)
+class CheckContext:
+    root: Path
+    policy: Policy
+    profile: str
+
+
+CheckHandler = Callable[[CheckContext, dict[str, Any]], list[Issue]]
+
+
+def load_policy() -> Policy:
+    """Load the packaged deterministic policy artifact."""
+    return load_compiled_policy()
+
+
+# Compatibility alias for callers that used the v0.4 name.
+load_rules = load_policy
 
 
 def _read(path: Path) -> str | None:
@@ -78,8 +94,54 @@ def _relative(root: Path, path: Path) -> str:
     return path.relative_to(root).as_posix()
 
 
+def _toml_error_line(error: tomllib.TOMLDecodeError) -> int | None:
+    line = getattr(error, "lineno", None)
+    if isinstance(line, int):
+        return line
+    match = re.search(r"line (\d+)", str(error))
+    return int(match.group(1)) if match else None
+
+
+def _load_toml(path: Path) -> tuple[dict[str, Any] | None, Issue | None]:
+    text = _read(path)
+    if text is None:
+        return None, Issue(path.name, f"{path.name} is missing.", None, "valid TOML")
+    try:
+        return tomllib.loads(text), None
+    except tomllib.TOMLDecodeError as error:
+        return (
+            None,
+            Issue(
+                path.name,
+                f"Could not parse TOML: {error}",
+                text,
+                "valid TOML",
+                _toml_error_line(error),
+            ),
+        )
+
+
+def _load_yaml(path: Path, root: Path) -> tuple[YamlDocument | None, Issue | None]:
+    text = _read(path)
+    relative = _relative(root, path)
+    if text is None:
+        return None, Issue(relative, f"{relative} is missing.", None, "valid YAML")
+    try:
+        return load_github_yaml(text), None
+    except YamlParseError as error:
+        return (
+            None,
+            Issue(
+                relative,
+                f"Could not parse YAML: {error}",
+                text,
+                "valid YAML",
+                error.line,
+            ),
+        )
+
+
 def _git_tracked_files(root: Path) -> list[Path] | None:
-    """Files git tracks under `root`, or `None` if `root` is not a git repo."""
     if not (root / ".git").exists():
         return None
     try:
@@ -96,14 +158,6 @@ def _git_tracked_files(root: Path) -> list[Path] | None:
 
 
 def _iter_scannable_files(root: Path) -> list[Path]:
-    """Files a full-tree rule should inspect.
-
-    Git-tracked files when `root` is a git repository — so caches, vendored
-    dependencies, and anything else nobody committed are never scanned,
-    however they happen to be named — falling back to a filtered walk only
-    for a repository that has no `.git` yet, such as freshly bootstrapped
-    output a test inspects before it has been committed.
-    """
     tracked = _git_tracked_files(root)
     if tracked is not None:
         return [path for path in tracked if path.is_file()]
@@ -115,338 +169,469 @@ def _iter_scannable_files(root: Path) -> list[Path]:
     ]
 
 
-# --- individual rule checks -------------------------------------------------
-# Each function takes (root, rules) so `check_repo` can run them uniformly,
-# even though most rules do not need `rules` to decide pass or fail.
+def _detect_profile(root: Path, policy: Policy) -> str:
+    profiles = sorted(
+        policy.profiles, key=lambda profile: profile.detection.priority, reverse=True
+    )
+    for profile in profiles:
+        if profile.detection.default:
+            continue
+        matches = []
+        for marker in profile.detection.markers:
+            path = root / marker.path
+            matches.append(path.is_file() if marker.kind == "file" else path.is_dir())
+        if matches and all(matches):
+            return profile.id
+    return next(profile.id for profile in profiles if profile.detection.default)
 
 
-def _check_agents_exists(root: Path, rules: Rules) -> list[Finding]:
-    """RSK001: `AGENTS.md` exists (Repository Contract)."""
-    if (root / "AGENTS.md").exists():
+def _valid_metadata_profile(root: Path, policy: Policy) -> str | None:
+    data, error = _load_toml(root / "pyproject.toml")
+    if error is not None or data is None:
+        return None
+    metadata = data.get("tool", {}).get("repo-standard")
+    if not isinstance(metadata, dict):
+        return None
+    profile = metadata.get("profile")
+    standard = metadata.get("standard")
+    if profile not in policy.profile_ids or standard != policy.standard_major:
+        return None
+    return profile
+
+
+def resolve_profile(root: Path, policy: Policy, override: str | None = None) -> str:
+    """Resolve CLI override, then valid metadata, then deterministic detection."""
+    if override is not None:
+        if override not in policy.profile_ids:
+            raise ValueError(f"unknown profile {override!r}")
+        return override
+    return _valid_metadata_profile(root, policy) or _detect_profile(root, policy)
+
+
+def _path_exists(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
+    path = context.root / config["path"]
+    kind = config["path_type"]
+    exists = path.is_file() if kind == "file" else path.is_dir()
+    if exists:
         return []
-    return [Finding("RSK001", "shall", "AGENTS.md", None, "AGENTS.md is required.")]
+    return [Issue(config["path"], f"Required {kind} is missing.", "missing", kind)]
 
 
-def _check_agents_sections(root: Path, rules: Rules) -> list[Finding]:
-    """RSK002: all required `AGENTS.md` sections are present (repo-standard.md)."""
-    text = _read(root / "AGENTS.md")
+def _markdown_headings(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
+    text = _read(context.root / config["path"])
     if text is None:
         return []
-    headings = re.findall(r"^##\s+(.+?)\s*$", text, re.MULTILINE)
-    missing = [s for s in rules.required_agents_sections if s not in headings]
+    actual = re.findall(r"^##\s+(.+?)\s*$", text, re.MULTILINE)
+    missing = [heading for heading in config["headings"] if heading not in actual]
     if not missing:
         return []
     return [
-        Finding(
-            "RSK002",
-            "shall",
-            "AGENTS.md",
-            None,
-            f"Missing required sections: {', '.join(missing)}.",
+        Issue(
+            config["path"],
+            f"Missing required headings: {', '.join(missing)}.",
+            actual,
+            config["headings"],
         )
     ]
 
 
-def _check_agents_gate_chain(root: Path, rules: Rules) -> list[Finding]:
-    """RSK003: `AGENTS.md` states the exact mandatory gate chain (§5)."""
-    text = _read(root / "AGENTS.md")
+def _text_contains_all(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
+    text = _read(context.root / config["path"])
     if text is None:
         return []
-    missing = [c for c in rules.mandatory_ci_commands if c not in text]
+    missing = [value for value in config["values"] if value not in text]
     if not missing:
         return []
     return [
-        Finding(
-            "RSK003",
-            "shall",
-            "AGENTS.md",
-            None,
-            f"Omits mandatory gate commands: {', '.join(missing)}.",
+        Issue(
+            config["path"],
+            f"Missing required values: {', '.join(missing)}.",
+            missing,
+            config["values"],
         )
     ]
 
 
-def _check_readme_exists(root: Path, rules: Rules) -> list[Finding]:
-    """RSK004: `README.md` exists (Repository Contract)."""
-    if (root / "README.md").exists():
-        return []
-    return [Finding("RSK004", "shall", "README.md", None, "README.md is required.")]
-
-
-def _check_kit_reference(root: Path, rules: Rules) -> list[Finding]:
-    """RSK005: `README.md` and `AGENTS.md` both reference repo-standard-kit."""
-    findings = []
-    for name in ("README.md", "AGENTS.md"):
-        text = _read(root / name)
-        if text is not None and not _KIT_REFERENCE_PATTERN.search(text):
-            findings.append(
-                Finding(
-                    "RSK005",
-                    "shall",
-                    name,
-                    None,
-                    f"{name} does not reference repo-standard-kit.",
+def _text_pattern_each(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
+    pattern = re.compile(config["pattern"])
+    issues = []
+    for relative in config["paths"]:
+        text = _read(context.root / relative)
+        if text is not None and pattern.search(text) is None:
+            issues.append(
+                Issue(
+                    relative,
+                    f"{relative} does not match {pattern.pattern!r}.",
+                    text,
+                    pattern.pattern,
                 )
             )
-    return findings
+    return issues
 
 
-def _check_ci_gate_chain(root: Path, rules: Rules) -> list[Finding]:
-    """RSK006: the CI workflow runs the full mandatory gate chain (§5)."""
-    workflow_path = root / ".github" / "workflows" / "quality.yml"
-    text = _read(workflow_path)
-    rel = _relative(root, workflow_path)
-    if text is None:
-        return [
-            Finding(
-                "RSK006",
-                "shall",
-                rel,
-                None,
-                "No CI workflow runs the mandatory gate chain.",
-            )
-        ]
-    missing = [c for c in rules.mandatory_ci_commands if c not in text]
-    if not missing:
-        return []
-    return [
-        Finding(
-            "RSK006",
-            "shall",
-            rel,
+def _shell_commands(run: str) -> list[list[str]]:
+    """Return executable command token lists from an Actions `run` scalar."""
+    normalized = re.sub(r"\\\r?\n", " ", run)
+    commands: list[list[str]] = []
+    for line in normalized.splitlines() or [normalized]:
+        lexer = shlex.shlex(line, posix=True, punctuation_chars=";&|")
+        lexer.whitespace_split = True
+        lexer.commenters = "#"
+        segment: list[str] = []
+        try:
+            tokens = list(lexer)
+        except ValueError:
+            continue
+        for token in [*tokens, ";"]:
+            if token in {";", "&&", "||", "&", "|"}:
+                while segment and segment[0] in {"then", "do", "{"}:
+                    segment.pop(0)
+                while segment and segment[-1] in {"fi", "done", "}"}:
+                    segment.pop()
+                if segment:
+                    commands.append(segment)
+                segment = []
+            else:
+                segment.append(token)
+    return commands
+
+
+def _trigger_present(on_value: Any, trigger: str) -> bool:
+    if isinstance(on_value, str):
+        return on_value == trigger
+    if isinstance(on_value, list):
+        return trigger in on_value
+    if isinstance(on_value, dict):
+        return trigger in on_value
+    return False
+
+
+def _workflow_job(
+    context: CheckContext, config: dict[str, Any]
+) -> tuple[YamlDocument | None, dict[str, Any] | None, list[Issue]]:
+    path = context.root / config["path"]
+    document, error = _load_yaml(path, context.root)
+    if error is not None:
+        return None, None, [error]
+    assert document is not None
+    if not isinstance(document.data, dict):
+        return (
+            document,
             None,
-            f"CI workflow is missing mandatory gates: {', '.join(missing)}.",
+            [
+                Issue(
+                    config["path"],
+                    "Workflow root must be a mapping.",
+                    document.data,
+                    "mapping",
+                )
+            ],
         )
-    ]
-
-
-def _check_pre_commit_hooks(root: Path, rules: Rules) -> list[Finding]:
-    """RSK007: mandatory local pre-commit hooks are configured (§4)."""
-    config_path = root / ".pre-commit-config.yaml"
-    text = _read(config_path)
-    if text is None:
-        return [
-            Finding(
-                "RSK007",
-                "shall",
-                ".pre-commit-config.yaml",
-                None,
-                "No .pre-commit-config.yaml.",
-            )
-        ]
-    missing = [e for e in rules.mandatory_pre_commit_entries if e not in text]
-    if not missing:
-        return []
-    return [
-        Finding(
-            "RSK007",
-            "shall",
-            ".pre-commit-config.yaml",
+    jobs = document.data.get("jobs")
+    if not isinstance(jobs, dict) or not isinstance(jobs.get(config["job"]), dict):
+        return (
+            document,
             None,
-            f"Missing mandatory hooks: {', '.join(missing)}.",
+            [
+                Issue(
+                    config["path"],
+                    f"Workflow has no executable {config['job']!r} job.",
+                    jobs,
+                    config["job"],
+                    document.line("jobs"),
+                )
+            ],
         )
-    ]
+    return document, jobs[config["job"]], []
 
 
-def _check_uv_build_backend(root: Path, rules: Rules) -> list[Finding]:
-    """RSK008: `pyproject.toml` builds with `uv_build` (Repository Contract)."""
-    pyproject_path = root / "pyproject.toml"
-    text = _read(pyproject_path)
-    if text is None:
-        return [
-            Finding(
-                "RSK008", "shall", "pyproject.toml", None, "pyproject.toml is required."
+def _github_workflow_commands(
+    context: CheckContext, config: dict[str, Any]
+) -> list[Issue]:
+    document, job, errors = _workflow_job(context, config)
+    if errors:
+        return errors
+    assert document is not None
+    assert job is not None
+    assert isinstance(document.data, dict)
+    issues: list[Issue] = []
+    if not _trigger_present(document.data.get("on"), config["trigger"]):
+        issues.append(
+            Issue(
+                config["path"],
+                f"Workflow does not trigger on {config['trigger']}.",
+                document.data.get("on"),
+                config["trigger"],
+                document.line("on"),
             )
-        ]
-    try:
-        data = tomllib.loads(text)
-    except tomllib.TOMLDecodeError as error:
-        return [
-            Finding(
-                "RSK008", "shall", "pyproject.toml", None, f"Could not parse: {error}"
-            )
-        ]
-    if "build-system" not in data:
-        # No build-system at all is legitimate for a workspace root that
-        # builds nothing itself; per-package pyproject.toml files carry it.
-        return []
-    backend = data["build-system"].get("build-backend")
-    if backend == "uv_build":
-        return []
-    return [
-        Finding(
-            "RSK008",
-            "shall",
-            "pyproject.toml",
-            None,
-            f"build-backend is {backend!r}, expected 'uv_build'.",
         )
+    steps = job.get("steps")
+    if not isinstance(steps, list):
+        issues.append(
+            Issue(
+                config["path"],
+                f"Job {config['job']!r} has no executable steps.",
+                steps,
+                "list of run steps",
+                document.line("jobs", config["job"], "steps"),
+            )
+        )
+        return issues
+    actual_commands: list[list[str]] = []
+    for step in steps:
+        if isinstance(step, dict) and isinstance(step.get("run"), str):
+            actual_commands.extend(_shell_commands(step["run"]))
+    required = [
+        shlex.split(command)
+        for command in config["commands_by_profile"][context.profile]
     ]
+    missing = [tokens for tokens in required if tokens not in actual_commands]
+    if missing:
+        issues.append(
+            Issue(
+                config["path"],
+                "Quality job is missing complete executable commands: "
+                + ", ".join(shlex.join(tokens) for tokens in missing)
+                + ".",
+                [shlex.join(tokens) for tokens in actual_commands],
+                [shlex.join(tokens) for tokens in required],
+                document.line("jobs", config["job"], "steps"),
+            )
+        )
+    return issues
 
 
-def _check_uv_lock(root: Path, rules: Rules) -> list[Finding]:
-    """RSK009: `uv.lock` is present (Repository Contract)."""
-    if (root / "uv.lock").exists():
-        return []
-    return [Finding("RSK009", "shall", "uv.lock", None, "uv.lock is not present.")]
-
-
-def _read_ruff_config(pyproject_path: Path) -> dict[str, Any] | None:
-    """The `[tool.ruff]` table, or `None` if the file/table is missing or unparsable."""
-    text = _read(pyproject_path)
-    if text is None:
+def _normalized_tokens(
+    entry: Any, args: Any
+) -> tuple[tuple[str, ...], tuple[tuple[str, ...], ...], tuple[str, ...]] | None:
+    if not isinstance(entry, str):
         return None
     try:
-        data = tomllib.loads(text)
-    except tomllib.TOMLDecodeError:
+        tokens = shlex.split(entry)
+        if args is not None:
+            if isinstance(args, str):
+                args = [args]
+            if not isinstance(args, list) or not all(
+                isinstance(arg, str) for arg in args
+            ):
+                return None
+            for arg in args:
+                tokens.extend(shlex.split(arg))
+
+        prefix: list[str] = []
+        options: list[tuple[str, ...]] = []
+        suffix: list[str] = []
+        index = 0
+        saw_option = False
+        while index < len(tokens):
+            token = tokens[index]
+            if token.startswith("-"):
+                saw_option = True
+                if (
+                    "=" not in token
+                    and index + 1 < len(tokens)
+                    and not tokens[index + 1].startswith("-")
+                ):
+                    options.append((token, tokens[index + 1]))
+                    index += 2
+                    continue
+                options.append((token,))
+            elif saw_option:
+                suffix.append(token)
+            else:
+                prefix.append(token)
+            index += 1
+        return tuple(prefix), tuple(sorted(options)), tuple(suffix)
+    except ValueError:
         return None
-    return data.get("tool", {}).get("ruff")
 
 
-def _check_ruff_baseline(root: Path, rules: Rules) -> list[Finding]:
-    """RSK010: `line-length` is declared explicitly and mandatory rule families
-    are selected (§13). The specific `line-length` *value* is not checked here —
-    see RSK015."""
-    pyproject_path = root / "pyproject.toml"
-    if not pyproject_path.exists():
-        return []
-    ruff = _read_ruff_config(pyproject_path)
-    if ruff is None:
+def _hook_matches(actual: dict[str, Any], expected: dict[str, Any]) -> bool:
+    if actual.get("id") != expected["id"]:
+        return False
+    if _normalized_tokens(
+        actual.get("entry"), actual.get("args")
+    ) != _normalized_tokens(expected["entry"], expected.get("args")):
+        return False
+    for key in ("types", "types_or"):
+        if key in expected:
+            actual_values = actual.get(key)
+            if not isinstance(actual_values, list) or set(actual_values) != set(
+                expected[key]
+            ):
+                return False
+    for key in ("pass_filenames", "require_serial"):
+        if key in expected and actual.get(key) is not expected[key]:
+            return False
+    return True
+
+
+def _pre_commit_hooks(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
+    document, error = _load_yaml(context.root / config["path"], context.root)
+    if error is not None:
+        return [error]
+    assert document is not None
+    data = document.data
+    repos = data.get("repos") if isinstance(data, dict) else None
+    if not isinstance(repos, list):
         return [
-            Finding(
-                "RSK010",
-                "shall",
-                "pyproject.toml",
-                None,
-                "No usable [tool.ruff] configuration.",
+            Issue(
+                config["path"],
+                "Pre-commit config has no repositories list.",
+                repos,
+                "repositories list",
             )
         ]
-
-    findings = []
-    if "line-length" not in ruff:
-        findings.append(
-            Finding(
-                "RSK010",
-                "shall",
-                "pyproject.toml",
-                None,
-                "[tool.ruff] does not declare an explicit line-length.",
+    hooks: list[tuple[dict[str, Any], int | None]] = []
+    for repo_index, repo in enumerate(repos):
+        if not isinstance(repo, dict) or not isinstance(repo.get("hooks"), list):
+            continue
+        for hook_index, hook in enumerate(repo["hooks"]):
+            if isinstance(hook, dict):
+                hooks.append(
+                    (hook, document.line("repos", repo_index, "hooks", hook_index))
+                )
+    issues = []
+    for expected in config["hooks"]:
+        candidates = [
+            (hook, line) for hook, line in hooks if hook.get("id") == expected["id"]
+        ]
+        if any(_hook_matches(candidate, expected) for candidate, _line in candidates):
+            continue
+        issues.append(
+            Issue(
+                config["path"],
+                f"Hook {expected['id']!r} is missing or has incompatible "
+                "command/fields.",
+                [candidate for candidate, _line in candidates],
+                expected,
+                candidates[0][1] if candidates else document.line("repos"),
             )
         )
-    actual_select = set(ruff.get("lint", {}).get("select", []))
-    missing_families = sorted(set(rules.ruff_mandatory_select) - actual_select)
-    if missing_families:
-        findings.append(
-            Finding(
-                "RSK010",
-                "shall",
-                "pyproject.toml",
-                None,
-                f"Ruff select drops required rule families: {missing_families}.",
-            )
-        )
-    return findings
+    return issues
 
 
-def _check_ruff_recommended_line_length(root: Path, rules: Rules) -> list[Finding]:
-    """RSK015: declared `line-length` matches the recommended value (§13)."""
-    pyproject_path = root / "pyproject.toml"
-    if not pyproject_path.exists():
+def _uv_build_backend(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
+    data, error = _load_toml(context.root / config["path"])
+    if error is not None:
+        return [error]
+    assert data is not None
+    build_system = data.get("build-system")
+    if build_system is None and context.profile in config.get(
+        "allow_missing_profiles", []
+    ):
         return []
-    ruff = _read_ruff_config(pyproject_path)
-    if ruff is None or "line-length" not in ruff:
-        return []  # RSK010 already covers an undeclared line-length.
-    try:
-        actual_line_length = int(ruff["line-length"])
-    except (TypeError, ValueError):
-        return []
-    if actual_line_length == rules.ruff_recommended_line_length:
+    backend = (
+        build_system.get("build-backend") if isinstance(build_system, dict) else None
+    )
+    if backend == config["backend"]:
         return []
     return [
-        Finding(
-            "RSK015",
-            "should",
-            "pyproject.toml",
-            None,
-            f"line-length is {actual_line_length}; "
-            f"{rules.ruff_recommended_line_length} is recommended so formatting "
-            "stays comparable across repositories.",
+        Issue(
+            config["path"],
+            "Build backend does not match policy.",
+            backend,
+            config["backend"],
         )
     ]
 
 
-def _check_ruff_recommended_select(root: Path, rules: Rules) -> list[Finding]:
-    """RSK016: recommended rule families (`PT`) are also selected (§13)."""
-    pyproject_path = root / "pyproject.toml"
-    if not pyproject_path.exists():
+def _ruff(
+    context: CheckContext, path: str
+) -> tuple[dict[str, Any] | None, Issue | None]:
+    data, error = _load_toml(context.root / path)
+    if error is not None:
+        return None, error
+    assert data is not None
+    ruff = data.get("tool", {}).get("ruff")
+    if not isinstance(ruff, dict):
+        return None, Issue(path, "No usable [tool.ruff] configuration.", ruff, "table")
+    return ruff, None
+
+
+def _ruff_baseline(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
+    ruff, error = _ruff(context, config["path"])
+    if error is not None:
+        return [error]
+    assert ruff is not None
+    issues = []
+    if config["require_line_length"] and "line-length" not in ruff:
+        issues.append(
+            Issue(
+                config["path"],
+                "Ruff line-length is not explicit.",
+                None,
+                "declared integer",
+            )
+        )
+    select = ruff.get("lint", {}).get("select", [])
+    actual = set(select) if isinstance(select, list) else set()
+    missing = sorted(set(config["required_select"]) - actual)
+    if missing:
+        issues.append(
+            Issue(
+                config["path"],
+                f"Ruff drops required families: {missing}.",
+                sorted(actual),
+                config["required_select"],
+            )
+        )
+    return issues
+
+
+def _ruff_line_length(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
+    ruff, error = _ruff(context, config["path"])
+    if error is not None or ruff is None or "line-length" not in ruff:
         return []
-    ruff = _read_ruff_config(pyproject_path)
-    if ruff is None:
+    actual = ruff["line-length"]
+    if actual == config["value"]:
         return []
-    actual_select = set(ruff.get("lint", {}).get("select", []))
-    missing = sorted(set(rules.ruff_recommended_select) - actual_select)
+    return [
+        Issue(
+            config["path"],
+            "Ruff line-length differs from the recommendation.",
+            actual,
+            config["value"],
+        )
+    ]
+
+
+def _ruff_select(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
+    ruff, error = _ruff(context, config["path"])
+    if error is not None or ruff is None:
+        return []
+    select = ruff.get("lint", {}).get("select", [])
+    actual = set(select) if isinstance(select, list) else set()
+    missing = sorted(set(config["values"]) - actual)
     if not missing:
         return []
     return [
-        Finding(
-            "RSK016",
-            "should",
-            "pyproject.toml",
-            None,
-            f"Ruff select does not include recommended rule families: {missing}.",
+        Issue(
+            config["path"],
+            f"Ruff omits recommended families: {missing}.",
+            sorted(actual),
+            config["values"],
         )
     ]
 
 
-def _check_no_placeholders(root: Path, rules: Rules) -> list[Finding]:
-    """RSK011: no unresolved bootstrap placeholder tokens remain (repo-standard.md).
-
-    Matches only `repo_init.py`'s known placeholder vocabulary, not every
-    dunder-shaped token — a repository's own code may legitimately use
-    `__SOME_CONSTANT__`-style names unrelated to this standard's templating.
-    """
-    findings = []
-    for path in _iter_scannable_files(root):
+def _no_placeholders(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
+    issues = []
+    for path in _iter_scannable_files(context.root):
         text = _read(path)
         if text is None:
             continue
-        matches = sorted(
-            token for token in rules.known_placeholder_tokens if token in text
-        )
+        matches = sorted(token for token in config["placeholders"] if token in text)
         if matches:
-            findings.append(
-                Finding(
-                    "RSK011",
-                    "shall",
-                    _relative(root, path),
-                    None,
+            issues.append(
+                Issue(
+                    _relative(context.root, path),
                     f"Unresolved placeholder tokens: {', '.join(matches)}.",
+                    matches,
+                    [],
                 )
             )
-    return findings
-
-
-def _check_adr_dir(root: Path, rules: Rules) -> list[Finding]:
-    """RSK012: `docs/adr/` exists (repo-layout.md)."""
-    if (root / "docs" / "adr").is_dir():
-        return []
-    return [Finding("RSK012", "should", "docs/adr", None, "docs/adr/ is missing.")]
-
-
-def _check_changelog_exists(root: Path, rules: Rules) -> list[Finding]:
-    """RSK017: `CHANGELOG.md` exists (repo-layout.md)."""
-    if (root / "CHANGELOG.md").is_file():
-        return []
-    return [
-        Finding("RSK017", "should", "CHANGELOG.md", None, "CHANGELOG.md is missing.")
-    ]
-
-
-def _check_license_exists(root: Path, rules: Rules) -> list[Finding]:
-    """RSK018: `LICENSE` exists (repo-layout.md)."""
-    if (root / "LICENSE").is_file():
-        return []
-    return [Finding("RSK018", "should", "LICENSE", None, "LICENSE is missing.")]
+    return issues
 
 
 def _git_remote_url(root: Path) -> str | None:
@@ -463,174 +648,290 @@ def _git_remote_url(root: Path) -> str | None:
     return result.stdout.strip() or None
 
 
-def _owner_repo_from_remote(remote: str) -> str | None:
-    match = _GITHUB_REMOTE_PATTERN.search(remote)
-    return match.group("owner_repo") if match else None
-
-
-def _check_branch_protection(root: Path, rules: Rules) -> list[Finding]:
-    """RSK014: `main` has the required branch protection (§10). Needs `gh` + auth."""
-    remote = _git_remote_url(root)
-    owner_repo = _owner_repo_from_remote(remote) if remote else None
-    if owner_repo is None:
+def _branch_protection(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
+    remote = _git_remote_url(context.root)
+    match = _GITHUB_REMOTE_PATTERN.search(remote) if remote else None
+    if match is None:
         return [
-            Finding(
-                "RSK014",
-                "platform",
+            Issue(
                 ".",
-                None,
-                "Could not resolve a GitHub owner/repo from the origin remote.",
+                "Could not resolve GitHub origin for platform check.",
+                remote,
+                "GitHub origin",
+                status="indeterminate",
             )
         ]
+    endpoint = (
+        f"repos/{match.group('owner_repo')}/branches/{config['branch']}/protection"
+    )
     try:
         result = subprocess.run(
-            ["gh", "api", f"repos/{owner_repo}/branches/main/protection"],
-            cwd=root,
+            ["gh", "api", endpoint],
+            cwd=context.root,
             capture_output=True,
             text=True,
             timeout=30,
         )
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (FileNotFoundError, subprocess.TimeoutExpired) as error:
         return [
-            Finding(
-                "RSK014",
-                "platform",
+            Issue(
                 ".",
+                f"Platform command unavailable: {error}",
                 None,
-                "gh CLI unavailable or timed out; could not verify branch protection.",
+                "branch protection response",
+                status="indeterminate",
             )
         ]
     if result.returncode != 0:
+        status = (
+            "violation"
+            if re.search(r"\b(?:403|404)\b", result.stderr)
+            else "indeterminate"
+        )
         return [
-            Finding(
-                "RSK014",
-                "shall",
+            Issue(
                 ".",
-                None,
-                f"Branch protection is not configured on main: {result.stderr.strip()}",
+                f"Branch protection query failed: {result.stderr.strip()}",
+                result.stderr.strip(),
+                "configured protection",
+                status=status,
             )
         ]
     try:
         protection = json.loads(result.stdout)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as error:
         return [
-            Finding(
-                "RSK014",
-                "platform",
+            Issue(
                 ".",
-                None,
-                "Unexpected response from gh api; could not verify branch protection.",
+                f"Platform response was not JSON: {error}",
+                result.stdout,
+                "JSON response",
+                status="indeterminate",
             )
         ]
-
-    findings = []
+    issues = []
     contexts = protection.get("required_status_checks", {}).get("contexts", [])
-    if "quality" not in contexts:
-        findings.append(
-            Finding(
-                "RSK014",
-                "shall",
+    if config["status_check"] not in contexts:
+        issues.append(
+            Issue(
                 ".",
-                None,
-                "Required status checks do not include 'quality'.",
+                "Required status check is absent.",
+                contexts,
+                config["status_check"],
             )
         )
     reviews = protection.get("required_pull_request_reviews", {}).get(
         "required_approving_review_count", 0
     )
-    if reviews < 1:
-        findings.append(
-            Finding(
-                "RSK014",
-                "shall",
+    if reviews < config["minimum_reviews"]:
+        issues.append(
+            Issue(
                 ".",
-                None,
-                "Must require at least one approving review.",
+                "Too few approving reviews are required.",
+                reviews,
+                config["minimum_reviews"],
             )
         )
     if not protection.get("enforce_admins", {}).get("enabled", False):
-        findings.append(
-            Finding(
-                "RSK014",
-                "shall",
-                ".",
-                None,
-                "Must not allow administrators to bypass protection.",
+        issues.append(Issue(".", "Administrators may bypass protection.", False, True))
+    return issues
+
+
+def _repo_metadata(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
+    data, error = _load_toml(context.root / config["path"])
+    if error is not None:
+        return [error]
+    assert data is not None
+    metadata = data.get("tool", {}).get("repo-standard")
+    expected = {
+        "profile": list(context.policy.profile_ids),
+        "standard": config["standard_major"],
+    }
+    if not isinstance(metadata, dict):
+        return [
+            Issue(
+                config["path"],
+                "Missing [tool.repo-standard] metadata.",
+                metadata,
+                expected,
             )
+        ]
+    unknown = set(metadata) - {"profile", "standard"}
+    profile = metadata.get("profile")
+    standard = metadata.get("standard")
+    if (
+        not unknown
+        and profile in context.policy.profile_ids
+        and standard == config["standard_major"]
+    ):
+        return []
+    return [
+        Issue(
+            config["path"],
+            "Invalid [tool.repo-standard] profile or standard major.",
+            metadata,
+            expected,
         )
-    return findings
+    ]
 
 
-def _load_ignore_config(root: Path) -> dict[str, str]:
-    """`[tool.repo-check.ignore]`: rule ID -> recorded reason for suppression (§11).
+def _effective_permissions(workflow: dict[str, Any], job: dict[str, Any]) -> Any:
+    return job["permissions"] if "permissions" in job else workflow.get("permissions")
 
-    A malformed or absent table suppresses nothing — an entry only takes
-    effect once it has a non-empty string reason recorded against it.
-    """
-    text = _read(root / "pyproject.toml")
-    if text is None:
-        return {}
-    try:
-        data = tomllib.loads(text)
-    except tomllib.TOMLDecodeError:
+
+def _github_workflow_permissions(
+    context: CheckContext, config: dict[str, Any]
+) -> list[Issue]:
+    document, job, errors = _workflow_job(context, config)
+    if errors:
+        return []
+    assert document is not None
+    assert job is not None
+    assert isinstance(document.data, dict)
+    permissions = _effective_permissions(document.data, job)
+    valid = permissions == "read-all" or (
+        isinstance(permissions, dict)
+        and permissions.get("contents") == "read"
+        and not any(value == "write" for value in permissions.values())
+    )
+    if valid:
+        return []
+    line = document.line("jobs", config["job"], "permissions") or document.line(
+        "permissions"
+    )
+    return [
+        Issue(
+            config["path"],
+            "Quality job permissions are not least privilege.",
+            permissions,
+            {"contents": "read", "writes": "none"},
+            line,
+        )
+    ]
+
+
+def _remote_uses(reference: str) -> bool:
+    return not reference.startswith("./") and not reference.startswith("docker://")
+
+
+def _immutable_reference(reference: str) -> bool:
+    return (
+        "@" in reference
+        and _FULL_SHA.fullmatch(reference.rsplit("@", 1)[1]) is not None
+    )
+
+
+def _github_workflow_pins(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
+    document, job, errors = _workflow_job(context, config)
+    if errors:
+        return []
+    assert document is not None
+    assert job is not None
+    assert isinstance(document.data, dict)
+    jobs = document.data.get("jobs")
+    assert isinstance(jobs, dict)
+    references: list[tuple[str, int | None]] = []
+    for job_id, workflow_job in jobs.items():
+        if not isinstance(job_id, str) or not isinstance(workflow_job, dict):
+            continue
+        if isinstance(workflow_job.get("uses"), str):
+            references.append(
+                (workflow_job["uses"], document.line("jobs", job_id, "uses"))
+            )
+        steps = workflow_job.get("steps")
+        if not isinstance(steps, list):
+            continue
+        for index, step in enumerate(steps):
+            if isinstance(step, dict) and isinstance(step.get("uses"), str):
+                references.append(
+                    (
+                        step["uses"],
+                        document.line("jobs", job_id, "steps", index, "uses"),
+                    )
+                )
+    return [
+        Issue(
+            config["path"],
+            f"Remote reference is not pinned to a full commit SHA: {reference}.",
+            reference,
+            "remote@40-character-SHA",
+            line,
+        )
+        for reference, line in references
+        if _remote_uses(reference) and not _immutable_reference(reference)
+    ]
+
+
+CHECK_HANDLERS: dict[str, CheckHandler] = {
+    "path_exists": _path_exists,
+    "markdown_headings": _markdown_headings,
+    "text_contains_all": _text_contains_all,
+    "text_pattern_each": _text_pattern_each,
+    "github_workflow_commands": _github_workflow_commands,
+    "pre_commit_hooks": _pre_commit_hooks,
+    "uv_build_backend": _uv_build_backend,
+    "ruff_baseline": _ruff_baseline,
+    "ruff_line_length": _ruff_line_length,
+    "ruff_select": _ruff_select,
+    "no_placeholders": _no_placeholders,
+    "branch_protection": _branch_protection,
+    "repo_metadata": _repo_metadata,
+    "github_workflow_permissions": _github_workflow_permissions,
+    "github_workflow_pins": _github_workflow_pins,
+}
+
+
+def _finding(rule: Rule, issue: Issue) -> Finding:
+    severity = "platform" if issue.status == "indeterminate" else rule.severity
+    return Finding(
+        rule.id,
+        rule.title,
+        rule.level,
+        severity,
+        issue.path,
+        issue.line,
+        issue.message,
+        issue.actual,
+        issue.expected,
+        rule.remediation,
+        issue.status,
+    )
+
+
+def _load_ignore_config(root: Path, policy: Policy) -> dict[str, str]:
+    data, error = _load_toml(root / "pyproject.toml")
+    if error is not None or data is None:
         return {}
     ignore = data.get("tool", {}).get("repo-check", {}).get("ignore", {})
     if not isinstance(ignore, dict):
         return {}
+    known = set(policy.rule_ids)
     return {
         rule_id: reason
         for rule_id, reason in ignore.items()
-        if isinstance(rule_id, str) and isinstance(reason, str) and reason.strip()
+        if rule_id in known and isinstance(reason, str) and reason.strip()
     }
-
-
-_STRUCTURAL_CHECKS = (
-    _check_agents_exists,
-    _check_agents_sections,
-    _check_agents_gate_chain,
-    _check_readme_exists,
-    _check_kit_reference,
-    _check_ci_gate_chain,
-    _check_pre_commit_hooks,
-    _check_uv_build_backend,
-    _check_uv_lock,
-    _check_ruff_baseline,
-    _check_ruff_recommended_line_length,
-    _check_ruff_recommended_select,
-    _check_no_placeholders,
-    _check_adr_dir,
-    _check_changelog_exists,
-    _check_license_exists,
-)
 
 
 def check_repo(
     root: Path,
-    rules: Rules,
+    policy: Policy,
     *,
     profile: str | None = None,
     include_platform: bool = False,
 ) -> list[Finding]:
-    """Check `root` for structural alignment with the standard `rules` define.
-
-    `profile` is accepted for forward compatibility with profile-specific
-    rules; none of the current catalogue differs by profile, so it does not
-    yet change which checks run. `include_platform` opts into RSK014, which
-    needs `gh`, network access, and auth (§10).
-
-    A rule with a recorded reason in `root`'s `[tool.repo-check.ignore]` is
-    dropped from the result entirely — this is the §11 exception mechanism,
-    not a report of what was excused.
-    """
-    checks = list(_STRUCTURAL_CHECKS)
-    if include_platform:
-        checks.append(_check_branch_protection)
-
+    """Check structural alignment using profile-filtered canonical rules."""
+    resolved_profile = resolve_profile(root, policy, profile)
+    context = CheckContext(root=root, policy=policy, profile=resolved_profile)
     findings: list[Finding] = []
-    for check in checks:
-        findings.extend(check(root, rules))
-
-    ignored = _load_ignore_config(root)
-    if ignored:
-        findings = [f for f in findings if f.rule_id not in ignored]
-    return findings
+    for rule in policy.rules:
+        if resolved_profile not in rule.profiles:
+            continue
+        if rule.enforcement == "platform" and not include_platform:
+            continue
+        handler = CHECK_HANDLERS[rule.check.kind]
+        findings.extend(
+            _finding(rule, issue) for issue in handler(context, rule.check.config)
+        )
+    ignored = _load_ignore_config(root, policy)
+    return [finding for finding in findings if finding.rule_id not in ignored]

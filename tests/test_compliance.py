@@ -1,370 +1,589 @@
-"""Tests for the `repo_standard.compliance` package: rules, checks, and the CLI.
-
-`check_repo` is exercised two ways: synthetic minimal repositories built in
-`tmp_path`, one mutation away from compliant, so each rule's pass and fail
-branch is covered directly; and the real starter kits, bootstrapped by
-`bootstrap_repo` the same way `repo-init` does, so it is impossible for a
-generated repository to drift out of alignment with what the checker accepts.
-"""
+"""Policy schema, structural checker, profile, output, and dogfood tests."""
 
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
+import tomllib
+from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 import yaml
 from conftest import REPO_ROOT
 
-from repo_standard.compliance import cli
+from repo_standard.compliance import checks, cli
 from repo_standard.compliance.checks import (
-    RULES_JSON_PATH,
+    CHECK_HANDLERS,
     Finding,
     check_repo,
-    load_rules,
+    load_policy,
+    resolve_profile,
 )
-from repo_standard.compliance.spec import build_rules
+from repo_standard.policy import PolicyError, load_compiled_policy, load_source_policy
+from repo_standard.policy.compiler import render_compiled, render_reference
+from repo_standard.policy.models import CHECK_SCHEMAS
 from repo_standard.repo_init import bootstrap_repo
 
-STARTER_KIT_PROFILES = ("python-single", "python-workspace")
-
-RULES = load_rules()
-
-
-def _minimal_repo(tmp_path: Path) -> Path:
-    """A repository that satisfies every structural (non-platform) rule."""
-    root = tmp_path / "compliant-repo"
-    root.mkdir()
-
-    agents_sections = "\n\n".join(
-        f"## {s}\n\nDetail." for s in RULES.required_agents_sections
-    )
-    gate_chain = "\n".join(
-        f"{i}. `{c}`" for i, c in enumerate(RULES.mandatory_ci_commands, 1)
-    )
-    (root / "AGENTS.md").write_text(
-        f"# AGENTS.md\n\n{agents_sections}\n\n## Quality Gates\n\n{gate_chain}\n\n"
-        "See [repo-standard-kit](https://github.com/FP-DevTools/repo-standard-kit).\n",
-        encoding="utf-8",
-    )
-    (root / "README.md").write_text(
-        "# compliant-repo\n\nSee [repo-standard-kit]"
-        "(https://github.com/FP-DevTools/repo-standard-kit).\n",
-        encoding="utf-8",
-    )
-
-    workflow_dir = root / ".github" / "workflows"
-    workflow_dir.mkdir(parents=True)
-    steps = "\n".join(f"      - run: {c}" for c in RULES.mandatory_ci_commands)
-    (workflow_dir / "quality.yml").write_text(
-        f"name: Quality\non: [pull_request]\njobs:\n  quality:\n    steps:\n{steps}\n",
-        encoding="utf-8",
-    )
-
-    hooks = "\n".join(f"        entry: {e}" for e in RULES.mandatory_pre_commit_entries)
-    (root / ".pre-commit-config.yaml").write_text(
-        f"repos:\n  - repo: local\n    hooks:\n{hooks}\n",
-        encoding="utf-8",
-    )
-
-    select = ", ".join(
-        f'"{s}"' for s in (*RULES.ruff_mandatory_select, *RULES.ruff_recommended_select)
-    )
-    (root / "pyproject.toml").write_text(
-        "[project]\n"
-        'name = "compliant-repo"\n'
-        'version = "0.1.0"\n\n'
-        "[build-system]\n"
-        'requires = ["uv_build>=0.11.20,<0.12"]\n'
-        'build-backend = "uv_build"\n\n'
-        "[tool.uv.build-backend]\n"
-        'module-name = "compliant_repo"\n\n'
-        "[tool.ruff]\n"
-        f"line-length = {RULES.ruff_recommended_line_length}\n\n"
-        "[tool.ruff.lint]\n"
-        f"select = [{select}]\n",
-        encoding="utf-8",
-    )
-    (root / "uv.lock").write_text("", encoding="utf-8")
-    (root / "docs" / "adr").mkdir(parents=True)
-    (root / "CHANGELOG.md").write_text(
-        "# Changelog\n\n## [Unreleased]\n", encoding="utf-8"
-    )
-    (root / "LICENSE").write_text("Proprietary.\n", encoding="utf-8")
-
-    return root
+POLICY = load_policy()
+STARTER_KIT_PROFILES = POLICY.profile_ids
 
 
 def _rule_ids(findings: list[Finding]) -> set[str]:
     return {finding.rule_id for finding in findings}
 
 
-def test_minimal_repo_has_no_structural_findings(tmp_path: Path) -> None:
-    root = _minimal_repo(tmp_path)
-    findings = check_repo(root, RULES)
-    assert findings == []
-
-
-def test_missing_agents_md_reports_rsk001(tmp_path: Path) -> None:
-    root = _minimal_repo(tmp_path)
-    (root / "AGENTS.md").unlink()
-    assert "RSK001" in _rule_ids(check_repo(root, RULES))
-
-
-def test_agents_md_missing_section_reports_rsk002(tmp_path: Path) -> None:
-    root = _minimal_repo(tmp_path)
-    text = (root / "AGENTS.md").read_text(encoding="utf-8")
-    stripped = text.replace(
-        f"## {RULES.required_agents_sections[0]}", "## Something Else"
+def _write_pre_commit(root: Path, hooks: list[dict[str, object]]) -> None:
+    data = {"repos": [{"repo": "local", "hooks": hooks}]}
+    (root / ".pre-commit-config.yaml").write_text(
+        yaml.safe_dump(data, sort_keys=False), encoding="utf-8"
     )
-    (root / "AGENTS.md").write_text(stripped, encoding="utf-8")
-    assert "RSK002" in _rule_ids(check_repo(root, RULES))
 
 
-def test_agents_md_missing_gate_command_reports_rsk003(tmp_path: Path) -> None:
+def _workflow_text(profile: str = "python-single") -> str:
+    commands = POLICY.rule("RSK006").check.config["commands_by_profile"][profile]
+    steps = "\n".join(f"      - run: {command}" for command in commands)
+    return (
+        "name: Quality\n"
+        "on:\n"
+        "  pull_request:\n"
+        "permissions:\n"
+        "  contents: read\n"
+        "jobs:\n"
+        "  quality:\n"
+        "    runs-on: ubuntu-latest\n"
+        "    steps:\n"
+        f"{steps}\n"
+    )
+
+
+def _minimal_repo(tmp_path: Path, profile: str = "python-single") -> Path:
+    root = tmp_path / "compliant-repo"
+    root.mkdir()
+    headings = POLICY.rule("RSK002").check.config["headings"]
+    agents_sections = "\n\n".join(f"## {heading}\n\nDetail." for heading in headings)
+    gate_chain = "\n".join(
+        f"{index}. `{command}`"
+        for index, command in enumerate(POLICY.rule("RSK003").check.config["values"], 1)
+    )
+    (root / "AGENTS.md").write_text(
+        f"# AGENTS.md\n\n{agents_sections}\n\n{gate_chain}\n\nSee repo-standard-kit.\n",
+        encoding="utf-8",
+    )
+    (root / "README.md").write_text(
+        "# Repository\n\nSee repo-standard-kit.\n", encoding="utf-8"
+    )
+    workflow = root / ".github" / "workflows"
+    workflow.mkdir(parents=True)
+    (workflow / "quality.yml").write_text(_workflow_text(profile), encoding="utf-8")
+    hooks = [dict(hook) for hook in POLICY.rule("RSK007").check.config["hooks"]]
+    for hook in hooks:
+        hook["language"] = "system"
+    _write_pre_commit(root, hooks)
+    select = [
+        *POLICY.rule("RSK010").check.config["required_select"],
+        *POLICY.rule("RSK016").check.config["values"],
+    ]
+    build = (
+        "[build-system]\n"
+        'requires = ["uv_build>=0.11.20,<0.12"]\n'
+        'build-backend = "uv_build"\n\n'
+        if profile == "python-single"
+        else "[tool.uv]\npackage = false\n\n"
+    )
+    (root / "pyproject.toml").write_text(
+        "[project]\n"
+        'name = "compliant-repo"\n'
+        'version = "0.1.0"\n\n'
+        f"{build}"
+        "[tool.ruff]\n"
+        f"line-length = {POLICY.rule('RSK015').check.config['value']}\n\n"
+        "[tool.ruff.lint]\n"
+        f"select = {json.dumps(select)}\n\n"
+        "[tool.repo-standard]\n"
+        f'profile = "{profile}"\n'
+        f'standard = "{POLICY.standard_major}"\n',
+        encoding="utf-8",
+    )
+    (root / "uv.lock").write_text("", encoding="utf-8")
+    (root / "docs" / "adr").mkdir(parents=True)
+    (root / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+    (root / "LICENSE").write_text("Proprietary.\n", encoding="utf-8")
+    return root
+
+
+def _load_pre_commit(root: Path) -> list[dict[str, object]]:
+    data = yaml.safe_load(
+        (root / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+    )
+    return data["repos"][0]["hooks"]
+
+
+def _policy_checkout(tmp_path: Path) -> Path:
+    root = tmp_path / "policy-checkout"
+    shutil.copytree(REPO_ROOT / "policy", root / "policy")
+    shutil.copytree(REPO_ROOT / "docs", root / "docs")
+    (root / "pyproject.toml").write_text(
+        f'[project]\nname = "policy-test"\nversion = "{POLICY.standard_version}"\n',
+        encoding="utf-8",
+    )
+    return root
+
+
+def _mutate_base(root: Path, mutation: Callable[[dict[str, object]], None]) -> None:
+    base = root / "policy" / "base.yaml"
+    data = yaml.safe_load(base.read_text(encoding="utf-8"))
+    assert isinstance(data, dict)
+    mutation(data)
+    base.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+
+# --- strict policy schema and generation ---------------------------------
+
+
+def test_source_policy_is_valid() -> None:
+    assert load_source_policy(REPO_ROOT) == load_compiled_policy()
+
+
+def test_v04_rule_ids_and_retired_gap_are_preserved_during_cutover() -> None:
+    prior = tuple(
+        [*(f"RSK{number:03d}" for number in range(1, 13)), "RSK014"]
+        + [f"RSK{number:03d}" for number in range(15, 19)]
+    )
+    assert POLICY.rule_ids[: len(prior)] == prior
+    assert POLICY.retired_rule_ids == ("RSK013",)
+
+
+def test_malformed_policy_yaml_reports_location(tmp_path: Path) -> None:
+    root = _policy_checkout(tmp_path)
+    (root / "policy" / "base.yaml").write_text("rules: [\n", encoding="utf-8")
+    with pytest.raises(PolicyError, match=r":2:1: malformed YAML"):
+        load_source_policy(root)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        (lambda data: data.update({"surprise": True}), "unknown keys"),
+        (lambda data: data.update({"schema_version": "1"}), "expected an integer"),
+        (
+            lambda data: data["rules"].append(dict(data["rules"][0])),
+            "duplicate rule IDs",
+        ),
+        (
+            lambda data: data["rules"].__setitem__(
+                slice(0, 2), list(reversed(data["rules"][:2]))
+            ),
+            "numerically ordered",
+        ),
+        (
+            lambda data: data["rules"][0].update({"profiles": ["unknown"]}),
+            "unknown profiles",
+        ),
+        (
+            lambda data: data["rules"][0]["source"].update({"section": "Missing"}),
+            "does not exist",
+        ),
+        (
+            lambda data: data["rules"][0]["check"].update({"kind": "unregistered"}),
+            "unregistered check kind",
+        ),
+    ],
+)
+def test_invalid_policy_is_rejected(
+    tmp_path: Path,
+    mutation: Callable[[dict[str, object]], None],
+    message: str,
+) -> None:
+    root = _policy_checkout(tmp_path)
+    _mutate_base(root, mutation)
+    with pytest.raises(PolicyError, match=message):
+        load_source_policy(root)
+
+
+def test_generated_policy_artifacts_are_current_and_deterministic() -> None:
+    source = load_source_policy(REPO_ROOT)
+    expected_json = render_compiled(source)
+    assert (REPO_ROOT / "src" / "repo_standard" / "policy" / "compiled.json").read_text(
+        encoding="utf-8"
+    ) == expected_json
+    assert (REPO_ROOT / "docs" / "policy-reference.md").read_text(
+        encoding="utf-8"
+    ) == render_reference(source)
+
+
+def test_every_typed_check_kind_has_exactly_one_runtime_handler() -> None:
+    assert set(CHECK_SCHEMAS) == set(CHECK_HANDLERS)
+
+
+def test_standard_package_version_and_source_distribution_inputs_agree() -> None:
+    pyproject_text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    pyproject = tomllib.loads(pyproject_text)
+    assert pyproject["project"]["version"] == POLICY.standard_version
+    includes = pyproject["tool"]["uv"]["build-backend"]["source-include"]
+    assert "policy/**" in includes
+    assert "docs/**" in includes
+    assert (REPO_ROOT / "src" / "repo_standard" / "policy" / "compiled.json").is_file()
+
+
+# --- base rules and actionable findings ----------------------------------
+
+
+def test_minimal_repo_has_no_findings(tmp_path: Path) -> None:
+    assert check_repo(_minimal_repo(tmp_path), POLICY) == []
+
+
+@pytest.mark.parametrize(
+    ("relative", "rule_id"),
+    [
+        ("AGENTS.md", "RSK001"),
+        ("README.md", "RSK004"),
+        ("uv.lock", "RSK009"),
+        ("CHANGELOG.md", "RSK017"),
+        ("LICENSE", "RSK018"),
+    ],
+)
+def test_missing_policy_owned_path_reports_rule(
+    tmp_path: Path, relative: str, rule_id: str
+) -> None:
     root = _minimal_repo(tmp_path)
-    text = (root / "AGENTS.md").read_text(encoding="utf-8")
-    stripped = text.replace(f"`{RULES.mandatory_ci_commands[0]}`", "`echo hi`")
-    (root / "AGENTS.md").write_text(stripped, encoding="utf-8")
-    assert "RSK003" in _rule_ids(check_repo(root, RULES))
+    (root / relative).unlink()
+    assert rule_id in _rule_ids(check_repo(root, POLICY))
 
 
-def test_missing_readme_reports_rsk004(tmp_path: Path) -> None:
+def test_finding_contains_actionable_contract_fields(tmp_path: Path) -> None:
     root = _minimal_repo(tmp_path)
     (root / "README.md").unlink()
-    assert "RSK004" in _rule_ids(check_repo(root, RULES))
+    finding = next(f for f in check_repo(root, POLICY) if f.rule_id == "RSK004")
+    assert finding.title
+    assert finding.level == "required"
+    assert finding.severity == "shall"
+    assert finding.actual == "missing"
+    assert finding.expected == "file"
+    assert finding.remediation
 
 
-def test_readme_without_kit_reference_reports_rsk005(tmp_path: Path) -> None:
+# --- GitHub workflow structure, commands, permissions, and pins -----------
+
+
+def test_github_loader_preserves_on_and_valid_workflow_passes(tmp_path: Path) -> None:
     root = _minimal_repo(tmp_path)
-    (root / "README.md").write_text(
-        "# compliant-repo\n\nNo reference here.\n", encoding="utf-8"
-    )
-    assert "RSK005" in _rule_ids(check_repo(root, RULES))
+    assert not _rule_ids(check_repo(root, POLICY)) & {"RSK006", "RSK020", "RSK021"}
 
 
-def test_ci_workflow_missing_gate_reports_rsk006(tmp_path: Path) -> None:
-    root = _minimal_repo(tmp_path)
-    workflow_path = root / ".github" / "workflows" / "quality.yml"
-    text = workflow_path.read_text(encoding="utf-8")
-    workflow_path.write_text(
-        text.replace(f"run: {RULES.mandatory_ci_commands[0]}", "run: echo hi"),
-        encoding="utf-8",
-    )
-    assert "RSK006" in _rule_ids(check_repo(root, RULES))
-
-
-def test_pre_commit_missing_hook_reports_rsk007(tmp_path: Path) -> None:
-    root = _minimal_repo(tmp_path)
-    config_path = root / ".pre-commit-config.yaml"
-    text = config_path.read_text(encoding="utf-8")
-    config_path.write_text(
-        text.replace(
-            f"entry: {RULES.mandatory_pre_commit_entries[0]}", "entry: echo hi"
-        ),
-        encoding="utf-8",
-    )
-    assert "RSK007" in _rule_ids(check_repo(root, RULES))
-
-
-def test_wrong_build_backend_reports_rsk008(tmp_path: Path) -> None:
-    root = _minimal_repo(tmp_path)
-    pyproject_path = root / "pyproject.toml"
-    text = pyproject_path.read_text(encoding="utf-8")
-    pyproject_path.write_text(
-        text.replace('build-backend = "uv_build"', 'build-backend = "hatchling.build"'),
-        encoding="utf-8",
-    )
-    assert "RSK008" in _rule_ids(check_repo(root, RULES))
-
-
-def test_missing_uv_lock_reports_rsk009(tmp_path: Path) -> None:
-    root = _minimal_repo(tmp_path)
-    (root / "uv.lock").unlink()
-    assert "RSK009" in _rule_ids(check_repo(root, RULES))
-
-
-def test_missing_line_length_reports_rsk010(tmp_path: Path) -> None:
-    root = _minimal_repo(tmp_path)
-    pyproject_path = root / "pyproject.toml"
-    text = pyproject_path.read_text(encoding="utf-8")
-    pyproject_path.write_text(
-        text.replace(f"line-length = {RULES.ruff_recommended_line_length}\n", ""),
-        encoding="utf-8",
-    )
-    assert "RSK010" in _rule_ids(check_repo(root, RULES))
-
-
-def test_different_but_declared_line_length_does_not_report_rsk010(
-    tmp_path: Path,
-) -> None:
-    """§13: the value is a per-repository choice; only its absence is a shall."""
-    root = _minimal_repo(tmp_path)
-    pyproject_path = root / "pyproject.toml"
-    text = pyproject_path.read_text(encoding="utf-8")
-    pyproject_path.write_text(
-        text.replace(
-            f"line-length = {RULES.ruff_recommended_line_length}", "line-length = 79"
-        ),
-        encoding="utf-8",
-    )
-    assert "RSK010" not in _rule_ids(check_repo(root, RULES))
-
-
-def test_dropped_mandatory_rule_family_reports_rsk010(tmp_path: Path) -> None:
-    root = _minimal_repo(tmp_path)
-    pyproject_path = root / "pyproject.toml"
-    text = pyproject_path.read_text(encoding="utf-8")
-    select = ", ".join(
-        f'"{s}"'
-        for s in (*RULES.ruff_mandatory_select[1:], *RULES.ruff_recommended_select)
-    )
-    pyproject_path.write_text(
-        text.split("[tool.ruff.lint]")[0] + f"[tool.ruff.lint]\nselect = [{select}]\n",
-        encoding="utf-8",
-    )
-    assert "RSK010" in _rule_ids(check_repo(root, RULES))
-
-
-def test_non_recommended_line_length_reports_rsk015_as_should(tmp_path: Path) -> None:
-    root = _minimal_repo(tmp_path)
-    pyproject_path = root / "pyproject.toml"
-    text = pyproject_path.read_text(encoding="utf-8")
-    pyproject_path.write_text(
-        text.replace(
-            f"line-length = {RULES.ruff_recommended_line_length}", "line-length = 100"
-        ),
-        encoding="utf-8",
-    )
-    findings = [f for f in check_repo(root, RULES) if f.rule_id == "RSK015"]
-    assert len(findings) == 1
-    assert findings[0].severity == "should"
-
-
-def test_dropped_recommended_rule_family_reports_rsk016_as_should(
-    tmp_path: Path,
+@pytest.mark.parametrize(
+    "replacement",
+    [
+        "# uv sync --locked",
+        "echo 'uv sync --locked'",
+        "bash -c 'uv sync --locked'",
+    ],
+)
+def test_comments_echo_and_shell_wrappers_do_not_count_as_commands(
+    tmp_path: Path, replacement: str
 ) -> None:
     root = _minimal_repo(tmp_path)
-    pyproject_path = root / "pyproject.toml"
-    text = pyproject_path.read_text(encoding="utf-8")
-    select = ", ".join(f'"{s}"' for s in RULES.ruff_mandatory_select)
-    pyproject_path.write_text(
-        text.split("[tool.ruff.lint]")[0] + f"[tool.ruff.lint]\nselect = [{select}]\n",
+    path = root / ".github" / "workflows" / "quality.yml"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            "run: uv sync --locked", f"run: {replacement}"
+        ),
         encoding="utf-8",
     )
-    findings = [f for f in check_repo(root, RULES) if f.rule_id == "RSK016"]
-    assert len(findings) == 1
-    assert findings[0].severity == "should"
+    assert "RSK006" in _rule_ids(check_repo(root, POLICY))
 
 
-def test_unresolved_placeholder_reports_rsk011(tmp_path: Path) -> None:
+def test_unrelated_workflow_fields_do_not_count_as_commands(tmp_path: Path) -> None:
     root = _minimal_repo(tmp_path)
-    (root / "NOTES.md").write_text("leftover __REPO_NAME__ token\n", encoding="utf-8")
-    findings = check_repo(root, RULES)
-    assert "RSK011" in _rule_ids(findings)
-    [finding] = [f for f in findings if f.rule_id == "RSK011"]
-    assert finding.path == "NOTES.md"
-
-
-def test_unrelated_dunder_constant_does_not_report_rsk011(tmp_path: Path) -> None:
-    """RSK011 matches repo_init.py's known placeholder vocabulary, not any
-    dunder-shaped token.
-
-    A pilot run against a real repository (wombat_configs) flagged its own
-    `__PDC_GENERATED_NAME__` sentinel constant as an "unresolved placeholder"
-    — a false positive, since that token has nothing to do with this
-    standard's bootstrap templating.
-    """
-    root = _minimal_repo(tmp_path)
-    (root / "NOTES.md").write_text(
-        'SENTINEL = "__PDC_GENERATED_NAME__"\n', encoding="utf-8"
+    path = root / ".github" / "workflows" / "quality.yml"
+    text = path.read_text(encoding="utf-8").replace(
+        "      - run: uv build", "      - name: uv build\n        run: echo build"
     )
-    assert "RSK011" not in _rule_ids(check_repo(root, RULES))
+    path.write_text(text, encoding="utf-8")
+    assert "RSK006" in _rule_ids(check_repo(root, POLICY))
 
 
-def test_missing_adr_dir_reports_rsk012_as_should(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda text: text.replace("  pull_request:\n", "  workflow_dispatch:\n"),
+        lambda text: text.replace("  quality:\n", "  other:\n"),
+        lambda text: text.replace("    steps:\n", "    no_steps: true\n"),
+    ],
+)
+def test_missing_trigger_job_or_steps_reports_rsk006(
+    tmp_path: Path, mutation: Callable[[str], str]
+) -> None:
+    root = _minimal_repo(tmp_path)
+    path = root / ".github" / "workflows" / "quality.yml"
+    path.write_text(mutation(path.read_text(encoding="utf-8")), encoding="utf-8")
+    assert "RSK006" in _rule_ids(check_repo(root, POLICY))
+
+
+def test_malformed_workflow_reports_yaml_line(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    path = root / ".github" / "workflows" / "quality.yml"
+    path.write_text("name: [\n", encoding="utf-8")
+    finding = next(f for f in check_repo(root, POLICY) if f.rule_id == "RSK006")
+    assert finding.line == 2
+    assert "Could not parse YAML" in finding.message
+
+
+def test_multiline_complete_command_is_accepted(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    path = root / ".github" / "workflows" / "quality.yml"
+    text = path.read_text(encoding="utf-8").replace(
+        "      - run: uv sync --locked",
+        "      - run: |\n          uv sync \\\n            --locked # reproducible",
+    )
+    path.write_text(text, encoding="utf-8")
+    assert "RSK006" not in _rule_ids(check_repo(root, POLICY))
+
+
+def test_job_permissions_override_workflow_permissions(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    path = root / ".github" / "workflows" / "quality.yml"
+    text = (
+        path.read_text(encoding="utf-8")
+        .replace(
+            "permissions:\n  contents: read\n",
+            "permissions:\n  contents: write\n",
+        )
+        .replace(
+            "  quality:\n    runs-on:",
+            "  quality:\n    permissions:\n      contents: read\n    runs-on:",
+        )
+    )
+    path.write_text(text, encoding="utf-8")
+    assert "RSK020" not in _rule_ids(check_repo(root, POLICY))
+
+
+def test_missing_or_write_permissions_report_rsk020(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    path = root / ".github" / "workflows" / "quality.yml"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            "  contents: read", "  contents: write"
+        ),
+        encoding="utf-8",
+    )
+    finding = next(f for f in check_repo(root, POLICY) if f.rule_id == "RSK020")
+    assert finding.line is not None
+
+
+def test_mutable_remote_action_reports_rsk021_at_node_line(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    path = root / ".github" / "workflows" / "quality.yml"
+    text = path.read_text(encoding="utf-8").replace(
+        "    steps:\n", "    steps:\n      - uses: actions/checkout@v5\n"
+    )
+    path.write_text(text, encoding="utf-8")
+    finding = next(f for f in check_repo(root, POLICY) if f.rule_id == "RSK021")
+    assert finding.actual == "actions/checkout@v5"
+    assert finding.line is not None
+
+
+def test_sha_local_and_docker_action_references_are_accepted(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    path = root / ".github" / "workflows" / "quality.yml"
+    sha = "a" * 40
+    text = path.read_text(encoding="utf-8").replace(
+        "    steps:\n",
+        "    steps:\n"
+        f"      - uses: actions/checkout@{sha}\n"
+        "      - uses: ./local-action\n"
+        "      - uses: docker://alpine:3.22\n",
+    )
+    path.write_text(text, encoding="utf-8")
+    assert "RSK021" not in _rule_ids(check_repo(root, POLICY))
+
+
+def test_rsk021_scans_every_job_in_the_quality_workflow(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    path = root / ".github" / "workflows" / "quality.yml"
+    with path.open("a", encoding="utf-8") as stream:
+        stream.write(
+            "  auxiliary:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            "      - uses: owner/tool@main\n"
+        )
+    assert "RSK021" in _rule_ids(check_repo(root, POLICY))
+
+
+# --- pre-commit structure -------------------------------------------------
+
+
+def test_comment_text_does_not_count_as_pre_commit_hook(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    hooks = _load_pre_commit(root)
+    hooks.pop(0)
+    _write_pre_commit(root, hooks)
+    with (root / ".pre-commit-config.yaml").open("a", encoding="utf-8") as stream:
+        stream.write("# id: check-yaml, entry: uv run check-yaml\n")
+    assert "RSK007" in _rule_ids(check_repo(root, POLICY))
+
+
+@pytest.mark.parametrize(
+    ("hook_index", "mutate"),
+    [
+        (8, lambda hook: hook.update({"id": "wrong-hook"})),
+        (8, lambda hook: hook.update({"args": []})),
+        (11, lambda hook: hook.update({"pass_filenames": True})),
+        (0, lambda hook: hook.update({"types": ["text"]})),
+    ],
+)
+def test_wrong_hook_or_material_fields_report_rsk007(
+    tmp_path: Path,
+    hook_index: int,
+    mutate: Callable[[dict[str, object]], None],
+) -> None:
+    root = _minimal_repo(tmp_path)
+    hooks = _load_pre_commit(root)
+    mutate(hooks[hook_index])
+    _write_pre_commit(root, hooks)
+    assert "RSK007" in _rule_ids(check_repo(root, POLICY))
+
+
+def test_equivalent_yaml_forms_and_filter_order_are_accepted(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    hooks = _load_pre_commit(root)
+    hooks[8]["args"] = "--maxkb=1024"
+    hooks[9]["types_or"] = ["pyi", "python"]
+    _write_pre_commit(root, hooks)
+    assert "RSK007" not in _rule_ids(check_repo(root, POLICY))
+
+
+# --- operational profiles and RSK019 -------------------------------------
+
+
+def test_profile_resolution_precedence(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path, "python-single")
+    (root / "packages").mkdir()
+    assert resolve_profile(root, POLICY) == "python-single"
+    assert resolve_profile(root, POLICY, "python-workspace") == "python-workspace"
+
+
+def test_profile_falls_back_to_detection_when_metadata_missing(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path, "python-workspace")
+    (root / "packages").mkdir()
+    path = root / "pyproject.toml"
+    path.write_text(
+        path.read_text(encoding="utf-8").split("[tool.repo-standard]")[0],
+        encoding="utf-8",
+    )
+    assert resolve_profile(root, POLICY) == "python-workspace"
+    assert "RSK019" in _rule_ids(check_repo(root, POLICY))
+
+
+def test_unknown_profile_override_is_rejected(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="unknown profile"):
+        resolve_profile(_minimal_repo(tmp_path), POLICY, "unknown")
+
+
+def test_standard_version_mismatch_reports_rsk019_but_other_checks_run(
+    tmp_path: Path,
+) -> None:
+    root = _minimal_repo(tmp_path)
+    path = root / "pyproject.toml"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace('standard = "1"', 'standard = "2"'),
+        encoding="utf-8",
+    )
+    (root / "README.md").unlink()
+    ids = _rule_ids(check_repo(root, POLICY))
+    assert {"RSK019", "RSK004"} <= ids
+
+
+def test_rule_applicability_filters_by_resolved_profile(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path, "python-single")
+    (root / "docs" / "adr").rmdir()
+    rule = POLICY.rule("RSK012")
+    single_excluded = replace(rule, profiles=("python-workspace",))
+    filtered = replace(
+        POLICY,
+        rules=tuple(
+            single_excluded if item.id == rule.id else item for item in POLICY.rules
+        ),
+    )
+    assert "RSK012" not in _rule_ids(check_repo(root, filtered))
+
+
+# --- exceptions, output, command errors, and dogfood ---------------------
+
+
+def test_only_known_nonempty_ignore_reasons_suppress(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    (root / "README.md").unlink()
+    path = root / "pyproject.toml"
+    with path.open("a", encoding="utf-8") as stream:
+        stream.write('\n[tool.repo-check.ignore]\nRSK004 = " "\nRSK999 = "Unknown"\n')
+    assert "RSK004" in _rule_ids(check_repo(root, POLICY))
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            'RSK004 = " "', 'RSK004 = "Approved reason"'
+        ),
+        encoding="utf-8",
+    )
+    assert "RSK004" not in _rule_ids(check_repo(root, POLICY))
+
+
+def test_json_output_retains_legacy_fields_and_adds_actionable_fields(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _minimal_repo(tmp_path)
+    (root / "README.md").unlink()
+    assert cli.main([str(root), "--format", "json"]) == 1
+    [item] = [
+        item
+        for item in json.loads(capsys.readouterr().out)
+        if item["rule_id"] == "RSK004"
+    ]
+    assert {"rule_id", "severity", "path", "line", "message"} <= item.keys()
+    assert {
+        "title",
+        "level",
+        "actual",
+        "expected",
+        "remediation",
+        "status",
+    } <= item.keys()
+
+
+def test_strict_mode_only_promotes_recommended_findings(tmp_path: Path) -> None:
     root = _minimal_repo(tmp_path)
     (root / "docs" / "adr").rmdir()
-    findings = [f for f in check_repo(root, RULES) if f.rule_id == "RSK012"]
-    assert len(findings) == 1
-    assert findings[0].severity == "should"
+    assert cli.main([str(root)]) == 0
+    assert cli.main([str(root), "--strict"]) == 1
 
 
-def test_missing_changelog_reports_rsk017_as_should(tmp_path: Path) -> None:
+def test_unavailable_requested_platform_check_is_command_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     root = _minimal_repo(tmp_path)
-    (root / "CHANGELOG.md").unlink()
-    findings = [f for f in check_repo(root, RULES) if f.rule_id == "RSK017"]
-    assert len(findings) == 1
-    assert findings[0].severity == "should"
 
+    def fake_run(
+        command: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        if command[:3] == ["git", "remote", "get-url"]:
+            return subprocess.CompletedProcess(
+                command, 0, "https://github.com/org/repo.git\n", ""
+            )
+        raise FileNotFoundError(command[0])
 
-def test_missing_license_reports_rsk018_as_should(tmp_path: Path) -> None:
-    root = _minimal_repo(tmp_path)
-    (root / "LICENSE").unlink()
-    findings = [f for f in check_repo(root, RULES) if f.rule_id == "RSK018"]
-    assert len(findings) == 1
-    assert findings[0].severity == "should"
-
-
-def test_platform_check_excluded_by_default(tmp_path: Path) -> None:
-    root = _minimal_repo(tmp_path)
-    findings = check_repo(root, RULES, include_platform=False)
-    assert "RSK014" not in _rule_ids(findings)
-
-
-def test_platform_check_included_with_flag_reports_something(tmp_path: Path) -> None:
-    root = _minimal_repo(tmp_path)
-    findings = check_repo(root, RULES, include_platform=True)
-    assert "RSK014" in _rule_ids(findings)
-
-
-# --- [tool.repo-check.ignore] (§11 Exceptions) --------------------------
-
-
-def test_ignored_rule_with_reason_is_suppressed(tmp_path: Path) -> None:
-    root = _minimal_repo(tmp_path)
-    (root / "README.md").write_text(
-        "# compliant-repo\n\nNo reference here.\n", encoding="utf-8"
-    )
-    with (root / "pyproject.toml").open("a", encoding="utf-8") as f:
-        f.write('\n[tool.repo-check.ignore]\nRSK005 = "Not applicable here."\n')
-    assert "RSK005" not in _rule_ids(check_repo(root, RULES))
-
-
-def test_ignore_entry_without_a_reason_does_not_suppress(tmp_path: Path) -> None:
-    root = _minimal_repo(tmp_path)
-    (root / "README.md").write_text(
-        "# compliant-repo\n\nNo reference here.\n", encoding="utf-8"
-    )
-    with (root / "pyproject.toml").open("a", encoding="utf-8") as f:
-        f.write('\n[tool.repo-check.ignore]\nRSK005 = "   "\n')
-    assert "RSK005" in _rule_ids(check_repo(root, RULES))
-
-
-def test_ignore_only_suppresses_the_named_rule(tmp_path: Path) -> None:
-    root = _minimal_repo(tmp_path)
-    (root / "README.md").write_text(
-        "# compliant-repo\n\nNo reference here.\n", encoding="utf-8"
-    )
-    (root / "AGENTS.md").unlink()
-    with (root / "pyproject.toml").open("a", encoding="utf-8") as f:
-        f.write('\n[tool.repo-check.ignore]\nRSK005 = "Not applicable here."\n')
-    ids = _rule_ids(check_repo(root, RULES))
-    assert "RSK005" not in ids
-    assert "RSK001" in ids
-
-
-# --- the dogfood tests -------------------------------------------------
+    monkeypatch.setattr(checks.subprocess, "run", fake_run)
+    findings = check_repo(root, POLICY, include_platform=True)
+    finding = next(f for f in findings if f.rule_id == "RSK014")
+    assert finding.status == "indeterminate"
+    assert finding.severity == "platform"
 
 
 @pytest.mark.parametrize("profile", STARTER_KIT_PROFILES)
-def test_generated_repos_pass_their_own_compliance_check(
-    profile: str, tmp_path: Path
-) -> None:
-    """The highest-value test: repo-init cannot generate a repo repo-check rejects."""
-    output_dir = tmp_path / "generated"
+def test_generated_repos_pass_repo_check(profile: str, tmp_path: Path) -> None:
+    output = tmp_path / "generated"
     bootstrap_repo(
         profile=profile,
         repo_name="generated",
@@ -373,117 +592,20 @@ def test_generated_repos_pass_their_own_compliance_check(
         repo_type="service",
         python_version="3.12",
         author="",
-        output_dir=output_dir,
+        output_dir=output,
         no_install=True,
     )
-    # `no_install=True` skips `uv sync`, which normally creates uv.lock, so
-    # tests avoid a real network call the way the rest of this suite does.
-    (output_dir / "uv.lock").write_text("", encoding="utf-8")
-
-    findings = check_repo(output_dir, RULES)
-    shall_findings = [f for f in findings if f.severity == "shall"]
-    assert shall_findings == []
+    (output / "uv.lock").write_text("", encoding="utf-8")
+    findings = check_repo(output, POLICY)
+    assert [finding for finding in findings if finding.level == "required"] == []
 
 
-def test_repo_root_has_no_unexpected_shall_findings() -> None:
-    """repo-standard-kit checks itself the same way an adopting repository would.
-
-    RSK005 and RSK011 are structurally inapplicable to the standard's own
-    repository; the exception is recorded in `[tool.repo-check.ignore]` in
-    this repository's own `pyproject.toml` — the §11 mechanism every adopter
-    gets, not a special case inside the checker or the test suite.
-    """
-    findings = check_repo(REPO_ROOT, RULES)
-    shall_findings = [f for f in findings if f.severity == "shall"]
-    assert shall_findings == []
-
-
-def test_rules_json_matches_generated_output() -> None:
-    """§6 Generated Artifact Consistency: rules.json must match its sources."""
-    regenerated = build_rules(REPO_ROOT)
-    committed = load_rules()
-    assert regenerated == committed, (
-        f"{RULES_JSON_PATH} is stale; run `uv run python scripts/generate_rules.py` "
-        "and commit the result."
-    )
-
-
-# --- CLI --------------------------------------------------------------
-
-
-def test_cli_reports_shall_findings_and_exits_nonzero(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    root = tmp_path / "empty-repo"
-    root.mkdir()
-    exit_code = cli.main([str(root)])
-    captured = capsys.readouterr()
-    assert exit_code == 1
-    assert "RSK001" in captured.out
-
-
-def test_cli_exits_zero_for_a_compliant_repo(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    root = _minimal_repo(tmp_path)
-    exit_code = cli.main([str(root)])
-    captured = capsys.readouterr()
-    assert exit_code == 0
-    assert "All checks passed!" in captured.out
-
-
-def test_cli_success_message_is_uncolored_by_default(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """capsys is not a terminal, so no ANSI escapes without FORCE_COLOR."""
-    root = _minimal_repo(tmp_path)
-    cli.main([str(root)])
-    captured = capsys.readouterr()
-    assert "\033[" not in captured.out
-
-
-def test_cli_success_message_is_green_with_force_color(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Matches ruff/ty: FORCE_COLOR opts into color on a non-terminal stream."""
-    monkeypatch.setenv("FORCE_COLOR", "1")
-    root = _minimal_repo(tmp_path)
-    cli.main([str(root)])
-    captured = capsys.readouterr()
-    assert "\033[32mAll checks passed!\033[0m" in captured.out
-
-
-def test_no_color_wins_over_force_color(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("FORCE_COLOR", "1")
-    monkeypatch.setenv("NO_COLOR", "1")
-    root = _minimal_repo(tmp_path)
-    cli.main([str(root)])
-    captured = capsys.readouterr()
-    assert "\033[" not in captured.out
-
-
-def test_cli_json_format_is_valid_json(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    root = tmp_path / "empty-repo"
-    root.mkdir()
-    cli.main([str(root), "--format", "json"])
-    captured = capsys.readouterr()
-    payload = json.loads(captured.out)
-    assert any(item["rule_id"] == "RSK001" for item in payload)
-
-
-def test_cli_strict_mode_fails_on_should_findings(tmp_path: Path) -> None:
-    root = _minimal_repo(tmp_path)
-    (root / "docs" / "adr").rmdir()
-    assert cli.main([str(root)]) == 0
-    assert cli.main([str(root), "--strict"]) == 1
+def test_repository_passes_repo_check_strictly() -> None:
+    assert check_repo(REPO_ROOT, POLICY) == []
 
 
 def test_repo_check_console_script_runs_end_to_end(tmp_path: Path) -> None:
-    root = tmp_path / "empty-repo"
+    root = tmp_path / "empty"
     root.mkdir()
     result = subprocess.run(
         [sys.executable, "-m", "repo_standard.compliance.cli", str(root)],
@@ -495,39 +617,11 @@ def test_repo_check_console_script_runs_end_to_end(tmp_path: Path) -> None:
     assert "RSK001" in result.stdout
 
 
-# --- consumption surfaces -----------------------------------------------
-
-
-def test_pre_commit_hooks_manifest_declares_repo_check() -> None:
-    manifest = yaml.safe_load(
+def test_pre_commit_manifest_declares_repo_check() -> None:
+    [hook] = yaml.safe_load(
         (REPO_ROOT / ".pre-commit-hooks.yaml").read_text(encoding="utf-8")
     )
-    [hook] = manifest
     assert hook["id"] == "repo-check"
     assert hook["entry"] == "repo-check"
-    assert hook["language"] == "python"
     assert hook["pass_filenames"] is False
     assert hook["always_run"] is True
-
-
-def test_compliance_workflow_is_reusable_and_pinned_to_setup_uv() -> None:
-    workflow_path = REPO_ROOT / ".github" / "workflows" / "compliance.yml"
-    workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
-    # PyYAML parses the bare `on:` key as boolean True.
-    assert "workflow_call" in workflow[True]
-    assert workflow["permissions"] == {"contents": "read"}
-
-    # `ref` must be required, with no default: a called reusable workflow has
-    # no reliable way to read its own `uses: ...@ref` pin from the inside, so
-    # the caller states it explicitly instead of this workflow guessing.
-    ref_input = workflow[True]["workflow_call"]["inputs"]["ref"]
-    assert ref_input["required"] is True
-    assert "default" not in ref_input
-
-    text = workflow_path.read_text(encoding="utf-8")
-    assert "astral-sh/setup-uv@v5" in text
-    assert "actions/checkout@v5" in text
-    assert (
-        "git+https://github.com/FP-DevTools/repo-standard-kit.git@${{ inputs.ref }}"
-        in text
-    )

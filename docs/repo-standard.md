@@ -10,6 +10,21 @@ It governs repositories that *adopt* the standard. The `README.md` at the root
 of `repo-standard-kit` is a non-normative guide to using the kit's tooling and
 does not define rules.
 
+## Normative Language
+
+The key words **MUST**, **MUST NOT**, **SHALL**, **SHALL NOT**, **SHOULD**,
+**SHOULD NOT**, and **MAY** are normative throughout every document indexed
+below. MUST and SHALL identify a required policy level; SHOULD identifies a
+recommended policy level whose finding is non-blocking unless strict checking
+is requested; MAY identifies an optional choice. Plain imperatives carry the
+same level made explicit by their surrounding section or policy reference.
+
+`policy/base.yaml` and `policy/profiles/` are the sole source of executable
+values, applicability, and check configuration for machine-enforced rules.
+Normative Markdown explains those rules and human-review-only guidance but is
+never parsed to obtain executable values. `docs/policy-reference.md` is the
+generated, normative human-readable catalogue of machine-enforced policy.
+
 ## Purpose
 
 This standard defines the baseline operating model for a repository developed by
@@ -25,7 +40,7 @@ concrete and actionable.
 
 ## Repository Contract
 
-Every repository adopting this standard should provide:
+Every repository adopting this standard must provide:
 
 - a concrete `AGENTS.md`
 - a user-facing `README.md`
@@ -40,6 +55,23 @@ Every repository adopting this standard should provide:
 - a documented repository layout
 - clear API, schema, or migration rules where relevant
 - `uv` as the default Python package manager and build backend
+
+The following machine-enforced rules are **required**: RSK001 requires the
+root `AGENTS.md`; RSK004 requires the root `README.md`; RSK005 requires both
+documents to reference `repo-standard-kit`; RSK008 requires Python packages to
+use `uv_build` (a tooling-only workspace root may omit a build system); RSK009
+requires `uv.lock`; RSK011 rejects only the kit's known unresolved bootstrap
+tokens; and RSK019 requires this explicit repository metadata:
+
+```toml
+[tool.repo-standard]
+profile = "python-single" # or "python-workspace"
+standard = "1"
+```
+
+The declaration wins over filesystem heuristics. A missing or invalid
+declaration is an RSK019 required finding, but deterministic auto-detection
+still selects a profile so all other applicable checks can run.
 
 ## Core Rules
 
@@ -72,14 +104,13 @@ including its `README.md`, templates, and starter kits, implements them.
 
 Where a companion document conflicts with this one, this document governs.
 
-`docs/quality-gates.md` is a specification: its sections are numbered so they
-can be cited precisely, and it uses "shall" and "should" as normative keywords.
-Every other document here is guidance and uses plain imperative voice. The
-difference is deliberate, not drift.
+`docs/quality-gates.md` keeps numbered sections so requirements can be cited
+precisely. The normative-keyword meanings above apply consistently to it and
+every other indexed document.
 
 ## Required `AGENTS.md` Sections
 
-Every target repository should include:
+Every target repository must include:
 
 1. Repository Purpose
 2. Repository Context
@@ -93,3 +124,8 @@ Every target repository should include:
 10. Change Control Notes
 
 Committed copies must not contain placeholders or generic filler text.
+
+RSK002 enforces the listed headings at the **required** level. RSK003 enforces
+at the **required** level that `AGENTS.md` states the exact quality-gate chain
+defined by policy. These checks remain heading and literal-command checks;
+they do not attempt subjective scoring of the section prose.

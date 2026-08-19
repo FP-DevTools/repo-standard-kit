@@ -20,6 +20,13 @@ repo root.
 `docs/quality-gates.md` defines the mandatory local and CI gate chain. Run it
 from the repository root. This profile adds no extra gates and relaxes none.
 
+## Policy Declaration
+
+Declare `profile = "python-single"` and `standard = "1"` under
+`[tool.repo-standard]`. This explicit declaration wins over filesystem
+markers. In its absence, this profile is the deterministic fallback after
+higher-priority profile markers do not match.
+
 ## Bootstrap Behavior
 
 - `repo-init --profile python-single`

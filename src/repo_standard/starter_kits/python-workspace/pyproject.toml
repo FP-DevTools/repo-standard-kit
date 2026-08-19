@@ -20,6 +20,10 @@ dev = [
 [tool.ruff]
 line-length = 88
 
+[tool.repo-standard]
+profile = "python-workspace"
+standard = "1"
+
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "PT"]
 

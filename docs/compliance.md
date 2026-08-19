@@ -1,85 +1,84 @@
 # Compliance Checking
 
-`repo-check` verifies that a repository is *structurally* aligned with
-`docs/repo-standard.md` and `docs/quality-gates.md`. It does not certify that
-a repository is well-engineered — see "What This Cannot Check" below.
+`repo-check` evaluates a repository against the compiled form of the canonical
+YAML policy. It checks structural facts; it does not certify engineering
+quality or replace review judgement.
 
 ## Running It
 
-Against the current directory:
-
 ```bash
 uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-check
-```
-
-Or, inside a checkout with the dev dependency group installed:
-
-```bash
 uv run repo-check /path/to/repository
 ```
 
 Options:
 
-- `--format text|json`: `json` is for aggregating results across repositories.
-- `--profile auto|python-single|python-workspace`: reserved for future
-  profile-specific rules; `auto` detects by the presence of `packages/`.
-- `--check-enforcement`: also checks branch protection (§10). Needs `gh`,
-  network access, and authentication, so it is opt-in.
-- `--strict`: treats `should` findings as failures too.
+- `--format text|json` selects human-readable or stable machine output.
+- `--profile auto|python-single|python-workspace` selects an explicit override.
+- `--check-enforcement` also queries branch protection for RSK014.
+- `--strict` promotes recommended findings to failures.
 
-Exit codes: `0` aligned, `1` a `shall` rule was violated (or a `should` rule
-under `--strict`), `2` usage error.
+Exit code `0` means no blocking findings. Exit code `1` means a required rule
+failed, or a recommended rule failed under `--strict`. Exit code `2` is a
+usage or indeterminate command error, including an explicitly requested
+platform check whose evidence could not be obtained.
 
-`should` findings are non-blocking by design, everywhere `repo-check` runs —
-the CLI's default exit code, the pre-commit hook (`.pre-commit-hooks.yaml`
-passes no `--strict`), and the reusable CI workflow (`strict` defaults to
-`false`) all agree on this. They are visible in every output format, just
-never the reason a run fails, unless something explicitly opts into
-`--strict`.
+Required findings fail by default. Recommended findings are always visible but
+fail only under `--strict`; this behavior is unchanged from the pre-v1 `shall`
+and `should` contract.
+
+## Profile Resolution
+
+Resolution is deterministic:
+
+1. an explicit `--profile` override;
+2. valid repository metadata;
+3. policy-owned auto-detection metadata.
+
+Every adopting repository declares:
+
+```toml
+[tool.repo-standard]
+profile = "python-single" # or "python-workspace"
+standard = "1"
+```
+
+An explicit declaration wins even when conflicting markers such as
+`packages/` exist. Missing metadata, an unknown profile, or a standard-major
+mismatch produces required RSK019, while auto-detection still lets all other
+checks execute for the best deterministic profile.
+
+## Findings And JSON Compatibility
+
+Every finding includes the rule ID, title, canonical level, path and line when
+available, message, actual value, expected value, remediation, and status.
+The JSON `severity` field remains present through v1 for existing consumers:
+`required` derives `shall`, `recommended` derives `should`, and an unavailable
+platform command derives the legacy `platform` value plus
+`status: "indeterminate"`.
+
+YAML and TOML parse failures report parser locations. Workflow findings report
+the relevant node line when PyYAML exposes one.
 
 ## Suppressing A Rule
 
-A rule can be structurally inapplicable to a specific repository — asking a
-repository to link to itself, for instance. §11 *Exceptions* requires an
-explicit, recorded justification for that; `repo-check` reads it from the
-checked repository's own `pyproject.toml`:
+The v1 exception shape remains deliberately small:
 
 ```toml
 [tool.repo-check.ignore]
-RSK005 = "This repository is the standard's own home; linking to itself is meaningless."
+RSK005 = "This repository is the standard's own home."
 ```
 
-A rule ID is suppressed only once it has a non-empty string reason recorded
-against it — an empty or missing reason changes nothing, so the table can
-never silently swallow a finding. Suppressed findings never appear in either
-output format; the reason lives in version control, next to the code it
-excuses, which is what makes it explicit and reviewable rather than a private
-understanding between the checker and one repository.
+Only a known rule ID with a non-empty string reason suppresses findings. Empty
+reasons, unknown IDs, malformed TOML, and non-string values suppress nothing.
+Owner, expiry, and reference metadata are deferred beyond v1.
 
 ## Consumption Surfaces
 
-Three ways to run `repo-check` against a repository, from lowest to highest
-commitment. **Pick one, not several.** In particular, the pre-commit hook and
-the reusable CI workflow both run the full check — CI already re-runs the
-pre-commit hook (see §5, "Local gate verification"), so wiring in both means
-`repo-check` runs twice on every pull request for no additional coverage.
-Prefer the pre-commit hook; reach for the reusable CI workflow instead of it
-only for a repository that does not want `repo-check` as a pre-commit
-dependency at all.
+Choose one automated surface so the same full-tree check is not repeated twice
+on every pull request.
 
-### Ad hoc
-
-No setup: the command shown above, or pinned to a released version:
-
-```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v1.0.0" repo-check
-```
-
-### Local pre-commit hook
-
-This repository ships `.pre-commit-hooks.yaml`, so `pre-commit` can install
-and run `repo-check` without the consuming repository declaring it as a
-dependency. Add to the consuming repository's `.pre-commit-config.yaml`:
+### Pre-commit
 
 ```yaml
 repos:
@@ -89,15 +88,7 @@ repos:
       - id: repo-check
 ```
 
-Pin `rev` to a released tag and bump it deliberately — `pre-commit
-autoupdate` turns that into a one-line PR. The hook always runs (it inspects
-the whole tree, not the files staged in a commit) and does not fail the
-commit for `should` findings unless `args: [--strict]` is added.
-
-### Reusable CI workflow
-
-This repository's `.github/workflows/compliance.yml` triggers on
-`workflow_call`. A consuming repository adds its own workflow that calls it:
+### Reusable workflow
 
 ```yaml
 name: Compliance
@@ -107,95 +98,59 @@ on:
 
 jobs:
   compliance:
-    uses: FP-DevTools/repo-standard-kit/.github/workflows/compliance.yml@v1.0.0
+    uses: FP-DevTools/repo-standard-kit/.github/workflows/compliance.yml@<full-sha>
     with:
       ref: v1.0.0
 ```
 
-`ref` is required and must match the pin in `uses:`. GitHub Actions does not
-give a called reusable workflow a reliable way to read that pin from inside
-itself — an earlier version of this workflow tried the `GITHUB_WORKFLOW_REF`
-self-resolution trick and it silently installed the wrong ref in a live
-cross-repo test, so the caller states it explicitly instead. Add `with: {
-strict: true }` or `with: { check-enforcement: true }` to opt into the
-stricter modes described above.
+The caller supplies `ref` because a called workflow cannot reliably infer the
+ref used by its caller. Pin the reusable workflow itself to a full commit SHA.
 
-## How It Stays Honest
+## Canonical Policy And Generation
 
-The rule catalogue is not hand-maintained prose duplicating the spec. It is
-parsed out of `docs/quality-gates.md` and `docs/repo-standard.md` by
-`src/repo_standard/compliance/spec.py`, frozen into
-`src/repo_standard/compliance/rules.json` by `scripts/generate_rules.py`, and
-shipped inside the package so `repo-check` needs no access to `docs/` at
-runtime. `tests/test_compliance.py` fails if `rules.json` drifts from what
-regenerating it would produce (§6 Generated Artifact Consistency) — editing a
-normative document without running the generator fails the suite instead of
-drifting silently.
+`policy/base.yaml` and `policy/profiles/` are the sole source of every
+machine-enforced value. Strict models reject unknown fields, bad types,
+duplicate or unordered rule IDs, unrecorded gaps, unknown profiles, invalid
+source references, and unregistered check kinds. Policy YAML is loaded with
+`yaml.safe_load`.
 
-## The Check Catalogue
+Run:
 
-Every rule traces to a normative sentence. Severity follows the
-specification's own vocabulary: `shall` maps to an error, `should` to a
-warning. Rules marked `platform` need `gh`, network, and auth, so they sit
-behind `--check-enforcement`.
+```bash
+uv run python scripts/generate_policy.py
+```
 
-| ID | Rule | Source | Severity |
-| --- | --- | --- | --- |
-| `RSK001` | `AGENTS.md` exists | Repository Contract | shall |
-| `RSK002` | All required `AGENTS.md` sections present | `repo-standard.md` | shall |
-| `RSK003` | `AGENTS.md` states the exact gate chain | §5 | shall |
-| `RSK004` | `README.md` exists | Repository Contract | shall |
-| `RSK005` | Both reference repo-standard-kit | `repo-standard.md` | shall |
-| `RSK006` | `quality.yml` runs the full gate chain | §5 | shall |
-| `RSK007` | Mandatory pre-commit hooks present | §4 | shall |
-| `RSK008` | Build-system, if declared, is `uv_build` | Repository Contract | shall |
-| `RSK009` | `uv.lock` is present | Repository Contract | shall |
-| `RSK010` | Ruff `line-length` declared; mandatory families selected | §13 | shall |
-| `RSK011` | No unresolved `__PLACEHOLDER__` tokens | `repo-standard.md` | shall |
-| `RSK012` | `docs/adr/` exists | `repo-layout.md` | should |
-| `RSK014` | Branch protection configured on `main` | §10 | platform |
-| `RSK015` | Ruff `line-length` matches the recommended value (`88`) | §13 | should |
-| `RSK016` | Recommended rule family `PT` is selected | §13 | should |
-| `RSK017` | `CHANGELOG.md` exists | `repo-layout.md` | should |
-| `RSK018` | `LICENSE` exists | `repo-layout.md` | should |
+It deterministically produces:
+
+- `src/repo_standard/policy/compiled.json`, the wheel runtime artifact;
+- `docs/policy-reference.md`, the normative human-readable catalogue.
+
+Runtime checks dispatch through the `check.kind` registry. Handlers receive
+typed configuration and never own rule IDs, levels, applicability, titles, or
+remediation. Markdown explains policy but supplies no executable values.
+
+## Structural Boundaries
+
+- GitHub Actions are parsed with safe GitHub-compatible YAML semantics, so
+  `on` remains a string. RSK006 inspects only executable
+  `jobs.quality.steps[*].run` nodes. Comments, echo, unrelated fields, and
+  shell-wrapper strings do not satisfy commands.
+- Pre-commit is parsed structurally. RSK007 matches hook IDs, normalized entry
+  and argument tokens, and policy-owned material fields such as filters and
+  `pass_filenames`.
+- AGENTS.md remains a heading and literal-contract check. There is no
+  subjective prose scoring.
+- RSK020 evaluates the quality job's effective permissions. RSK021 requires
+  full SHA pins for remote actions and reusable workflows; local and Docker
+  actions are exempt.
 
 ## What This Cannot Check
 
-A checker that implies more coverage than it has is worse than one that
-admits its limits.
+- Whether prose is thoughtful rather than generic beyond known bootstrap
+  tokens.
+- Whether a test suite or review is meaningful.
+- Whether an exception reason is wise, approved, or still timely.
+- Human-owned release, product, architectural, and security decisions.
 
-- **"No placeholders or generic filler text"** is decidable only for
-  `repo_init.py`'s exact known placeholder tokens (`__REPO_NAME__`,
-  `__PACKAGE_NAME__`, `__DESCRIPTION__`, `__REPO_TYPE__`,
-  `__PYTHON_VERSION__`, `__AUTHOR__`), not for any dunder-shaped token — a
-  pilot run found a repository's own `__PDC_GENERATED_NAME__` sentinel
-  constant flagged as a false positive before this was narrowed. Prose
-  quality generally is not mechanically assessable.
-- **"Tests are part of the change, not follow-up work"** is a review
-  judgement about a diff, not a property of a tree.
-- **§11 Exceptions.** `[tool.repo-check.ignore]` (see "Suppressing A Rule"
-  above) records *that* a reason was given and machine-enforces it is
-  non-empty. Whether that reason is actually sound, was reviewed, and stays
-  time-limited rather than permanent is still a judgement for the pull
-  request, not something the checker can decide.
-- **Gate effectiveness.** The checker confirms `uv run pytest` appears in the
-  workflow. It cannot tell you the test suite is meaningful.
-
-## Applying `repo-check` To This Repository
-
-`repo-standard-kit` is the standard's own home, not a repository that adopts
-it, so two rules do not apply to it the way they apply everywhere else:
-`RSK005` would ask this repository to link itself, and `RSK011` flags the
-known placeholder tokens this repository defines, tests, and ships (in
-`repo_init.py`, the starter kits, and `compliance/rules.json` itself) for
-templating, not leftovers from an unfinished bootstrap. Both are recorded in
-this repository's own `[tool.repo-check.ignore]` — the same mechanism any
-adopter uses, run against itself rather than special-cased in the checker or
-the test suite.
-
-## Status
-
-`repo-check` is optional tooling, not a mandatory gate. Adopting it does not
-require any change under the compatibility policy in `CHANGELOG.md`. Whether
-it becomes mandatory in a future release depends on results from piloting it
-against real repositories first.
+Vulnerability scanning remains optional in v1.0. Mandatory scanning, SAST,
+SBOMs, signing, richer exception metadata, and non-Python profiles are deferred.
