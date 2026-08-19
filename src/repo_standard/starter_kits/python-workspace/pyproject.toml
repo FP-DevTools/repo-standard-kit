@@ -24,7 +24,13 @@ line-length = 88
 select = ["E", "F", "I", "B", "UP", "PT"]
 
 [tool.pytest.ini_options]
-testpaths = ["packages"]
+testpaths = ["tests", "packages"]
 
 [tool.ty.src]
-include = ["packages"]
+include = ["packages", "tests"]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/*"]

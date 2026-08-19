@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import tomllib
 import zipfile
 from pathlib import Path
 
@@ -147,6 +148,9 @@ def test_bootstrap_repo_renders_python_workspace_starter(tmp_path: Path) -> None
     pre_commit_text = (output_dir / ".pre-commit-config.yaml").read_text(
         encoding="utf-8"
     )
+    pyproject_data = tomllib.loads(
+        (output_dir / "pyproject.toml").read_text(encoding="utf-8")
+    )
 
     assert "Python workspace" in readme_text
     assert (output_dir / ".github" / "workflows" / "quality.yml").exists()
@@ -158,6 +162,24 @@ def test_bootstrap_repo_renders_python_workspace_starter(tmp_path: Path) -> None
     assert not (output_dir / ".ruff_cache").exists()
     assert (output_dir / "packages" / ".gitkeep").exists()
     assert not (output_dir / "src").exists()
+
+    # M1: pytest must not exit 5 (empty collection) before any package exists.
+    assert (output_dir / "tests" / "test_workspace_shell.py").exists()
+    assert pyproject_data["tool"]["pytest"]["ini_options"]["testpaths"] == [
+        "tests",
+        "packages",
+    ]
+
+    # M2: packages/* must be registered as uv workspace members so uv sync
+    # actually installs them, or a package added by repo-add-package is
+    # never importable.
+    assert pyproject_data["tool"]["uv"]["workspace"]["members"] == ["packages/*"]
+
+    # M3: the workspace root carries no distributable artifact of its own,
+    # so `uv build` there cannot silently fall back to the setuptools
+    # default backend; the CI build step scopes to actual packages instead.
+    assert pyproject_data["tool"]["uv"]["package"] is False
+    assert "uv build --all-packages" in workflow_text
 
 
 def test_pre_commit_configs_use_mandatory_local_uv_managed_hooks() -> None:

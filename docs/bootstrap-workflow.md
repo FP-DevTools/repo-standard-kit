@@ -176,6 +176,7 @@ widget-platform/
   docs/adr/0001-template.md
   docs/diagrams/README.md
   packages/.gitkeep
+  tests/test_workspace_shell.py
 ```
 
 Each later `repo-add-package --package-name widget_api` run adds:

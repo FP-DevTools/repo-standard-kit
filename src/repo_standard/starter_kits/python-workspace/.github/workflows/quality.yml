@@ -25,5 +25,10 @@ jobs:
       - name: Run pytest
         run: uv run pytest
 
-      - name: Build package
-        run: uv build
+      - name: Build packages
+        run: |
+          if compgen -G "packages/*/pyproject.toml" > /dev/null; then
+            uv build --all-packages
+          else
+            echo "No packages under packages/ yet; nothing to build."
+          fi
