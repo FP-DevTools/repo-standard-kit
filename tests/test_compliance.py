@@ -219,6 +219,13 @@ def test_every_typed_check_kind_has_exactly_one_runtime_handler() -> None:
     assert set(CHECK_SCHEMAS) == set(CHECK_HANDLERS)
 
 
+def test_rsk021_policy_is_workflow_scoped() -> None:
+    assert POLICY.rule("RSK021").check.config == {
+        "path": ".github/workflows/quality.yml"
+    }
+    assert CHECK_SCHEMAS["github_workflow_pins"] == ({"path"}, set())
+
+
 def test_standard_package_version_and_source_distribution_inputs_agree() -> None:
     pyproject_text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     pyproject = tomllib.loads(pyproject_text)
@@ -404,6 +411,7 @@ def test_sha_local_and_docker_action_references_are_accepted(tmp_path: Path) -> 
 def test_rsk021_scans_every_job_in_the_quality_workflow(tmp_path: Path) -> None:
     root = _minimal_repo(tmp_path)
     path = root / ".github" / "workflows" / "quality.yml"
+    sha = "b" * 40
     with path.open("a", encoding="utf-8") as stream:
         stream.write(
             "  auxiliary:\n"
@@ -412,6 +420,11 @@ def test_rsk021_scans_every_job_in_the_quality_workflow(tmp_path: Path) -> None:
             "      - uses: owner/tool@main\n"
         )
     assert "RSK021" in _rule_ids(check_repo(root, POLICY))
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("owner/tool@main", f"owner/tool@{sha}"),
+        encoding="utf-8",
+    )
+    assert "RSK021" not in _rule_ids(check_repo(root, POLICY))
 
 
 # --- pre-commit structure -------------------------------------------------

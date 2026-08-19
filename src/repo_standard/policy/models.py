@@ -38,7 +38,7 @@ CHECK_SCHEMAS: dict[str, tuple[set[str], set[str]]] = {
     "branch_protection": ({"branch", "status_check", "minimum_reviews"}, set()),
     "repo_metadata": ({"path", "standard_major"}, set()),
     "github_workflow_permissions": ({"path", "job"}, set()),
-    "github_workflow_pins": ({"path", "job"}, set()),
+    "github_workflow_pins": ({"path"}, set()),
 }
 
 

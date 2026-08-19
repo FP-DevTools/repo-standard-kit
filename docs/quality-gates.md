@@ -115,10 +115,10 @@ commands, and equivalent command formatting are normalized before comparison.
 
 RSK020 enforces at the **required** level that the quality job's effective
 permissions include `contents: read` and no write permission. RSK021 enforces
-at the **required** level that every remote action and reusable workflow used
-by that job is pinned to a full 40-character commit SHA. Local `./` actions and
-`docker://` references are exempt. Keep a version comment next to each SHA so
-Dependabot updates remain understandable.
+at the **required** level that every remote action and reusable workflow
+referenced by the quality workflow is pinned to a full 40-character commit
+SHA. Local `./` actions and `docker://` references are exempt. Keep a version
+comment next to each SHA so Dependabot updates remain understandable.
 
 ### Environment reproducibility
 

@@ -306,7 +306,7 @@ def _trigger_present(on_value: Any, trigger: str) -> bool:
     return False
 
 
-def _workflow_job(
+def _workflow_jobs(
     context: CheckContext, config: dict[str, Any]
 ) -> tuple[YamlDocument | None, dict[str, Any] | None, list[Issue]]:
     path = context.root / config["path"]
@@ -328,7 +328,32 @@ def _workflow_job(
             ],
         )
     jobs = document.data.get("jobs")
-    if not isinstance(jobs, dict) or not isinstance(jobs.get(config["job"]), dict):
+    if not isinstance(jobs, dict):
+        return (
+            document,
+            None,
+            [
+                Issue(
+                    config["path"],
+                    "Workflow jobs must be a mapping.",
+                    jobs,
+                    "mapping",
+                    document.line("jobs"),
+                )
+            ],
+        )
+    return document, jobs, []
+
+
+def _workflow_job(
+    context: CheckContext, config: dict[str, Any]
+) -> tuple[YamlDocument | None, dict[str, Any] | None, list[Issue]]:
+    document, jobs, errors = _workflow_jobs(context, config)
+    if errors:
+        return document, None, errors
+    assert document is not None
+    assert jobs is not None
+    if not isinstance(jobs.get(config["job"]), dict):
         return (
             document,
             None,
@@ -822,14 +847,11 @@ def _immutable_reference(reference: str) -> bool:
 
 
 def _github_workflow_pins(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
-    document, job, errors = _workflow_job(context, config)
+    document, jobs, errors = _workflow_jobs(context, config)
     if errors:
-        return []
+        return errors
     assert document is not None
-    assert job is not None
-    assert isinstance(document.data, dict)
-    jobs = document.data.get("jobs")
-    assert isinstance(jobs, dict)
+    assert jobs is not None
     references: list[tuple[str, int | None]] = []
     for job_id, workflow_job in jobs.items():
         if not isinstance(job_id, str) or not isinstance(workflow_job, dict):

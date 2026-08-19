@@ -619,7 +619,6 @@
     {
       "check": {
         "config": {
-          "job": "quality",
           "path": ".github/workflows/quality.yml"
         },
         "kind": "github_workflow_pins"
@@ -631,8 +630,8 @@
         "python-single",
         "python-workspace"
       ],
-      "rationale": "Full commit pins prevent upstream tag movement from changing trusted code.",
-      "remediation": "Pin every remote action and reusable workflow to a 40-character SHA.",
+      "rationale": "Full commit pins prevent upstream tag movement from changing trusted workflow code.",
+      "remediation": "Pin every remote action and reusable workflow in the quality workflow to a 40-character SHA.",
       "source": {
         "document": "docs/quality-gates.md",
         "section": "5. CI Pull Request Gates"

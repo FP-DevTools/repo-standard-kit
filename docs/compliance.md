@@ -141,8 +141,8 @@ remediation. Markdown explains policy but supplies no executable values.
 - AGENTS.md remains a heading and literal-contract check. There is no
   subjective prose scoring.
 - RSK020 evaluates the quality job's effective permissions. RSK021 requires
-  full SHA pins for remote actions and reusable workflows; local and Docker
-  actions are exempt.
+  full SHA pins for remote actions and reusable workflows in every job in the
+  quality workflow; local and Docker actions are exempt.
 
 ## What This Cannot Check
 
