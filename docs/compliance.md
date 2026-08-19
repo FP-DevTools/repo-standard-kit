@@ -143,6 +143,9 @@ remediation. Markdown explains policy but supplies no executable values.
 - RSK020 evaluates the quality job's effective permissions. RSK021 requires
   full SHA pins for remote actions and reusable workflows in every job in the
   quality workflow; local and Docker actions are exempt.
+- RSK014 checks pull request reviews, stale approval dismissal, required status
+  checks, strict up-to-date branches, conversation resolution, and
+  administrator enforcement when platform checks are requested.
 
 ## What This Cannot Check
 

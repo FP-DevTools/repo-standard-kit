@@ -180,7 +180,7 @@ Remediation: Add docs/adr/ and an ADR template or first decision record.
 
 Rationale: Passing workflows are advisory unless merges require them.
 
-Remediation: Protect main with quality checks, review, and administrator enforcement.
+Remediation: Protect main with pull request reviews, stale approval dismissal, strict quality checks, conversation resolution, and administrator enforcement.
 
 ### RSK015: Ruff line length uses the recommended baseline
 

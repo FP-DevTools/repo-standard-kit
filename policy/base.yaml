@@ -285,10 +285,15 @@ rules:
       kind: branch_protection
       config:
         branch: main
-        status_check: quality
+        required_status_checks:
+          - quality
         minimum_reviews: 1
+        dismiss_stale_approvals: true
+        require_up_to_date: true
+        require_conversation_resolution: true
+        enforce_admins: true
     rationale: Passing workflows are advisory unless merges require them.
-    remediation: Protect main with quality checks, review, and administrator enforcement.
+    remediation: Protect main with pull request reviews, stale approval dismissal, strict quality checks, conversation resolution, and administrator enforcement.
 
   - id: RSK015
     title: Ruff line length uses the recommended baseline

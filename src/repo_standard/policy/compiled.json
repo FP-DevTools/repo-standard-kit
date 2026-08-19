@@ -456,8 +456,14 @@
       "check": {
         "config": {
           "branch": "main",
+          "dismiss_stale_approvals": true,
+          "enforce_admins": true,
           "minimum_reviews": 1,
-          "status_check": "quality"
+          "require_conversation_resolution": true,
+          "require_up_to_date": true,
+          "required_status_checks": [
+            "quality"
+          ]
         },
         "kind": "branch_protection"
       },
@@ -469,7 +475,7 @@
         "python-workspace"
       ],
       "rationale": "Passing workflows are advisory unless merges require them.",
-      "remediation": "Protect main with quality checks, review, and administrator enforcement.",
+      "remediation": "Protect main with pull request reviews, stale approval dismissal, strict quality checks, conversation resolution, and administrator enforcement.",
       "source": {
         "document": "docs/quality-gates.md",
         "section": "10. Enforcement"

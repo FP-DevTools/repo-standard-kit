@@ -314,15 +314,21 @@ once, so open an initial pull request before configuring protection.
 ```bash
 gh api repos/<owner>/<repo>/branches/main/protection \
   --jq '{checks: .required_status_checks.contexts,
+         strict: .required_status_checks.strict,
          reviews: .required_pull_request_reviews.required_approving_review_count,
+         dismiss_stale: .required_pull_request_reviews.dismiss_stale_reviews,
+         conversation_resolution: .required_conversation_resolution.enabled,
          enforce_admins: .enforce_admins.enabled}'
 ```
 
 The `quality` check shall appear in `checks`, `reviews` shall be at least `1`,
-and `enforce_admins` shall be `true`.
+and `strict`, `dismiss_stale`, `conversation_resolution`, and `enforce_admins`
+shall all be `true`.
 
-A `403` response means the repository is on a plan that does not support
-branch protection; see the platform prerequisite above.
+A `403` response carrying the documented upgrade message means the repository
+is on a plan that does not support branch protection; see the platform
+prerequisite above. Other authentication, authorization, and network failures
+leave enforcement evidence indeterminate.
 
 A repository that cannot produce this configuration is not aligned with this
 specification, regardless of whether its workflow passes.
