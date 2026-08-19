@@ -432,6 +432,38 @@ def test_cli_exits_zero_for_a_compliant_repo(
     assert "All checks passed!" in captured.out
 
 
+def test_cli_success_message_is_uncolored_by_default(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """capsys is not a terminal, so no ANSI escapes without FORCE_COLOR."""
+    root = _minimal_repo(tmp_path)
+    cli.main([str(root)])
+    captured = capsys.readouterr()
+    assert "\033[" not in captured.out
+
+
+def test_cli_success_message_is_green_with_force_color(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Matches ruff/ty: FORCE_COLOR opts into color on a non-terminal stream."""
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    root = _minimal_repo(tmp_path)
+    cli.main([str(root)])
+    captured = capsys.readouterr()
+    assert "\033[32mAll checks passed!\033[0m" in captured.out
+
+
+def test_no_color_wins_over_force_color(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    monkeypatch.setenv("NO_COLOR", "1")
+    root = _minimal_repo(tmp_path)
+    cli.main([str(root)])
+    captured = capsys.readouterr()
+    assert "\033[" not in captured.out
+
+
 def test_cli_json_format_is_valid_json(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

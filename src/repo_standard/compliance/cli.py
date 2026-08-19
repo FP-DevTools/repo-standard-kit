@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
 from repo_standard.compliance.checks import Finding, check_repo, load_rules
+
+_GREEN = "\033[32m"
+_RESET = "\033[0m"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -43,9 +47,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return build_parser().parse_args(argv)
 
 
-def _format_text(findings: list[Finding]) -> str:
+def _supports_color() -> bool:
+    """Follows ruff/ty: colored unless NO_COLOR is set or stdout isn't a tty."""
+    if os.environ.get("NO_COLOR"):
+        return False
+    if os.environ.get("FORCE_COLOR"):
+        return True
+    return sys.stdout.isatty()
+
+
+def _format_text(findings: list[Finding], *, color: bool) -> str:
     if not findings:
-        return "All checks passed!\n"
+        message = "All checks passed!"
+        return f"{_GREEN}{message}{_RESET}\n" if color else f"{message}\n"
     lines = [
         f"{finding.severity.upper():8} {finding.rule_id}  {finding.path}"
         + (f":{finding.line}" if finding.line is not None else "")
@@ -88,7 +102,11 @@ def main(argv: list[str] | None = None) -> int:
         root, rules, profile=profile, include_platform=args.check_enforcement
     )
 
-    output = _format_json(findings) if args.format == "json" else _format_text(findings)
+    output = (
+        _format_json(findings)
+        if args.format == "json"
+        else _format_text(findings, color=_supports_color())
+    )
     print(output, end="")
 
     severities = {"shall", "should"} if args.strict else {"shall"}
