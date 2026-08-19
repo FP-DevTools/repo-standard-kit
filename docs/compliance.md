@@ -141,9 +141,10 @@ remediation. Markdown explains policy but supplies no executable values.
   `pass_filenames`.
 - AGENTS.md remains a heading and literal-contract check. There is no
   subjective prose scoring.
-- RSK020 evaluates the quality job's effective permissions. RSK021 requires
-  full SHA pins for remote actions and reusable workflows in every job in the
-  quality workflow; local and Docker actions are exempt.
+- RSK020 requires the quality job's effective permissions to exactly match the
+  policy-owned `contents: read` mapping; extra read scopes and all write scopes
+  fail. RSK021 requires full SHA pins for remote actions and reusable workflows
+  in every job in the quality workflow; local and Docker actions are exempt.
 - RSK014 checks pull request reviews, stale approval dismissal, required status
   checks, strict up-to-date branches, conversation resolution, and
   administrator enforcement when platform checks are requested. If classic

@@ -115,11 +115,21 @@ inside a shell-wrapper string do not count. Whitespace, comments, multiline
 commands, and equivalent command formatting are normalized before comparison.
 
 RSK020 enforces at the **required** level that the quality job's effective
-permissions include `contents: read` and no write permission. RSK021 enforces
-at the **required** level that every remote action and reusable workflow
-referenced by the quality workflow is pinned to a full 40-character commit
-SHA. Local `./` actions and `docker://` references are exempt. Keep a version
-comment next to each SHA so Dependabot updates remain understandable.
+`GITHUB_TOKEN` permissions are exactly:
+
+```yaml
+permissions:
+  contents: read
+```
+
+Additional read or write scopes are not permitted unless the policy is
+deliberately changed in a future standard version. Job-level permissions
+override workflow-level permissions, so RSK020 evaluates the effective
+configuration for the `quality` job. RSK021 enforces at the **required** level
+that every remote action and reusable workflow referenced by the quality
+workflow is pinned to a full 40-character commit SHA. Local `./` actions and
+`docker://` references are exempt. Keep a version comment next to each SHA so
+Dependabot updates remain understandable.
 
 ### Environment reproducibility
 

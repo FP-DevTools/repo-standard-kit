@@ -388,8 +388,13 @@ rules:
       config:
         path: .github/workflows/quality.yml
         job: quality
-    rationale: Quality checks need source read access and no repository write access.
-    remediation: Set effective quality-job permissions to contents read with no writes.
+        permissions:
+          contents: read
+    rationale: >-
+      The quality job only needs read access to repository contents; additional
+      token scopes increase blast radius without supporting the gate chain.
+    remediation: >-
+      Set the quality job's effective permissions to exactly `contents: read`.
 
   - id: RSK021
     title: Quality workflow pins remote actions immutably

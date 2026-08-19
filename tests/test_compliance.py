@@ -240,6 +240,42 @@ def test_rsk021_policy_is_workflow_scoped() -> None:
     assert CHECK_SCHEMAS["github_workflow_pins"] == ({"path"}, set())
 
 
+def test_rsk020_policy_defines_exact_effective_permissions() -> None:
+    assert POLICY.rule("RSK020").check.config == {
+        "path": ".github/workflows/quality.yml",
+        "job": "quality",
+        "permissions": {"contents": "read"},
+    }
+    assert CHECK_SCHEMAS["github_workflow_permissions"] == (
+        {"path", "job", "permissions"},
+        set(),
+    )
+
+
+@pytest.mark.parametrize(
+    ("permissions", "message"),
+    [
+        ("read-all", "expected a mapping with string keys"),
+        ({}, "expected a non-empty mapping"),
+        ({"contents": "execute"}, "unsupported permission value"),
+    ],
+)
+def test_invalid_rsk020_policy_permissions_are_rejected(
+    tmp_path: Path, permissions: object, message: str
+) -> None:
+    root = _policy_checkout(tmp_path)
+
+    def mutation(data: dict[str, object]) -> None:
+        rules = data["rules"]
+        assert isinstance(rules, list)
+        rule = next(item for item in rules if item["id"] == "RSK020")
+        rule["check"]["config"]["permissions"] = permissions
+
+    _mutate_base(root, mutation)
+    with pytest.raises(PolicyError, match=message):
+        load_source_policy(root)
+
+
 def test_rsk014_policy_represents_every_required_protection_property() -> None:
     assert POLICY.rule("RSK014").check.config == {
         "branch": "main",
@@ -376,7 +412,9 @@ def test_multiline_complete_command_is_accepted(tmp_path: Path) -> None:
     assert "RSK006" not in _rule_ids(check_repo(root, POLICY))
 
 
-def test_job_permissions_override_workflow_permissions(tmp_path: Path) -> None:
+def test_exact_job_permissions_override_broader_workflow_permissions(
+    tmp_path: Path,
+) -> None:
     root = _minimal_repo(tmp_path)
     path = root / ".github" / "workflows" / "quality.yml"
     text = (
@@ -394,17 +432,57 @@ def test_job_permissions_override_workflow_permissions(tmp_path: Path) -> None:
     assert "RSK020" not in _rule_ids(check_repo(root, POLICY))
 
 
-def test_missing_or_write_permissions_report_rsk020(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("mutation", "actual"),
+    [
+        (
+            lambda text: text.replace(
+                "permissions:\n  contents: read\n", "permissions: read-all\n"
+            ),
+            "read-all",
+        ),
+        (
+            lambda text: text.replace(
+                "  contents: read", "  contents: read\n  issues: read"
+            ),
+            {"contents": "read", "issues": "read"},
+        ),
+        (
+            lambda text: text.replace("  contents: read", "  contents: write"),
+            {"contents": "write"},
+        ),
+        (
+            lambda text: text.replace("permissions:\n  contents: read\n", ""),
+            None,
+        ),
+        (
+            lambda text: text.replace(
+                "  quality:\n    runs-on:",
+                "  quality:\n"
+                "    permissions:\n"
+                "      contents: read\n"
+                "      pull-requests: read\n"
+                "    runs-on:",
+            ),
+            {"contents": "read", "pull-requests": "read"},
+        ),
+    ],
+)
+def test_nonminimal_effective_permissions_report_rsk020(
+    tmp_path: Path, mutation: Callable[[str], str], actual: object
+) -> None:
     root = _minimal_repo(tmp_path)
     path = root / ".github" / "workflows" / "quality.yml"
-    path.write_text(
-        path.read_text(encoding="utf-8").replace(
-            "  contents: read", "  contents: write"
-        ),
-        encoding="utf-8",
-    )
+    path.write_text(mutation(path.read_text(encoding="utf-8")), encoding="utf-8")
     finding = next(f for f in check_repo(root, POLICY) if f.rule_id == "RSK020")
-    assert finding.line is not None
+    assert finding.message == (
+        "Quality job permissions do not match the least-privilege policy."
+    )
+    assert finding.actual == actual
+    assert finding.expected == {"contents": "read"}
+    assert finding.remediation == (
+        "Set the quality job's effective permissions to exactly `contents: read`."
+    )
 
 
 def test_mutable_remote_action_reports_rsk021_at_node_line(tmp_path: Path) -> None:

@@ -16,6 +16,7 @@ COMPILED_POLICY_PATH = Path(__file__).resolve().parent / "compiled.json"
 LEVELS = {"required", "recommended"}
 ENFORCEMENT_MODES = {"structural", "platform"}
 MARKER_KINDS = {"file", "directory"}
+GITHUB_PERMISSION_VALUES = {"none", "read", "write"}
 
 # Each check kind owns its accepted configuration keys. Required keys are the
 # first set; optional keys are the second. Value-level validation follows in
@@ -48,7 +49,7 @@ CHECK_SCHEMAS: dict[str, tuple[set[str], set[str]]] = {
         set(),
     ),
     "repo_metadata": ({"path", "standard_major"}, set()),
-    "github_workflow_permissions": ({"path", "job"}, set()),
+    "github_workflow_permissions": ({"path", "job", "permissions"}, set()),
     "github_workflow_pins": ({"path"}, set()),
 }
 
@@ -247,6 +248,18 @@ def _validate_check_config(kind: str, config: dict[str, Any], location: str) -> 
         for token, field in placeholders.items():
             _string(token, f"{location}.placeholders key")
             _string(field, f"{location}.placeholders.{token}")
+    if "permissions" in config:
+        permissions = _mapping(config["permissions"], f"{location}.permissions")
+        if not permissions:
+            _fail(f"{location}.permissions", "expected a non-empty mapping")
+        for scope, value in permissions.items():
+            _string(scope, f"{location}.permissions key")
+            permission = _string(value, f"{location}.permissions.{scope}")
+            if permission not in GITHUB_PERMISSION_VALUES:
+                _fail(
+                    f"{location}.permissions.{scope}",
+                    f"unsupported permission value {permission!r}",
+                )
     for key in (
         "require_line_length",
         "dismiss_stale_approvals",

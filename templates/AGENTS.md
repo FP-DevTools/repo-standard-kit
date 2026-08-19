@@ -50,10 +50,10 @@ Run from repo root:
 3. `uv run pytest`
 4. `uv build`
 
-The quality workflow must grant effective `contents: read` permission with no
-write permissions, and pin every remote action or reusable workflow to a full
-40-character commit SHA. Keep version comments and GitHub Actions Dependabot
-configuration so those pins remain maintainable.
+The quality job's effective permissions must be exactly `contents: read`, and
+every remote action or reusable workflow must be pinned to a full 40-character
+commit SHA. Keep version comments and GitHub Actions Dependabot configuration
+so those pins remain maintainable.
 
 ## Coding Standards
 

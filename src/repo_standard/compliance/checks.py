@@ -1211,12 +1211,8 @@ def _github_workflow_permissions(
     assert job is not None
     assert isinstance(document.data, dict)
     permissions = _effective_permissions(document.data, job)
-    valid = permissions == "read-all" or (
-        isinstance(permissions, dict)
-        and permissions.get("contents") == "read"
-        and not any(value == "write" for value in permissions.values())
-    )
-    if valid:
+    expected = config["permissions"]
+    if permissions == expected:
         return []
     line = document.line("jobs", config["job"], "permissions") or document.line(
         "permissions"
@@ -1224,9 +1220,9 @@ def _github_workflow_permissions(
     return [
         Issue(
             config["path"],
-            "Quality job permissions are not least privilege.",
+            "Quality job permissions do not match the least-privilege policy.",
             permissions,
-            {"contents": "read", "writes": "none"},
+            expected,
             line,
         )
     ]
