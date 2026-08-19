@@ -48,7 +48,7 @@ jobs:
             args+=(--check-enforcement)
           fi
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            uv run --locked repo-check . "${args[@]}"
+            uv run --locked --no-dev repo-check . "${args[@]}"
           else
             uvx --from "git+https://github.com/FP-DevTools/repo-standard-kit.git@${{ inputs.ref }}" repo-check . "${args[@]}"
           fi

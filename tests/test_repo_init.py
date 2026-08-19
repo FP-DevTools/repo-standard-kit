@@ -343,7 +343,7 @@ def test_compliance_workflows_emit_an_independent_required_status() -> None:
 
     root_workflow = workflow_paths[0].read_text(encoding="utf-8")
     assert "  workflow_call:\n" in root_workflow
-    assert "uv run --locked repo-check ." in root_workflow
+    assert "uv run --locked --no-dev repo-check ." in root_workflow
     for workflow_path in workflow_paths[1:]:
         assert "repo-standard-kit.git@v1.0.0" in workflow_path.read_text(
             encoding="utf-8"

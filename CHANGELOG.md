@@ -107,6 +107,9 @@ the changes listed under **Adopters must**.
 
 ### Fixed
 
+- The standards repository's self-compliance workflow now excludes the default
+  development dependency group, so `repo-check` no longer installs unrelated
+  quality tools before checking a pull request.
 - `RSK011` no longer matches any `__DUNDER__`-shaped token as an
   "unresolved placeholder" — only `repo_init.py`'s actual six-token
   vocabulary (`__REPO_NAME__`, `__PACKAGE_NAME__`, `__DESCRIPTION__`,
