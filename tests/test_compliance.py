@@ -32,13 +32,6 @@ STARTER_KIT_PROFILES = ("python-single", "python-workspace")
 
 RULES = load_rules()
 
-# Rules that cannot meaningfully apply to repo-standard-kit's own repository:
-# RSK005 asks a repo to link back to repo-standard-kit, which does not apply
-# to repo-standard-kit itself; RSK011 flags "__TOKEN__"-shaped strings, and
-# this repo's source is where those tokens are defined and tested, not a
-# leftover from an unfinished bootstrap. See docs/compliance.md.
-SELF_APPLICATION_EXCEPTIONS = {"RSK005", "RSK011"}
-
 
 def _minimal_repo(tmp_path: Path) -> Path:
     """A repository that satisfies every structural (non-platform) rule."""
@@ -76,7 +69,9 @@ def _minimal_repo(tmp_path: Path) -> Path:
         encoding="utf-8",
     )
 
-    select = ", ".join(f'"{s}"' for s in RULES.ruff_baseline.select)
+    select = ", ".join(
+        f'"{s}"' for s in (*RULES.ruff_mandatory_select, *RULES.ruff_recommended_select)
+    )
     (root / "pyproject.toml").write_text(
         "[project]\n"
         'name = "compliant-repo"\n'
@@ -87,13 +82,17 @@ def _minimal_repo(tmp_path: Path) -> Path:
         "[tool.uv.build-backend]\n"
         'module-name = "compliant_repo"\n\n'
         "[tool.ruff]\n"
-        f"line-length = {RULES.ruff_baseline.line_length}\n\n"
+        f"line-length = {RULES.ruff_recommended_line_length}\n\n"
         "[tool.ruff.lint]\n"
         f"select = [{select}]\n",
         encoding="utf-8",
     )
     (root / "uv.lock").write_text("", encoding="utf-8")
     (root / "docs" / "adr").mkdir(parents=True)
+    (root / "CHANGELOG.md").write_text(
+        "# Changelog\n\n## [Unreleased]\n", encoding="utf-8"
+    )
+    (root / "LICENSE").write_text("Proprietary.\n", encoding="utf-8")
 
     return root
 
@@ -187,29 +186,77 @@ def test_missing_uv_lock_reports_rsk009(tmp_path: Path) -> None:
     assert "RSK009" in _rule_ids(check_repo(root, RULES))
 
 
-def test_narrower_line_length_reports_rsk010(tmp_path: Path) -> None:
+def test_missing_line_length_reports_rsk010(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    pyproject_path = root / "pyproject.toml"
+    text = pyproject_path.read_text(encoding="utf-8")
+    pyproject_path.write_text(
+        text.replace(f"line-length = {RULES.ruff_recommended_line_length}\n", ""),
+        encoding="utf-8",
+    )
+    assert "RSK010" in _rule_ids(check_repo(root, RULES))
+
+
+def test_different_but_declared_line_length_does_not_report_rsk010(
+    tmp_path: Path,
+) -> None:
+    """§13: the value is a per-repository choice; only its absence is a shall."""
     root = _minimal_repo(tmp_path)
     pyproject_path = root / "pyproject.toml"
     text = pyproject_path.read_text(encoding="utf-8")
     pyproject_path.write_text(
         text.replace(
-            f"line-length = {RULES.ruff_baseline.line_length}", "line-length = 79"
+            f"line-length = {RULES.ruff_recommended_line_length}", "line-length = 79"
         ),
         encoding="utf-8",
     )
-    assert "RSK010" in _rule_ids(check_repo(root, RULES))
+    assert "RSK010" not in _rule_ids(check_repo(root, RULES))
 
 
-def test_dropped_rule_family_reports_rsk010(tmp_path: Path) -> None:
+def test_dropped_mandatory_rule_family_reports_rsk010(tmp_path: Path) -> None:
     root = _minimal_repo(tmp_path)
     pyproject_path = root / "pyproject.toml"
     text = pyproject_path.read_text(encoding="utf-8")
-    select = ", ".join(f'"{s}"' for s in RULES.ruff_baseline.select[1:])
+    select = ", ".join(
+        f'"{s}"'
+        for s in (*RULES.ruff_mandatory_select[1:], *RULES.ruff_recommended_select)
+    )
     pyproject_path.write_text(
         text.split("[tool.ruff.lint]")[0] + f"[tool.ruff.lint]\nselect = [{select}]\n",
         encoding="utf-8",
     )
     assert "RSK010" in _rule_ids(check_repo(root, RULES))
+
+
+def test_non_recommended_line_length_reports_rsk015_as_should(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    pyproject_path = root / "pyproject.toml"
+    text = pyproject_path.read_text(encoding="utf-8")
+    pyproject_path.write_text(
+        text.replace(
+            f"line-length = {RULES.ruff_recommended_line_length}", "line-length = 100"
+        ),
+        encoding="utf-8",
+    )
+    findings = [f for f in check_repo(root, RULES) if f.rule_id == "RSK015"]
+    assert len(findings) == 1
+    assert findings[0].severity == "should"
+
+
+def test_dropped_recommended_rule_family_reports_rsk016_as_should(
+    tmp_path: Path,
+) -> None:
+    root = _minimal_repo(tmp_path)
+    pyproject_path = root / "pyproject.toml"
+    text = pyproject_path.read_text(encoding="utf-8")
+    select = ", ".join(f'"{s}"' for s in RULES.ruff_mandatory_select)
+    pyproject_path.write_text(
+        text.split("[tool.ruff.lint]")[0] + f"[tool.ruff.lint]\nselect = [{select}]\n",
+        encoding="utf-8",
+    )
+    findings = [f for f in check_repo(root, RULES) if f.rule_id == "RSK016"]
+    assert len(findings) == 1
+    assert findings[0].severity == "should"
 
 
 def test_unresolved_placeholder_reports_rsk011(tmp_path: Path) -> None:
@@ -221,6 +268,22 @@ def test_unresolved_placeholder_reports_rsk011(tmp_path: Path) -> None:
     assert finding.path == "NOTES.md"
 
 
+def test_unrelated_dunder_constant_does_not_report_rsk011(tmp_path: Path) -> None:
+    """RSK011 matches repo_init.py's known placeholder vocabulary, not any
+    dunder-shaped token.
+
+    A pilot run against a real repository (wombat_configs) flagged its own
+    `__PDC_GENERATED_NAME__` sentinel constant as an "unresolved placeholder"
+    — a false positive, since that token has nothing to do with this
+    standard's bootstrap templating.
+    """
+    root = _minimal_repo(tmp_path)
+    (root / "NOTES.md").write_text(
+        'SENTINEL = "__PDC_GENERATED_NAME__"\n', encoding="utf-8"
+    )
+    assert "RSK011" not in _rule_ids(check_repo(root, RULES))
+
+
 def test_missing_adr_dir_reports_rsk012_as_should(tmp_path: Path) -> None:
     root = _minimal_repo(tmp_path)
     (root / "docs" / "adr").rmdir()
@@ -229,29 +292,20 @@ def test_missing_adr_dir_reports_rsk012_as_should(tmp_path: Path) -> None:
     assert findings[0].severity == "should"
 
 
-def test_overlong_markdown_line_reports_rsk013_as_should(tmp_path: Path) -> None:
+def test_missing_changelog_reports_rsk017_as_should(tmp_path: Path) -> None:
     root = _minimal_repo(tmp_path)
-    (root / "docs" / "notes.md").write_text("word " * 30 + "\n", encoding="utf-8")
-    findings = [f for f in check_repo(root, RULES) if f.rule_id == "RSK013"]
+    (root / "CHANGELOG.md").unlink()
+    findings = [f for f in check_repo(root, RULES) if f.rule_id == "RSK017"]
     assert len(findings) == 1
     assert findings[0].severity == "should"
 
 
-def test_overlong_markdown_line_outside_prose_width_scope_is_not_reported(
-    tmp_path: Path,
-) -> None:
-    """§13 scopes prose width to docs/, README.md, and AGENTS.md.
-
-    A pilot run against a real repository showed this rule flooding
-    thousands of findings against machine-generated Markdown (diff
-    summaries) living outside that scope; RSK013 must not touch it.
-    """
+def test_missing_license_reports_rsk018_as_should(tmp_path: Path) -> None:
     root = _minimal_repo(tmp_path)
-    (root / "generated").mkdir()
-    (root / "generated" / "report.md").write_text("word " * 30 + "\n", encoding="utf-8")
-    (root / "NOTES.md").write_text("word " * 30 + "\n", encoding="utf-8")
-    findings = [f for f in check_repo(root, RULES) if f.rule_id == "RSK013"]
-    assert findings == []
+    (root / "LICENSE").unlink()
+    findings = [f for f in check_repo(root, RULES) if f.rule_id == "RSK018"]
+    assert len(findings) == 1
+    assert findings[0].severity == "should"
 
 
 def test_platform_check_excluded_by_default(tmp_path: Path) -> None:
@@ -264,6 +318,42 @@ def test_platform_check_included_with_flag_reports_something(tmp_path: Path) -> 
     root = _minimal_repo(tmp_path)
     findings = check_repo(root, RULES, include_platform=True)
     assert "RSK014" in _rule_ids(findings)
+
+
+# --- [tool.repo-check.ignore] (§11 Exceptions) --------------------------
+
+
+def test_ignored_rule_with_reason_is_suppressed(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    (root / "README.md").write_text(
+        "# compliant-repo\n\nNo reference here.\n", encoding="utf-8"
+    )
+    with (root / "pyproject.toml").open("a", encoding="utf-8") as f:
+        f.write('\n[tool.repo-check.ignore]\nRSK005 = "Not applicable here."\n')
+    assert "RSK005" not in _rule_ids(check_repo(root, RULES))
+
+
+def test_ignore_entry_without_a_reason_does_not_suppress(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    (root / "README.md").write_text(
+        "# compliant-repo\n\nNo reference here.\n", encoding="utf-8"
+    )
+    with (root / "pyproject.toml").open("a", encoding="utf-8") as f:
+        f.write('\n[tool.repo-check.ignore]\nRSK005 = "   "\n')
+    assert "RSK005" in _rule_ids(check_repo(root, RULES))
+
+
+def test_ignore_only_suppresses_the_named_rule(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    (root / "README.md").write_text(
+        "# compliant-repo\n\nNo reference here.\n", encoding="utf-8"
+    )
+    (root / "AGENTS.md").unlink()
+    with (root / "pyproject.toml").open("a", encoding="utf-8") as f:
+        f.write('\n[tool.repo-check.ignore]\nRSK005 = "Not applicable here."\n')
+    ids = _rule_ids(check_repo(root, RULES))
+    assert "RSK005" not in ids
+    assert "RSK001" in ids
 
 
 # --- the dogfood tests -------------------------------------------------
@@ -296,18 +386,16 @@ def test_generated_repos_pass_their_own_compliance_check(
 
 
 def test_repo_root_has_no_unexpected_shall_findings() -> None:
-    """repo-standard-kit checks itself, modulo the rules that cannot apply to it.
+    """repo-standard-kit checks itself the same way an adopting repository would.
 
     RSK005 and RSK011 are structurally inapplicable to the standard's own
-    repository; see SELF_APPLICATION_EXCEPTIONS.
+    repository; the exception is recorded in `[tool.repo-check.ignore]` in
+    this repository's own `pyproject.toml` — the §11 mechanism every adopter
+    gets, not a special case inside the checker or the test suite.
     """
     findings = check_repo(REPO_ROOT, RULES)
-    unexpected = [
-        f
-        for f in findings
-        if f.severity == "shall" and f.rule_id not in SELF_APPLICATION_EXCEPTIONS
-    ]
-    assert unexpected == []
+    shall_findings = [f for f in findings if f.severity == "shall"]
+    assert shall_findings == []
 
 
 def test_rules_json_matches_generated_output() -> None:
@@ -341,7 +429,39 @@ def test_cli_exits_zero_for_a_compliant_repo(
     exit_code = cli.main([str(root)])
     captured = capsys.readouterr()
     assert exit_code == 0
-    assert "no findings" in captured.out
+    assert "All checks passed!" in captured.out
+
+
+def test_cli_success_message_is_uncolored_by_default(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """capsys is not a terminal, so no ANSI escapes without FORCE_COLOR."""
+    root = _minimal_repo(tmp_path)
+    cli.main([str(root)])
+    captured = capsys.readouterr()
+    assert "\033[" not in captured.out
+
+
+def test_cli_success_message_is_green_with_force_color(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Matches ruff/ty: FORCE_COLOR opts into color on a non-terminal stream."""
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    root = _minimal_repo(tmp_path)
+    cli.main([str(root)])
+    captured = capsys.readouterr()
+    assert "\033[32mAll checks passed!\033[0m" in captured.out
+
+
+def test_no_color_wins_over_force_color(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    monkeypatch.setenv("NO_COLOR", "1")
+    root = _minimal_repo(tmp_path)
+    cli.main([str(root)])
+    captured = capsys.readouterr()
+    assert "\033[" not in captured.out
 
 
 def test_cli_json_format_is_valid_json(

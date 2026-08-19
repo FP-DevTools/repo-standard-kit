@@ -18,8 +18,9 @@ import subprocess
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
-from repo_standard.compliance.spec import Rules, prose_offenders, ruff_config_of
+from repo_standard.compliance.spec import Rules
 
 RULES_JSON_PATH = Path(__file__).resolve().parent / "rules.json"
 
@@ -36,7 +37,6 @@ _IGNORED_DIR_PARTS = {
     "build",
 }
 
-_PLACEHOLDER_PATTERN = re.compile(r"__[A-Z][A-Z0-9_]*__")
 _KIT_REFERENCE_PATTERN = re.compile(r"repo-standard-kit")
 _GITHUB_REMOTE_PATTERN = re.compile(
     r"github\.com[:/](?P<owner_repo>[^/]+/[^/]+?)(?:\.git)?/?$"
@@ -113,29 +113,6 @@ def _iter_scannable_files(root: Path) -> list[Path]:
         if path.is_file()
         and not any(part in _IGNORED_DIR_PARTS for part in path.relative_to(root).parts)
     ]
-
-
-def _prose_width_scope(root: Path) -> list[Path]:
-    """Files §13's prose width applies to: `docs/**`, `README.md`, `AGENTS.md`.
-
-    Not every tracked Markdown file — a repository's `docs/` tree commonly
-    sits alongside generated, non-prose Markdown (diff summaries, changelogs
-    pulled from elsewhere) that §13 was never written to cover.
-    """
-    files = [
-        path for name in ("README.md", "AGENTS.md") if (path := root / name).is_file()
-    ]
-    docs_dir = root / "docs"
-    if docs_dir.is_dir():
-        files.extend(
-            path
-            for path in docs_dir.rglob("*.md")
-            if path.is_file()
-            and not any(
-                part in _IGNORED_DIR_PARTS for part in path.relative_to(root).parts
-            )
-        )
-    return files
 
 
 # --- individual rule checks -------------------------------------------------
@@ -314,14 +291,27 @@ def _check_uv_lock(root: Path, rules: Rules) -> list[Finding]:
     return [Finding("RSK009", "shall", "uv.lock", None, "uv.lock is not present.")]
 
 
+def _read_ruff_config(pyproject_path: Path) -> dict[str, Any] | None:
+    """The `[tool.ruff]` table, or `None` if the file/table is missing or unparsable."""
+    text = _read(pyproject_path)
+    if text is None:
+        return None
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        return None
+    return data.get("tool", {}).get("ruff")
+
+
 def _check_ruff_baseline(root: Path, rules: Rules) -> list[Finding]:
-    """RSK010: Ruff `line-length` and `select` match the formatting baseline (§13)."""
+    """RSK010: `line-length` is declared explicitly and mandatory rule families
+    are selected (§13). The specific `line-length` *value* is not checked here —
+    see RSK015."""
     pyproject_path = root / "pyproject.toml"
     if not pyproject_path.exists():
         return []
-    try:
-        actual = ruff_config_of(pyproject_path)
-    except (KeyError, tomllib.TOMLDecodeError):
+    ruff = _read_ruff_config(pyproject_path)
+    if ruff is None:
         return [
             Finding(
                 "RSK010",
@@ -331,19 +321,20 @@ def _check_ruff_baseline(root: Path, rules: Rules) -> list[Finding]:
                 "No usable [tool.ruff] configuration.",
             )
         ]
+
     findings = []
-    if actual.line_length != rules.ruff_baseline.line_length:
+    if "line-length" not in ruff:
         findings.append(
             Finding(
                 "RSK010",
                 "shall",
                 "pyproject.toml",
                 None,
-                f"line-length is {actual.line_length}, baseline requires "
-                f"{rules.ruff_baseline.line_length}.",
+                "[tool.ruff] does not declare an explicit line-length.",
             )
         )
-    missing_families = sorted(set(rules.ruff_baseline.select) - set(actual.select))
+    actual_select = set(ruff.get("lint", {}).get("select", []))
+    missing_families = sorted(set(rules.ruff_mandatory_select) - actual_select)
     if missing_families:
         findings.append(
             Finding(
@@ -357,14 +348,71 @@ def _check_ruff_baseline(root: Path, rules: Rules) -> list[Finding]:
     return findings
 
 
+def _check_ruff_recommended_line_length(root: Path, rules: Rules) -> list[Finding]:
+    """RSK015: declared `line-length` matches the recommended value (§13)."""
+    pyproject_path = root / "pyproject.toml"
+    if not pyproject_path.exists():
+        return []
+    ruff = _read_ruff_config(pyproject_path)
+    if ruff is None or "line-length" not in ruff:
+        return []  # RSK010 already covers an undeclared line-length.
+    try:
+        actual_line_length = int(ruff["line-length"])
+    except (TypeError, ValueError):
+        return []
+    if actual_line_length == rules.ruff_recommended_line_length:
+        return []
+    return [
+        Finding(
+            "RSK015",
+            "should",
+            "pyproject.toml",
+            None,
+            f"line-length is {actual_line_length}; "
+            f"{rules.ruff_recommended_line_length} is recommended so formatting "
+            "stays comparable across repositories.",
+        )
+    ]
+
+
+def _check_ruff_recommended_select(root: Path, rules: Rules) -> list[Finding]:
+    """RSK016: recommended rule families (`PT`) are also selected (§13)."""
+    pyproject_path = root / "pyproject.toml"
+    if not pyproject_path.exists():
+        return []
+    ruff = _read_ruff_config(pyproject_path)
+    if ruff is None:
+        return []
+    actual_select = set(ruff.get("lint", {}).get("select", []))
+    missing = sorted(set(rules.ruff_recommended_select) - actual_select)
+    if not missing:
+        return []
+    return [
+        Finding(
+            "RSK016",
+            "should",
+            "pyproject.toml",
+            None,
+            f"Ruff select does not include recommended rule families: {missing}.",
+        )
+    ]
+
+
 def _check_no_placeholders(root: Path, rules: Rules) -> list[Finding]:
-    """RSK011: no unresolved `__PLACEHOLDER__` tokens remain (repo-standard.md)."""
+    """RSK011: no unresolved bootstrap placeholder tokens remain (repo-standard.md).
+
+    Matches only `repo_init.py`'s known placeholder vocabulary, not every
+    dunder-shaped token — a repository's own code may legitimately use
+    `__SOME_CONSTANT__`-style names unrelated to this standard's templating.
+    """
     findings = []
     for path in _iter_scannable_files(root):
         text = _read(path)
         if text is None:
             continue
-        matches = sorted(set(_PLACEHOLDER_PATTERN.findall(text)))
+        matches = sorted(
+            token for token in rules.known_placeholder_tokens if token in text
+        )
         if matches:
             findings.append(
                 Finding(
@@ -385,21 +433,20 @@ def _check_adr_dir(root: Path, rules: Rules) -> list[Finding]:
     return [Finding("RSK012", "should", "docs/adr", None, "docs/adr/ is missing.")]
 
 
-def _check_prose_width(root: Path, rules: Rules) -> list[Finding]:
-    """RSK013: docs/, README.md, and AGENTS.md wrap at the prose width (§13)."""
-    findings = []
-    for path in _prose_width_scope(root):
-        for line_number, width in prose_offenders(path, rules.prose_width):
-            findings.append(
-                Finding(
-                    "RSK013",
-                    "should",
-                    _relative(root, path),
-                    line_number,
-                    f"Line exceeds {rules.prose_width} columns ({width}).",
-                )
-            )
-    return findings
+def _check_changelog_exists(root: Path, rules: Rules) -> list[Finding]:
+    """RSK017: `CHANGELOG.md` exists (repo-layout.md)."""
+    if (root / "CHANGELOG.md").is_file():
+        return []
+    return [
+        Finding("RSK017", "should", "CHANGELOG.md", None, "CHANGELOG.md is missing.")
+    ]
+
+
+def _check_license_exists(root: Path, rules: Rules) -> list[Finding]:
+    """RSK018: `LICENSE` exists (repo-layout.md)."""
+    if (root / "LICENSE").is_file():
+        return []
+    return [Finding("RSK018", "should", "LICENSE", None, "LICENSE is missing.")]
 
 
 def _git_remote_url(root: Path) -> str | None:
@@ -514,6 +561,29 @@ def _check_branch_protection(root: Path, rules: Rules) -> list[Finding]:
     return findings
 
 
+def _load_ignore_config(root: Path) -> dict[str, str]:
+    """`[tool.repo-check.ignore]`: rule ID -> recorded reason for suppression (§11).
+
+    A malformed or absent table suppresses nothing — an entry only takes
+    effect once it has a non-empty string reason recorded against it.
+    """
+    text = _read(root / "pyproject.toml")
+    if text is None:
+        return {}
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        return {}
+    ignore = data.get("tool", {}).get("repo-check", {}).get("ignore", {})
+    if not isinstance(ignore, dict):
+        return {}
+    return {
+        rule_id: reason
+        for rule_id, reason in ignore.items()
+        if isinstance(rule_id, str) and isinstance(reason, str) and reason.strip()
+    }
+
+
 _STRUCTURAL_CHECKS = (
     _check_agents_exists,
     _check_agents_sections,
@@ -525,9 +595,12 @@ _STRUCTURAL_CHECKS = (
     _check_uv_build_backend,
     _check_uv_lock,
     _check_ruff_baseline,
+    _check_ruff_recommended_line_length,
+    _check_ruff_recommended_select,
     _check_no_placeholders,
     _check_adr_dir,
-    _check_prose_width,
+    _check_changelog_exists,
+    _check_license_exists,
 )
 
 
@@ -544,6 +617,10 @@ def check_repo(
     rules; none of the current catalogue differs by profile, so it does not
     yet change which checks run. `include_platform` opts into RSK014, which
     needs `gh`, network access, and auth (§10).
+
+    A rule with a recorded reason in `root`'s `[tool.repo-check.ignore]` is
+    dropped from the result entirely — this is the §11 exception mechanism,
+    not a report of what was excused.
     """
     checks = list(_STRUCTURAL_CHECKS)
     if include_platform:
@@ -552,4 +629,8 @@ def check_repo(
     findings: list[Finding] = []
     for check in checks:
         findings.extend(check(root, rules))
+
+    ignored = _load_ignore_config(root)
+    if ignored:
+        findings = [f for f in findings if f.rule_id not in ignored]
     return findings

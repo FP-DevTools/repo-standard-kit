@@ -18,13 +18,13 @@ Do not clone the standards repository as the base of a product repository.
 
 1. Run the initializer directly with `uvx`:
 
-```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-init --profile python-single --repo-name widget-service
-```
+   ```bash
+   uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-init --profile python-single --repo-name widget-service
+   ```
 
-`uvx` is the short form of `uv tool run`. It installs the bootstrap package
-from this standards repository into an isolated tool environment, then runs
-the packaged `repo-init` command.
+   `uvx` is the short form of `uv tool run`. It installs the bootstrap package
+   from this standards repository into an isolated tool environment, then runs
+   the packaged `repo-init` command.
 
 2. Either create and enter an empty target directory, or run `repo-init` through
    `uvx` from the parent directory with `--repo-name` so it creates the
@@ -47,7 +47,7 @@ uv tool install --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.g
 Pin a standards version by adding a Git ref:
 
 ```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v0.4.0" repo-init --profile python-single --repo-name widget-service
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v1.0.0" repo-init --profile python-single --repo-name widget-service
 ```
 
 The generated repository derives its `AGENTS.md`, CI workflow, `pyproject.toml`,
@@ -145,7 +145,9 @@ each package `pyproject.toml`, and no unresolved template placeholders.
 widget-service/
   .github/workflows/quality.yml
   .pre-commit-config.yaml
+  .pymarkdown.json
   AGENTS.md
+  CHANGELOG.md
   README.md
   pyproject.toml
   docs/adr/0001-template.md
@@ -166,12 +168,15 @@ workspace shell with an empty `packages/` directory:
 widget-platform/
   .github/workflows/quality.yml
   .pre-commit-config.yaml
+  .pymarkdown.json
   AGENTS.md
+  CHANGELOG.md
   README.md
   pyproject.toml
   docs/adr/0001-template.md
   docs/diagrams/README.md
   packages/.gitkeep
+  tests/test_workspace_shell.py
 ```
 
 Each later `repo-add-package --package-name widget_api` run adds:

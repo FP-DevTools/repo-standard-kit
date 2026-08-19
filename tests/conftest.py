@@ -20,9 +20,8 @@ if str(SRC) not in sys.path:
 
 from repo_standard.compliance import spec  # noqa: E402
 
-PROSE_WIDTH = spec.PROSE_WIDTH
 RuffBaseline = spec.RuffBaseline
-prose_offenders = spec.prose_offenders
+RuffPolicy = spec.RuffPolicy
 ruff_config_of = spec.ruff_config_of
 
 QUALITY_GATES_DOC = REPO_ROOT / "docs" / "quality-gates.md"
@@ -39,6 +38,6 @@ def required_agents_sections() -> list[str]:
     return spec.required_agents_sections(REPO_STANDARD_DOC)
 
 
-def documented_ruff_baseline() -> RuffBaseline:
-    """Parse the required Ruff configuration out of the formatting baseline."""
-    return spec.documented_ruff_baseline(QUALITY_GATES_DOC)
+def documented_ruff_policy() -> RuffPolicy:
+    """Parse the mandatory and recommended Ruff configuration out of §13."""
+    return spec.documented_ruff_policy(QUALITY_GATES_DOC)

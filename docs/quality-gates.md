@@ -58,6 +58,8 @@ Local checks should remain lightweight and fast.
 
 - Code formatting
 - Lint auto-fixes where safe
+- Static type checking
+- Markdown structural linting
 - YAML validation
 - TOML validation
 - JSON validation
@@ -67,11 +69,27 @@ Local checks should remain lightweight and fast.
 - Detection of accidentally committed secrets
 - Prevention of oversized binary files
 
+This standard treats `ty` as the approved equivalent to `mypy` for Python
+starter repositories, and `pymarkdown` as the approved Markdown linter.
+Markdown structural linting shall run with its line-length rule (`md013`)
+disabled — section 13 recommends a prose width but does not mandate one
+(see below), so this gate shall not turn that recommendation into a block.
+A repository may enable `md013` locally if it wants to enforce prose width,
+paired with `--exclude <pattern>` for generated or vendored Markdown that
+was never written to any prose convention. `md033` (no inline HTML) and
+`md036` (emphasis instead of heading) shall also run disabled by default:
+both false-positive on conventions this standard itself relies on —
+`<angle-bracket>` fill-in-the-blank placeholders in `templates/`, and
+`__DUNDER__`-shaped bootstrap tokens, which are valid Markdown
+strong-emphasis syntax before a starter kit is rendered.
+
 ### Recommended tools
 
 ```bash
 uv run ruff format
 uv run ruff check --fix
+uv run ty check
+uv run pymarkdown --config .pymarkdown.json scan
 ```
 
 ### Performance target
@@ -100,41 +118,11 @@ Verifies that dependency resolution is reproducible.
 uv run pre-commit run --all-files
 ```
 
-Confirms in CI that the mandatory local gates of section 4 were applied, so a
-bypassed local hook cannot reach `main`.
-
----
-
-### Formatting
-
-```bash
-uv run ruff format --check .
-```
-
-Ensures a consistent code style.
-
----
-
-### Linting
-
-```bash
-uv run ruff check .
-```
-
-Ensures compliance with repository coding standards.
-
----
-
-### Static type checking
-
-```bash
-uv run ty check
-```
-
-This standard treats `ty` as the approved equivalent to `mypy` for Python
-starter repositories.
-
-Ensures consistency between implementation and declared interfaces.
+Confirms in CI that the mandatory local gates of section 4 — formatting,
+linting, static type checking, and file hygiene — were applied, so a bypassed
+or missing local hook cannot reach `main`. This is the sole CI enforcement of
+those gates; they are not separately re-run as standalone CI steps, since
+that would only repeat the same tools against the same files a second time.
 
 ---
 
@@ -345,30 +333,47 @@ looks like. This section fixes the configuration those gates run with.
 
 ### Ruff configuration
 
-Every adopting repository shall configure Ruff with at least:
+Every adopting repository shall declare an explicit `line-length` in
+`[tool.ruff]`, and shall select at least the following rule families:
 
 ```toml
 [tool.ruff]
 line-length = 88
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "PT"]
+select = ["E", "F", "I", "B", "UP"]
 ```
 
-`line-length = 88` matches Ruff's own default and is stated explicitly so that
-it reads as a decision rather than an inherited default. The selected families
-are pycodestyle errors, Pyflakes, import sorting, flake8-bugbear, pyupgrade,
-and flake8-pytest-style.
+The selected families are pycodestyle errors, Pyflakes, import sorting,
+flake8-bugbear, and pyupgrade. A repository shall not drop one of them
+without recording an exemption under section 11.
 
-A repository may select additional rule families. It shall not drop one of the
-families above without recording an exemption under section 11.
+The specific `line-length` value is a per-repository decision, not
+prescribed by this standard — the requirement is that a value is declared
+explicitly, not left as an inherited default. `88` matches Ruff's own
+default; a repository should prefer it, so formatting stays comparable
+across repositories, but a different declared value does not need an
+exemption under section 11.
+
+A repository should additionally select the following rule family; dropping
+it does not need an exemption under section 11 either:
+
+```toml
+[tool.ruff.lint]
+select = ["PT"]
+```
+
+`PT` is flake8-pytest-style. A repository may select further rule families
+beyond both lists above.
 
 ### Prose width
 
-Markdown under `docs/`, along with `README.md` and `AGENTS.md`, should wrap at
-the same 88 columns, so documentation and code share one measure and diffs stay
-reviewable line by line.
-
-Four things are exempt, because wrapping them harms them: fenced code blocks,
-table rows, link reference definitions, and any line whose length comes from a
-single unbreakable token such as a URL.
+Markdown under `docs/`, along with `README.md` and `AGENTS.md`, should wrap
+at the same 88 columns as the Ruff baseline above, so documentation and code
+share one measure and diffs stay reviewable line by line — the same
+recommended-not-required treatment section 4 gives `pymarkdown`'s `md013`
+rule. A repository that enables it locally gets `md013`'s own defaults for
+free: fenced code blocks, link reference definitions, and a line whose
+length comes from one unbreakable token such as a URL are already exempt.
+It does not exempt table rows — keep them within the limit too, or exclude
+the file.

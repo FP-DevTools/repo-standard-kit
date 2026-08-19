@@ -30,17 +30,49 @@ Options:
 Exit codes: `0` aligned, `1` a `shall` rule was violated (or a `should` rule
 under `--strict`), `2` usage error.
 
+`should` findings are non-blocking by design, everywhere `repo-check` runs —
+the CLI's default exit code, the pre-commit hook (`.pre-commit-hooks.yaml`
+passes no `--strict`), and the reusable CI workflow (`strict` defaults to
+`false`) all agree on this. They are visible in every output format, just
+never the reason a run fails, unless something explicitly opts into
+`--strict`.
+
+## Suppressing A Rule
+
+A rule can be structurally inapplicable to a specific repository — asking a
+repository to link to itself, for instance. §11 *Exceptions* requires an
+explicit, recorded justification for that; `repo-check` reads it from the
+checked repository's own `pyproject.toml`:
+
+```toml
+[tool.repo-check.ignore]
+RSK005 = "This repository is the standard's own home; linking to itself is meaningless."
+```
+
+A rule ID is suppressed only once it has a non-empty string reason recorded
+against it — an empty or missing reason changes nothing, so the table can
+never silently swallow a finding. Suppressed findings never appear in either
+output format; the reason lives in version control, next to the code it
+excuses, which is what makes it explicit and reviewable rather than a private
+understanding between the checker and one repository.
+
 ## Consumption Surfaces
 
 Three ways to run `repo-check` against a repository, from lowest to highest
-commitment.
+commitment. **Pick one, not several.** In particular, the pre-commit hook and
+the reusable CI workflow both run the full check — CI already re-runs the
+pre-commit hook (see §5, "Local gate verification"), so wiring in both means
+`repo-check` runs twice on every pull request for no additional coverage.
+Prefer the pre-commit hook; reach for the reusable CI workflow instead of it
+only for a repository that does not want `repo-check` as a pre-commit
+dependency at all.
 
 ### Ad hoc
 
 No setup: the command shown above, or pinned to a released version:
 
 ```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v0.4.0" repo-check
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v1.0.0" repo-check
 ```
 
 ### Local pre-commit hook
@@ -52,7 +84,7 @@ dependency. Add to the consuming repository's `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/FP-DevTools/repo-standard-kit
-    rev: v0.4.0
+    rev: v1.0.0
     hooks:
       - id: repo-check
 ```
@@ -75,9 +107,9 @@ on:
 
 jobs:
   compliance:
-    uses: FP-DevTools/repo-standard-kit/.github/workflows/compliance.yml@v0.4.0
+    uses: FP-DevTools/repo-standard-kit/.github/workflows/compliance.yml@v1.0.0
     with:
-      ref: v0.4.0
+      ref: v1.0.0
 ```
 
 `ref` is required and must match the pin in `uses:`. GitHub Actions does not
@@ -116,26 +148,36 @@ behind `--check-enforcement`.
 | `RSK005` | Both reference repo-standard-kit | `repo-standard.md` | shall |
 | `RSK006` | `quality.yml` runs the full gate chain | §5 | shall |
 | `RSK007` | Mandatory pre-commit hooks present | §4 | shall |
-| `RSK008` | `pyproject.toml` uses `uv_build` where a build-system is declared | Repository Contract | shall |
+| `RSK008` | Build-system, if declared, is `uv_build` | Repository Contract | shall |
 | `RSK009` | `uv.lock` is present | Repository Contract | shall |
-| `RSK010` | Ruff `line-length` and `select` match the baseline | §13 | shall |
+| `RSK010` | Ruff `line-length` declared; mandatory families selected | §13 | shall |
 | `RSK011` | No unresolved `__PLACEHOLDER__` tokens | `repo-standard.md` | shall |
 | `RSK012` | `docs/adr/` exists | `repo-layout.md` | should |
-| `RSK013` | `docs/`, `README.md`, `AGENTS.md` wrap at the prose width | §13 | should |
 | `RSK014` | Branch protection configured on `main` | §10 | platform |
+| `RSK015` | Ruff `line-length` matches the recommended value (`88`) | §13 | should |
+| `RSK016` | Recommended rule family `PT` is selected | §13 | should |
+| `RSK017` | `CHANGELOG.md` exists | `repo-layout.md` | should |
+| `RSK018` | `LICENSE` exists | `repo-layout.md` | should |
 
 ## What This Cannot Check
 
 A checker that implies more coverage than it has is worse than one that
 admits its limits.
 
-- **"No placeholders or generic filler text"** is decidable for
-  `__REPO_NAME__`-shaped tokens and essentially nothing else. Prose quality
-  is not mechanically assessable.
+- **"No placeholders or generic filler text"** is decidable only for
+  `repo_init.py`'s exact known placeholder tokens (`__REPO_NAME__`,
+  `__PACKAGE_NAME__`, `__DESCRIPTION__`, `__REPO_TYPE__`,
+  `__PYTHON_VERSION__`, `__AUTHOR__`), not for any dunder-shaped token — a
+  pilot run found a repository's own `__PDC_GENERATED_NAME__` sentinel
+  constant flagged as a false positive before this was narrowed. Prose
+  quality generally is not mechanically assessable.
 - **"Tests are part of the change, not follow-up work"** is a review
   judgement about a diff, not a property of a tree.
-- **§11 Exceptions** — whether an exemption was justified, approved, and
-  time-limited — is social, not structural.
+- **§11 Exceptions.** `[tool.repo-check.ignore]` (see "Suppressing A Rule"
+  above) records *that* a reason was given and machine-enforces it is
+  non-empty. Whether that reason is actually sound, was reviewed, and stays
+  time-limited rather than permanent is still a judgement for the pull
+  request, not something the checker can decide.
 - **Gate effectiveness.** The checker confirms `uv run pytest` appears in the
   workflow. It cannot tell you the test suite is meaningful.
 
@@ -144,10 +186,12 @@ admits its limits.
 `repo-standard-kit` is the standard's own home, not a repository that adopts
 it, so two rules do not apply to it the way they apply everywhere else:
 `RSK005` would ask this repository to link itself, and `RSK011` flags the
-`__PLACEHOLDER__`-shaped tokens this repository defines and tests for
-templating, not leftovers from an unfinished bootstrap.
-`tests/test_compliance.py` documents this exception explicitly rather than
-special-casing it inside the checker.
+known placeholder tokens this repository defines, tests, and ships (in
+`repo_init.py`, the starter kits, and `compliance/rules.json` itself) for
+templating, not leftovers from an unfinished bootstrap. Both are recorded in
+this repository's own `[tool.repo-check.ignore]` — the same mechanism any
+adopter uses, run against itself rather than special-cased in the checker or
+the test suite.
 
 ## Status
 

@@ -69,7 +69,7 @@ Pick the block that matches this repo's profile and delete the other.
 
 **Single-package (`python-single`)**
 
-```
+```text
 .
 ├── src/<package_name>/   # production code
 ├── tests/                # unit and integration tests
@@ -83,7 +83,7 @@ Pick the block that matches this repo's profile and delete the other.
 
 **Workspace (`python-workspace`)**
 
-```
+```text
 .
 ├── packages/<package-slug>/
 │   ├── src/<package_name>/

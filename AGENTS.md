@@ -53,11 +53,8 @@ Run from repository root:
 
 1. `uv sync --locked`
 2. `uv run pre-commit run --all-files`
-3. `uv run ruff format --check .`
-4. `uv run ruff check .`
-5. `uv run ty check`
-6. `uv run pytest`
-7. `uv build`
+3. `uv run pytest`
+4. `uv build`
 
 This is exactly the chain in `docs/quality-gates.md`; this repository adds no
 gates of its own. Bootstrap behavior needs no separate manual step — `uv run

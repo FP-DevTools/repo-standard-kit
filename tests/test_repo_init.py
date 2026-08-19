@@ -2,16 +2,15 @@ from __future__ import annotations
 
 import re
 import subprocess
+import tomllib
 import zipfile
 from pathlib import Path
 
 import pytest
 from conftest import (
-    PROSE_WIDTH,
     REPO_ROOT,
-    documented_ruff_baseline,
+    documented_ruff_policy,
     mandatory_ci_commands,
-    prose_offenders,
     required_agents_sections,
     ruff_config_of,
 )
@@ -51,7 +50,7 @@ MANDATORY_PRE_COMMIT_ENTRIES = [
     "uv run detect-private-key",
     "uv run detect-secrets-hook",
     "uv run check-added-large-files",
-    "uv run ruff check --force-exclude",
+    "uv run ruff check --fix --force-exclude",
     "uv run ruff format --force-exclude",
 ]
 
@@ -149,6 +148,9 @@ def test_bootstrap_repo_renders_python_workspace_starter(tmp_path: Path) -> None
     pre_commit_text = (output_dir / ".pre-commit-config.yaml").read_text(
         encoding="utf-8"
     )
+    pyproject_data = tomllib.loads(
+        (output_dir / "pyproject.toml").read_text(encoding="utf-8")
+    )
 
     assert "Python workspace" in readme_text
     assert (output_dir / ".github" / "workflows" / "quality.yml").exists()
@@ -160,6 +162,24 @@ def test_bootstrap_repo_renders_python_workspace_starter(tmp_path: Path) -> None
     assert not (output_dir / ".ruff_cache").exists()
     assert (output_dir / "packages" / ".gitkeep").exists()
     assert not (output_dir / "src").exists()
+
+    # M1: pytest must not exit 5 (empty collection) before any package exists.
+    assert (output_dir / "tests" / "test_workspace_shell.py").exists()
+    assert pyproject_data["tool"]["pytest"]["ini_options"]["testpaths"] == [
+        "tests",
+        "packages",
+    ]
+
+    # M2: packages/* must be registered as uv workspace members so uv sync
+    # actually installs them, or a package added by repo-add-package is
+    # never importable.
+    assert pyproject_data["tool"]["uv"]["workspace"]["members"] == ["packages/*"]
+
+    # M3: the workspace root carries no distributable artifact of its own,
+    # so `uv build` there cannot silently fall back to the setuptools
+    # default backend; the CI build step scopes to actual packages instead.
+    assert pyproject_data["tool"]["uv"]["package"] is False
+    assert "uv build --all-packages" in workflow_text
 
 
 def test_pre_commit_configs_use_mandatory_local_uv_managed_hooks() -> None:
@@ -752,33 +772,25 @@ def test_starter_kit_repo_check_hook_pin_matches_the_package_version(
     ids=["repo-root", "starter-single", "starter-workspace"],
 )
 def test_ruff_config_matches_the_documented_baseline(pyproject_path: Path) -> None:
-    """Passing the format gate is not enough; the config behind it must be the same."""
-    documented = documented_ruff_baseline()
+    """Passing the format gate is not enough; the config behind it must be the same.
+
+    repo-standard-kit's own repos hold themselves to the full recommended
+    baseline (§13) — line-length 88 and the PT family — not just the
+    mandatory floor every adopter must clear.
+    """
+    policy = documented_ruff_policy()
     actual = ruff_config_of(REPO_ROOT / pyproject_path)
 
-    assert actual.line_length == documented.line_length, (
-        f"{pyproject_path} sets line-length {actual.line_length}, "
-        f"baseline requires {documented.line_length}"
-    )
-    missing = set(documented.select) - set(actual.select)
+    missing = set(policy.mandatory_select) - set(actual.select)
     assert not missing, (
         f"{pyproject_path} drops required rule families: {sorted(missing)}"
     )
-
-
-def test_markdown_wraps_at_the_documented_prose_width() -> None:
-    """The prose width in the formatting baseline applies to the docs we ship."""
-    tracked = subprocess.run(
-        ["git", "ls-files", "*.md"],
-        cwd=REPO_ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.split()
-
-    over_long = [
-        f"{name}:{line} ({width} cols)"
-        for name in tracked
-        for line, width in prose_offenders(REPO_ROOT / name)
-    ]
-    assert not over_long, f"prose exceeds {PROSE_WIDTH} columns: {over_long}"
+    assert actual.line_length == policy.recommended_line_length, (
+        f"{pyproject_path} sets line-length {actual.line_length}, "
+        f"recommended baseline is {policy.recommended_line_length}"
+    )
+    missing_recommended = set(policy.recommended_select) - set(actual.select)
+    assert not missing_recommended, (
+        f"{pyproject_path} drops recommended rule families: "
+        f"{sorted(missing_recommended)}"
+    )
