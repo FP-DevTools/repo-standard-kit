@@ -37,6 +37,17 @@ the changes listed under **Adopters must**.
   `RSK016` (the recommended `PT` rule family is selected). Neither needs a
   §11 exemption.
 
+### Fixed
+
+- `RSK011` no longer matches any `__DUNDER__`-shaped token as an
+  "unresolved placeholder" — only `repo_init.py`'s actual six-token
+  vocabulary (`__REPO_NAME__`, `__PACKAGE_NAME__`, `__DESCRIPTION__`,
+  `__REPO_TYPE__`, `__PYTHON_VERSION__`, `__AUTHOR__`). A pilot run against
+  a real repository (`wombat_configs`) flagged its own
+  `__PDC_GENERATED_NAME__` sentinel constant as a false positive; the
+  pattern was never meant to catch anything outside this standard's own
+  bootstrap templating.
+
 ### Changed
 
 - **§5 CI Pull Request Gates collapsed from seven gates to four.**

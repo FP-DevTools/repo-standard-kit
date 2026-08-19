@@ -1,4 +1,12 @@
 {
+  "known_placeholder_tokens": [
+    "__REPO_NAME__",
+    "__PACKAGE_NAME__",
+    "__DESCRIPTION__",
+    "__REPO_TYPE__",
+    "__PYTHON_VERSION__",
+    "__AUTHOR__"
+  ],
   "mandatory_ci_commands": [
     "uv sync --locked",
     "uv run pre-commit run --all-files",

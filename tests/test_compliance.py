@@ -271,6 +271,22 @@ def test_unresolved_placeholder_reports_rsk011(tmp_path: Path) -> None:
     assert finding.path == "NOTES.md"
 
 
+def test_unrelated_dunder_constant_does_not_report_rsk011(tmp_path: Path) -> None:
+    """RSK011 matches repo_init.py's known placeholder vocabulary, not any
+    dunder-shaped token.
+
+    A pilot run against a real repository (wombat_configs) flagged its own
+    `__PDC_GENERATED_NAME__` sentinel constant as an "unresolved placeholder"
+    — a false positive, since that token has nothing to do with this
+    standard's bootstrap templating.
+    """
+    root = _minimal_repo(tmp_path)
+    (root / "NOTES.md").write_text(
+        'SENTINEL = "__PDC_GENERATED_NAME__"\n', encoding="utf-8"
+    )
+    assert "RSK011" not in _rule_ids(check_repo(root, RULES))
+
+
 def test_missing_adr_dir_reports_rsk012_as_should(tmp_path: Path) -> None:
     root = _minimal_repo(tmp_path)
     (root / "docs" / "adr").rmdir()

@@ -15,10 +15,18 @@ import tomllib
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from repo_standard.repo_init import PLACEHOLDERS
+
 CI_GATES_SECTION = "## 5. CI Pull Request Gates"
 FORMATTING_SECTION = "## 13. Formatting Baseline"
 PROSE_WIDTH = 88
 REQUIRED_SECTIONS_HEADING = "## Required `AGENTS.md` Sections"
+
+# The exact bootstrap placeholder vocabulary `repo_init.py` substitutes, not
+# every dunder-shaped token — a repository's own code may legitimately use
+# `__SOME_CONSTANT__`-style names for reasons that have nothing to do with
+# this standard's templating. See docs/compliance.md's RSK011 note.
+KNOWN_PLACEHOLDER_TOKENS: tuple[str, ...] = tuple(PLACEHOLDERS)
 
 # docs/quality-gates.md §4 lists hook *categories* ("YAML validation", ...),
 # not literal commands, so this baseline is a maintained constant rather than
@@ -161,6 +169,7 @@ class Rules(NamedTuple):
     ruff_recommended_select: tuple[str, ...]
     prose_width: int
     mandatory_pre_commit_entries: tuple[str, ...]
+    known_placeholder_tokens: tuple[str, ...]
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -172,6 +181,7 @@ class Rules(NamedTuple):
             "ruff_recommended_select": list(self.ruff_recommended_select),
             "prose_width": self.prose_width,
             "mandatory_pre_commit_entries": list(self.mandatory_pre_commit_entries),
+            "known_placeholder_tokens": list(self.known_placeholder_tokens),
         }
 
     @classmethod
@@ -185,6 +195,7 @@ class Rules(NamedTuple):
             ruff_recommended_select=tuple(data["ruff_recommended_select"]),
             prose_width=data["prose_width"],
             mandatory_pre_commit_entries=tuple(data["mandatory_pre_commit_entries"]),
+            known_placeholder_tokens=tuple(data["known_placeholder_tokens"]),
         )
 
 
@@ -209,4 +220,5 @@ def build_rules(repo_root: Path) -> Rules:
         ruff_recommended_select=ruff_policy.recommended_select,
         prose_width=PROSE_WIDTH,
         mandatory_pre_commit_entries=MANDATORY_PRE_COMMIT_ENTRIES,
+        known_placeholder_tokens=KNOWN_PLACEHOLDER_TOKENS,
     )

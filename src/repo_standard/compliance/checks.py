@@ -37,7 +37,6 @@ _IGNORED_DIR_PARTS = {
     "build",
 }
 
-_PLACEHOLDER_PATTERN = re.compile(r"__[A-Z][A-Z0-9_]*__")
 _KIT_REFERENCE_PATTERN = re.compile(r"repo-standard-kit")
 _GITHUB_REMOTE_PATTERN = re.compile(
     r"github\.com[:/](?P<owner_repo>[^/]+/[^/]+?)(?:\.git)?/?$"
@@ -423,13 +422,20 @@ def _check_ruff_recommended_select(root: Path, rules: Rules) -> list[Finding]:
 
 
 def _check_no_placeholders(root: Path, rules: Rules) -> list[Finding]:
-    """RSK011: no unresolved `__PLACEHOLDER__` tokens remain (repo-standard.md)."""
+    """RSK011: no unresolved bootstrap placeholder tokens remain (repo-standard.md).
+
+    Matches only `repo_init.py`'s known placeholder vocabulary, not every
+    dunder-shaped token — a repository's own code may legitimately use
+    `__SOME_CONSTANT__`-style names unrelated to this standard's templating.
+    """
     findings = []
     for path in _iter_scannable_files(root):
         text = _read(path)
         if text is None:
             continue
-        matches = sorted(set(_PLACEHOLDER_PATTERN.findall(text)))
+        matches = sorted(
+            token for token in rules.known_placeholder_tokens if token in text
+        )
         if matches:
             findings.append(
                 Finding(

@@ -144,9 +144,13 @@ behind `--check-enforcement`.
 A checker that implies more coverage than it has is worse than one that
 admits its limits.
 
-- **"No placeholders or generic filler text"** is decidable for
-  `__REPO_NAME__`-shaped tokens and essentially nothing else. Prose quality
-  is not mechanically assessable.
+- **"No placeholders or generic filler text"** is decidable only for
+  `repo_init.py`'s exact known placeholder tokens (`__REPO_NAME__`,
+  `__PACKAGE_NAME__`, `__DESCRIPTION__`, `__REPO_TYPE__`,
+  `__PYTHON_VERSION__`, `__AUTHOR__`), not for any dunder-shaped token — a
+  pilot run found a repository's own `__PDC_GENERATED_NAME__` sentinel
+  constant flagged as a false positive before this was narrowed. Prose
+  quality generally is not mechanically assessable.
 - **"Tests are part of the change, not follow-up work"** is a review
   judgement about a diff, not a property of a tree.
 - **§11 Exceptions** — whether an exemption was justified, approved, and
@@ -159,7 +163,8 @@ admits its limits.
 `repo-standard-kit` is the standard's own home, not a repository that adopts
 it, so two rules do not apply to it the way they apply everywhere else:
 `RSK005` would ask this repository to link itself, and `RSK011` flags the
-`__PLACEHOLDER__`-shaped tokens this repository defines and tests for
+known placeholder tokens this repository defines, tests, and ships (in
+`repo_init.py`, the starter kits, and `compliance/rules.json` itself) for
 templating, not leftovers from an unfinished bootstrap.
 `tests/test_compliance.py` documents this exception explicitly rather than
 special-casing it inside the checker.
