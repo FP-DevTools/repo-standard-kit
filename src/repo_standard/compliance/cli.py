@@ -10,7 +10,7 @@ from pathlib import Path
 
 from repo_standard.compliance.checks import Finding, check_repo, load_policy
 
-_GREEN = "\033[32m"
+_POSITIVE = "\033[38;2;35;209;111m"
 _RESET = "\033[0m"
 
 
@@ -60,7 +60,7 @@ def _supports_color() -> bool:
 def _format_text(findings: list[Finding], *, color: bool) -> str:
     if not findings:
         message = "All checks passed!"
-        return f"{_GREEN}{message}{_RESET}\n" if color else f"{message}\n"
+        return f"{_POSITIVE}{message}{_RESET}\n" if color else f"{message}\n"
     lines = []
     for finding in findings:
         location = finding.path + (

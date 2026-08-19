@@ -986,6 +986,12 @@ def test_json_output_retains_legacy_fields_and_adds_actionable_fields(
     } <= item.keys()
 
 
+def test_success_output_uses_positive_brand_color() -> None:
+    assert cli._format_text([], color=True) == (
+        "\033[38;2;35;209;111mAll checks passed!\033[0m\n"
+    )
+
+
 def test_strict_mode_only_promotes_recommended_findings(tmp_path: Path) -> None:
     root = _minimal_repo(tmp_path)
     (root / "docs" / "adr").rmdir()
