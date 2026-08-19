@@ -92,15 +92,23 @@
     {
       "check": {
         "config": {
-          "path": "AGENTS.md",
-          "values": [
-            "uv sync --locked",
-            "uv run pre-commit run --all-files",
-            "uv run pytest",
-            "uv build"
-          ]
+          "commands_by_profile": {
+            "python-single": [
+              "uv sync --locked",
+              "uv run pre-commit run --all-files",
+              "uv run pytest",
+              "uv build"
+            ],
+            "python-workspace": [
+              "uv sync --locked",
+              "uv run pre-commit run --all-files",
+              "uv run pytest",
+              "uv build --all-packages"
+            ]
+          },
+          "path": "AGENTS.md"
         },
-        "kind": "text_contains_all"
+        "kind": "agents_quality_commands"
       },
       "enforcement": "structural",
       "id": "RSK003",

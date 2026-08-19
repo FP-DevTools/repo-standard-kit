@@ -56,7 +56,7 @@ Remediation: Add every required level-two heading to AGENTS.md.
 - Profiles: `python-single`, `python-workspace`
 - Source: [`docs/repo-standard.md` — Required `AGENTS.md` Sections](../docs/repo-standard.md)
 - Enforcement: `structural`
-- Check kind: `text_contains_all`
+- Check kind: `agents_quality_commands`
 
 Rationale: Contributors need exact local commands that mirror CI.
 

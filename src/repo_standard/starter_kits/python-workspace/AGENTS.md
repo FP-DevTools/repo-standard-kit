@@ -51,7 +51,10 @@ Run from repo root:
 1. `uv sync --locked`
 2. `uv run pre-commit run --all-files`
 3. `uv run pytest`
-4. `uv build`
+4. `uv build --all-packages`
+
+The build step is a documented no-op before the workspace contains its first
+package, matching the workspace quality workflow.
 
 The quality job's effective permissions must be exactly `contents: read`, and
 every remote action or reusable workflow must be pinned to a full 40-character

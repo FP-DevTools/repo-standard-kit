@@ -126,6 +126,7 @@ Every target repository must include:
 Committed copies must not contain placeholders or generic filler text.
 
 RSK002 enforces the listed headings at the **required** level. RSK003 enforces
-at the **required** level that `AGENTS.md` states the exact quality-gate chain
-defined by policy. These checks remain heading and literal-command checks;
-they do not attempt subjective scoring of the section prose.
+at the **required** level that the `## Quality Gates` section in `AGENTS.md`
+states the exact ordered command chain defined by policy for the resolved
+profile. Commands elsewhere in the document do not count. These checks do not
+attempt subjective scoring of the section prose.

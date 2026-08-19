@@ -252,6 +252,41 @@ def _text_contains_all(context: CheckContext, config: dict[str, Any]) -> list[Is
     ]
 
 
+def _agents_quality_commands(
+    context: CheckContext, config: dict[str, Any]
+) -> list[Issue]:
+    text = _read(context.root / config["path"])
+    if text is None:
+        return []
+    section_match = re.search(
+        r"^##\s+Quality Gates\s*$\n?(?P<body>.*?)(?=^##\s+|\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    actual: list[str] = []
+    if section_match is not None:
+        actual = [
+            re.sub(r"\s+", " ", command).strip()
+            for command in re.findall(
+                r"^\s*(?:\d+[.)]|[-*+])\s+`([^`\r\n]+)`\s*$",
+                section_match.group("body"),
+                re.MULTILINE,
+            )
+        ]
+    expected = config["commands_by_profile"][context.profile]
+    if actual == expected:
+        return []
+    return [
+        Issue(
+            config["path"],
+            "Quality Gates must list the exact ordered commands for profile "
+            f"{context.profile!r}.",
+            actual,
+            expected,
+        )
+    ]
+
+
 def _text_pattern_each(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
     pattern = re.compile(config["pattern"])
     issues = []
@@ -1341,6 +1376,7 @@ CHECK_HANDLERS: dict[str, CheckHandler] = {
     "path_exists": _path_exists,
     "markdown_headings": _markdown_headings,
     "text_contains_all": _text_contains_all,
+    "agents_quality_commands": _agents_quality_commands,
     "text_pattern_each": _text_pattern_each,
     "github_workflow_commands": _github_workflow_commands,
     "pre_commit_hooks": _pre_commit_hooks,

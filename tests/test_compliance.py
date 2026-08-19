@@ -65,13 +65,18 @@ def _minimal_repo(tmp_path: Path, profile: str = "python-single") -> Path:
     root = tmp_path / "compliant-repo"
     root.mkdir()
     headings = POLICY.rule("RSK002").check.config["headings"]
-    agents_sections = "\n\n".join(f"## {heading}\n\nDetail." for heading in headings)
     gate_chain = "\n".join(
         f"{index}. `{command}`"
-        for index, command in enumerate(POLICY.rule("RSK003").check.config["values"], 1)
+        for index, command in enumerate(
+            POLICY.rule("RSK003").check.config["commands_by_profile"][profile], 1
+        )
+    )
+    agents_sections = "\n\n".join(
+        f"## {heading}\n\n{gate_chain if heading == 'Quality Gates' else 'Detail.'}"
+        for heading in headings
     )
     (root / "AGENTS.md").write_text(
-        f"# AGENTS.md\n\n{agents_sections}\n\n{gate_chain}\n\nSee repo-standard-kit.\n",
+        f"# AGENTS.md\n\n{agents_sections}\n\nSee repo-standard-kit.\n",
         encoding="utf-8",
     )
     (root / "README.md").write_text(
@@ -233,6 +238,33 @@ def test_every_typed_check_kind_has_exactly_one_runtime_handler() -> None:
     assert set(CHECK_SCHEMAS) == set(CHECK_HANDLERS)
 
 
+def test_rsk003_policy_defines_profile_specific_quality_commands() -> None:
+    rule = POLICY.rule("RSK003")
+    assert rule.check.kind == "agents_quality_commands"
+    assert CHECK_SCHEMAS["agents_quality_commands"] == (
+        {"path", "commands_by_profile"},
+        set(),
+    )
+    assert rule.check.config["commands_by_profile"] == {
+        "python-single": [
+            "uv sync --locked",
+            "uv run pre-commit run --all-files",
+            "uv run pytest",
+            "uv build",
+        ],
+        "python-workspace": [
+            "uv sync --locked",
+            "uv run pre-commit run --all-files",
+            "uv run pytest",
+            "uv build --all-packages",
+        ],
+    }
+    assert (
+        rule.check.config["commands_by_profile"]
+        == POLICY.rule("RSK006").check.config["commands_by_profile"]
+    )
+
+
 def test_rsk021_policy_is_workflow_scoped() -> None:
     assert POLICY.rule("RSK021").check.config == {
         "path": ".github/workflows/quality.yml"
@@ -325,8 +357,65 @@ def test_standard_package_version_and_source_distribution_inputs_agree() -> None
 # --- base rules and actionable findings ----------------------------------
 
 
-def test_minimal_repo_has_no_findings(tmp_path: Path) -> None:
-    assert check_repo(_minimal_repo(tmp_path), POLICY) == []
+@pytest.mark.parametrize("profile", STARTER_KIT_PROFILES)
+def test_minimal_repo_has_no_findings(profile: str, tmp_path: Path) -> None:
+    assert check_repo(_minimal_repo(tmp_path, profile), POLICY) == []
+
+
+@pytest.mark.parametrize(
+    ("profile", "incorrect", "expected"),
+    [
+        ("python-workspace", "uv build --all-packages", "uv build"),
+        ("python-single", "uv build", "uv build --all-packages"),
+    ],
+)
+def test_rsk003_rejects_the_other_profiles_build_command(
+    tmp_path: Path, profile: str, incorrect: str, expected: str
+) -> None:
+    root = _minimal_repo(tmp_path, profile)
+    path = root / "AGENTS.md"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            f"4. `{incorrect}`", f"4. `{expected}`"
+        ),
+        encoding="utf-8",
+    )
+    assert "RSK003" in _rule_ids(check_repo(root, POLICY))
+
+
+def test_rsk003_rejects_commands_in_the_wrong_order(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    path = root / "AGENTS.md"
+    text = path.read_text(encoding="utf-8")
+    text = text.replace(
+        "1. `uv sync --locked`\n2. `uv run pre-commit run --all-files`",
+        "1. `uv run pre-commit run --all-files`\n2. `uv sync --locked`",
+    )
+    path.write_text(text, encoding="utf-8")
+    assert "RSK003" in _rule_ids(check_repo(root, POLICY))
+
+
+def test_rsk003_ignores_required_commands_outside_quality_gates(
+    tmp_path: Path,
+) -> None:
+    root = _minimal_repo(tmp_path)
+    path = root / "AGENTS.md"
+    text = path.read_text(encoding="utf-8")
+    text = text.replace("4. `uv build`\n\n## Coding Standards", "## Coding Standards")
+    text += "\nThe build command is `uv build`.\n"
+    path.write_text(text, encoding="utf-8")
+    assert "RSK003" in _rule_ids(check_repo(root, POLICY))
+
+
+def test_rsk003_ignores_unrelated_quality_gate_prose(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    path = root / "AGENTS.md"
+    text = path.read_text(encoding="utf-8").replace(
+        "## Quality Gates\n\n",
+        "## Quality Gates\n\nRun these commands from the repository root.\n\n",
+    )
+    path.write_text(text, encoding="utf-8")
+    assert "RSK003" not in _rule_ids(check_repo(root, POLICY))
 
 
 @pytest.mark.parametrize(

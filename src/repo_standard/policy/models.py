@@ -25,6 +25,7 @@ CHECK_SCHEMAS: dict[str, tuple[set[str], set[str]]] = {
     "path_exists": ({"path", "path_type"}, set()),
     "markdown_headings": ({"path", "headings"}, set()),
     "text_contains_all": ({"path", "values"}, set()),
+    "agents_quality_commands": ({"path", "commands_by_profile"}, set()),
     "text_pattern_each": ({"paths", "pattern"}, set()),
     "github_workflow_commands": (
         {"path", "job", "trigger", "commands_by_profile"},

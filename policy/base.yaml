@@ -58,14 +58,20 @@ rules:
       section: Required `AGENTS.md` Sections
     enforcement: structural
     check:
-      kind: text_contains_all
+      kind: agents_quality_commands
       config:
         path: AGENTS.md
-        values:
-          - uv sync --locked
-          - uv run pre-commit run --all-files
-          - uv run pytest
-          - uv build
+        commands_by_profile:
+          python-single:
+            - uv sync --locked
+            - uv run pre-commit run --all-files
+            - uv run pytest
+            - uv build
+          python-workspace:
+            - uv sync --locked
+            - uv run pre-commit run --all-files
+            - uv run pytest
+            - uv build --all-packages
     rationale: Contributors need exact local commands that mirror CI.
     remediation: List the complete ordered gate chain in AGENTS.md.
 
