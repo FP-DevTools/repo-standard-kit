@@ -1,0 +1,31 @@
+{
+  // md013 (line-length) is disabled: docs/quality-gates.md §13 already owns
+  // prose width, with its own exemptions (fenced code, tables, link
+  // references, unbreakable tokens like URLs) that this rule doesn't know
+  // about. Checking both would just disagree with itself.
+  "plugins": {
+    "md013": {
+      "enabled": false
+    },
+    // Keep a Changelog-style files repeat headings ("### Added", "###
+    // Changed", ...) once per version section by design; only flag
+    // duplicates that are actual siblings under the same parent heading.
+    "md024": {
+      "siblings_only": true
+    },
+    // repo_init.py's __DUNDER__ placeholder tokens (e.g. __DESCRIPTION__)
+    // are valid Markdown strong-emphasis syntax, so an unrendered starter
+    // kit file reads as "a paragraph that's entirely bold" — this rule's
+    // exact false-positive target, colliding with a deliberate convention
+    // rather than catching a real authoring mistake.
+    "md036": {
+      "enabled": false
+    },
+    // templates/ uses <angle-bracket> notation for human-fill-in-the-blank
+    // placeholders (a well-established documentation convention), which
+    // this rule reads as unintended inline HTML.
+    "md033": {
+      "enabled": false
+    }
+  }
+}

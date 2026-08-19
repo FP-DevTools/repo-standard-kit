@@ -18,13 +18,13 @@ Do not clone the standards repository as the base of a product repository.
 
 1. Run the initializer directly with `uvx`:
 
-```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-init --profile python-single --repo-name widget-service
-```
+   ```bash
+   uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-init --profile python-single --repo-name widget-service
+   ```
 
-`uvx` is the short form of `uv tool run`. It installs the bootstrap package
-from this standards repository into an isolated tool environment, then runs
-the packaged `repo-init` command.
+   `uvx` is the short form of `uv tool run`. It installs the bootstrap package
+   from this standards repository into an isolated tool environment, then runs
+   the packaged `repo-init` command.
 
 2. Either create and enter an empty target directory, or run `repo-init` through
    `uvx` from the parent directory with `--repo-name` so it creates the

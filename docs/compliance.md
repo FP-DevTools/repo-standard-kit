@@ -128,7 +128,7 @@ behind `--check-enforcement`.
 | `RSK004` | `README.md` exists | Repository Contract | shall |
 | `RSK005` | Both reference repo-standard-kit | `repo-standard.md` | shall |
 | `RSK006` | `quality.yml` runs the full gate chain | §5 | shall |
-| `RSK007` | Mandatory pre-commit hooks present (incl. `ty check`) | §4 | shall |
+| `RSK007` | Mandatory pre-commit hooks present (incl. `ty check`, `pymarkdown`) | §4 | shall |
 | `RSK008` | `pyproject.toml` uses `uv_build` where a build-system is declared | Repository Contract | shall |
 | `RSK009` | `uv.lock` is present | Repository Contract | shall |
 | `RSK010` | Ruff `line-length` declared and mandatory rule families selected | §13 | shall |

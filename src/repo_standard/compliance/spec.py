@@ -44,6 +44,7 @@ MANDATORY_PRE_COMMIT_ENTRIES: tuple[str, ...] = (
     "uv run ruff check --force-exclude",
     "uv run ruff format --force-exclude",
     "uv run ty check",
+    "uv run pymarkdown --config .pymarkdown.json scan",
 )
 
 

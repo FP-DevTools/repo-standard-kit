@@ -25,7 +25,8 @@
     "uv run check-added-large-files",
     "uv run ruff check --force-exclude",
     "uv run ruff format --force-exclude",
-    "uv run ty check"
+    "uv run ty check",
+    "uv run pymarkdown --config .pymarkdown.json scan"
   ],
   "prose_width": 88,
   "required_agents_sections": [

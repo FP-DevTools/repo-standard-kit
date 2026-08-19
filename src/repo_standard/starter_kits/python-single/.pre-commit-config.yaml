@@ -63,6 +63,11 @@ repos:
         language: system
         pass_filenames: false
         types: [python]
+      - id: markdown-lint
+        name: markdown lint
+        entry: uv run pymarkdown --config .pymarkdown.json scan
+        language: system
+        types: [markdown]
   - repo: https://github.com/FP-DevTools/repo-standard-kit
     rev: v1.0.0
     hooks:

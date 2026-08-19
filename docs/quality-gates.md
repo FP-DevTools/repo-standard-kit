@@ -59,6 +59,7 @@ Local checks should remain lightweight and fast.
 - Code formatting
 - Lint auto-fixes where safe
 - Static type checking
+- Markdown structural linting
 - YAML validation
 - TOML validation
 - JSON validation
@@ -69,7 +70,11 @@ Local checks should remain lightweight and fast.
 - Prevention of oversized binary files
 
 This standard treats `ty` as the approved equivalent to `mypy` for Python
-starter repositories.
+starter repositories, and `pymarkdown` as the approved Markdown linter.
+Markdown structural linting shall not re-check prose width — section 13
+already owns that, with exemptions the linter's own line-length rule does
+not know about, so a repository shall disable it there (`md013` for
+`pymarkdown`) rather than run two disagreeing checks.
 
 ### Recommended tools
 
@@ -77,6 +82,7 @@ starter repositories.
 uv run ruff format
 uv run ruff check --fix
 uv run ty check
+uv run pymarkdown --config .pymarkdown.json scan
 ```
 
 ### Performance target
