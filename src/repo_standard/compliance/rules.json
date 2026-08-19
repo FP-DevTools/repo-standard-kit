@@ -2,9 +2,6 @@
   "mandatory_ci_commands": [
     "uv sync --locked",
     "uv run pre-commit run --all-files",
-    "uv run ruff format --check .",
-    "uv run ruff check .",
-    "uv run ty check",
     "uv run pytest",
     "uv build"
   ],
@@ -19,7 +16,8 @@
     "uv run detect-secrets-hook",
     "uv run check-added-large-files",
     "uv run ruff check --force-exclude",
-    "uv run ruff format --force-exclude"
+    "uv run ruff format --force-exclude",
+    "uv run ty check"
   ],
   "prose_width": 88,
   "required_agents_sections": [
@@ -34,16 +32,16 @@
     "Repository Layout",
     "Change Control Notes"
   ],
-  "ruff_baseline": {
-    "line_length": 88,
-    "select": [
-      "E",
-      "F",
-      "I",
-      "B",
-      "UP",
-      "PT"
-    ]
-  },
-  "standard_version": "0.4.0"
+  "ruff_mandatory_select": [
+    "E",
+    "F",
+    "I",
+    "B",
+    "UP"
+  ],
+  "ruff_recommended_line_length": 88,
+  "ruff_recommended_select": [
+    "PT"
+  ],
+  "standard_version": "1.0.0"
 }

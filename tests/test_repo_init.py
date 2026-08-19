@@ -9,7 +9,7 @@ import pytest
 from conftest import (
     PROSE_WIDTH,
     REPO_ROOT,
-    documented_ruff_baseline,
+    documented_ruff_policy,
     mandatory_ci_commands,
     prose_offenders,
     required_agents_sections,
@@ -752,17 +752,27 @@ def test_starter_kit_repo_check_hook_pin_matches_the_package_version(
     ids=["repo-root", "starter-single", "starter-workspace"],
 )
 def test_ruff_config_matches_the_documented_baseline(pyproject_path: Path) -> None:
-    """Passing the format gate is not enough; the config behind it must be the same."""
-    documented = documented_ruff_baseline()
+    """Passing the format gate is not enough; the config behind it must be the same.
+
+    repo-standard-kit's own repos hold themselves to the full recommended
+    baseline (§13) — line-length 88 and the PT family — not just the
+    mandatory floor every adopter must clear.
+    """
+    policy = documented_ruff_policy()
     actual = ruff_config_of(REPO_ROOT / pyproject_path)
 
-    assert actual.line_length == documented.line_length, (
-        f"{pyproject_path} sets line-length {actual.line_length}, "
-        f"baseline requires {documented.line_length}"
-    )
-    missing = set(documented.select) - set(actual.select)
+    missing = set(policy.mandatory_select) - set(actual.select)
     assert not missing, (
         f"{pyproject_path} drops required rule families: {sorted(missing)}"
+    )
+    assert actual.line_length == policy.recommended_line_length, (
+        f"{pyproject_path} sets line-length {actual.line_length}, "
+        f"recommended baseline is {policy.recommended_line_length}"
+    )
+    missing_recommended = set(policy.recommended_select) - set(actual.select)
+    assert not missing_recommended, (
+        f"{pyproject_path} drops recommended rule families: "
+        f"{sorted(missing_recommended)}"
     )
 
 

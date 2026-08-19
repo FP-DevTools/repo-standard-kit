@@ -30,17 +30,30 @@ Options:
 Exit codes: `0` aligned, `1` a `shall` rule was violated (or a `should` rule
 under `--strict`), `2` usage error.
 
+`should` findings are non-blocking by design, everywhere `repo-check` runs —
+the CLI's default exit code, the pre-commit hook (`.pre-commit-hooks.yaml`
+passes no `--strict`), and the reusable CI workflow (`strict` defaults to
+`false`) all agree on this. They are visible in every output format, just
+never the reason a run fails, unless something explicitly opts into
+`--strict`.
+
 ## Consumption Surfaces
 
 Three ways to run `repo-check` against a repository, from lowest to highest
-commitment.
+commitment. **Pick one, not several.** In particular, the pre-commit hook and
+the reusable CI workflow both run the full check — CI already re-runs the
+pre-commit hook (see §5, "Local gate verification"), so wiring in both means
+`repo-check` runs twice on every pull request for no additional coverage.
+Prefer the pre-commit hook; reach for the reusable CI workflow instead of it
+only for a repository that does not want `repo-check` as a pre-commit
+dependency at all.
 
 ### Ad hoc
 
 No setup: the command shown above, or pinned to a released version:
 
 ```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v0.4.0" repo-check
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v1.0.0" repo-check
 ```
 
 ### Local pre-commit hook
@@ -52,7 +65,7 @@ dependency. Add to the consuming repository's `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/FP-DevTools/repo-standard-kit
-    rev: v0.4.0
+    rev: v1.0.0
     hooks:
       - id: repo-check
 ```
@@ -75,9 +88,9 @@ on:
 
 jobs:
   compliance:
-    uses: FP-DevTools/repo-standard-kit/.github/workflows/compliance.yml@v0.4.0
+    uses: FP-DevTools/repo-standard-kit/.github/workflows/compliance.yml@v1.0.0
     with:
-      ref: v0.4.0
+      ref: v1.0.0
 ```
 
 `ref` is required and must match the pin in `uses:`. GitHub Actions does not
@@ -115,14 +128,16 @@ behind `--check-enforcement`.
 | `RSK004` | `README.md` exists | Repository Contract | shall |
 | `RSK005` | Both reference repo-standard-kit | `repo-standard.md` | shall |
 | `RSK006` | `quality.yml` runs the full gate chain | §5 | shall |
-| `RSK007` | Mandatory pre-commit hooks present | §4 | shall |
+| `RSK007` | Mandatory pre-commit hooks present (incl. `ty check`) | §4 | shall |
 | `RSK008` | `pyproject.toml` uses `uv_build` where a build-system is declared | Repository Contract | shall |
 | `RSK009` | `uv.lock` is present | Repository Contract | shall |
-| `RSK010` | Ruff `line-length` and `select` match the baseline | §13 | shall |
+| `RSK010` | Ruff `line-length` declared and mandatory rule families selected | §13 | shall |
 | `RSK011` | No unresolved `__PLACEHOLDER__` tokens | `repo-standard.md` | shall |
 | `RSK012` | `docs/adr/` exists | `repo-layout.md` | should |
 | `RSK013` | `docs/`, `README.md`, `AGENTS.md` wrap at the prose width | §13 | should |
 | `RSK014` | Branch protection configured on `main` | §10 | platform |
+| `RSK015` | Ruff `line-length` matches the recommended value (`88`) | §13 | should |
+| `RSK016` | Recommended rule family `PT` is selected | §13 | should |
 
 ## What This Cannot Check
 

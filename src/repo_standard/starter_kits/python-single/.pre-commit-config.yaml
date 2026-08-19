@@ -57,7 +57,13 @@ repos:
         language: system
         types_or: [python, pyi]
         require_serial: true
+      - id: ty-check
+        name: ty check
+        entry: uv run ty check
+        language: system
+        pass_filenames: false
+        types: [python]
   - repo: https://github.com/FP-DevTools/repo-standard-kit
-    rev: v0.4.0
+    rev: v1.0.0
     hooks:
       - id: repo-check

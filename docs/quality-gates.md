@@ -58,6 +58,7 @@ Local checks should remain lightweight and fast.
 
 - Code formatting
 - Lint auto-fixes where safe
+- Static type checking
 - YAML validation
 - TOML validation
 - JSON validation
@@ -67,11 +68,15 @@ Local checks should remain lightweight and fast.
 - Detection of accidentally committed secrets
 - Prevention of oversized binary files
 
+This standard treats `ty` as the approved equivalent to `mypy` for Python
+starter repositories.
+
 ### Recommended tools
 
 ```bash
 uv run ruff format
 uv run ruff check --fix
+uv run ty check
 ```
 
 ### Performance target
@@ -100,41 +105,11 @@ Verifies that dependency resolution is reproducible.
 uv run pre-commit run --all-files
 ```
 
-Confirms in CI that the mandatory local gates of section 4 were applied, so a
-bypassed local hook cannot reach `main`.
-
----
-
-### Formatting
-
-```bash
-uv run ruff format --check .
-```
-
-Ensures a consistent code style.
-
----
-
-### Linting
-
-```bash
-uv run ruff check .
-```
-
-Ensures compliance with repository coding standards.
-
----
-
-### Static type checking
-
-```bash
-uv run ty check
-```
-
-This standard treats `ty` as the approved equivalent to `mypy` for Python
-starter repositories.
-
-Ensures consistency between implementation and declared interfaces.
+Confirms in CI that the mandatory local gates of section 4 — formatting,
+linting, static type checking, and file hygiene — were applied, so a bypassed
+or missing local hook cannot reach `main`. This is the sole CI enforcement of
+those gates; they are not separately re-run as standalone CI steps, since
+that would only repeat the same tools against the same files a second time.
 
 ---
 
@@ -345,23 +320,38 @@ looks like. This section fixes the configuration those gates run with.
 
 ### Ruff configuration
 
-Every adopting repository shall configure Ruff with at least:
+Every adopting repository shall declare an explicit `line-length` in
+`[tool.ruff]`, and shall select at least the following rule families:
 
 ```toml
 [tool.ruff]
 line-length = 88
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "PT"]
+select = ["E", "F", "I", "B", "UP"]
 ```
 
-`line-length = 88` matches Ruff's own default and is stated explicitly so that
-it reads as a decision rather than an inherited default. The selected families
-are pycodestyle errors, Pyflakes, import sorting, flake8-bugbear, pyupgrade,
-and flake8-pytest-style.
+The selected families are pycodestyle errors, Pyflakes, import sorting,
+flake8-bugbear, and pyupgrade. A repository shall not drop one of them
+without recording an exemption under section 11.
 
-A repository may select additional rule families. It shall not drop one of the
-families above without recording an exemption under section 11.
+The specific `line-length` value is a per-repository decision, not
+prescribed by this standard — the requirement is that a value is declared
+explicitly, not left as an inherited default. `88` matches Ruff's own
+default; a repository should prefer it, so formatting stays comparable
+across repositories, but a different declared value does not need an
+exemption under section 11.
+
+A repository should additionally select the following rule family; dropping
+it does not need an exemption under section 11 either:
+
+```toml
+[tool.ruff.lint]
+select = ["PT"]
+```
+
+`PT` is flake8-pytest-style. A repository may select further rule families
+beyond both lists above.
 
 ### Prose width
 

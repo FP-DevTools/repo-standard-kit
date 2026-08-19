@@ -35,6 +35,7 @@ MANDATORY_PRE_COMMIT_ENTRIES: tuple[str, ...] = (
     "uv run check-added-large-files",
     "uv run ruff check --force-exclude",
     "uv run ruff format --force-exclude",
+    "uv run ty check",
 )
 
 
@@ -72,22 +73,41 @@ def required_agents_sections(repo_standard_doc: Path) -> list[str]:
 
 
 class RuffBaseline(NamedTuple):
-    """The Ruff settings `docs/quality-gates.md` §13 requires."""
+    """A Ruff configuration as actually declared: `line-length` and `select`."""
 
     line_length: int
     select: tuple[str, ...]
 
 
-def documented_ruff_baseline(quality_gates_doc: Path) -> RuffBaseline:
-    """Parse the required Ruff configuration out of the formatting baseline."""
+class RuffPolicy(NamedTuple):
+    """What §13 requires versus recommends for Ruff configuration.
+
+    `mandatory_select` families must be present, and `line-length` must be
+    declared explicitly to *some* value — but which value, and whether
+    `recommended_select` is also selected, are recommendations (should), not
+    requirements.
+    """
+
+    mandatory_select: tuple[str, ...]
+    recommended_line_length: int
+    recommended_select: tuple[str, ...]
+
+
+def documented_ruff_policy(quality_gates_doc: Path) -> RuffPolicy:
+    """Parse the mandatory and recommended Ruff configuration out of §13."""
     body = _section(quality_gates_doc, FORMATTING_SECTION)
     blocks = re.findall(r"```toml\n(.*?)```", body, re.DOTALL)
-    if not blocks:
-        raise AssertionError(f"No toml block found under {FORMATTING_SECTION!r}")
-    ruff = tomllib.loads(blocks[0])["tool"]["ruff"]
-    return RuffBaseline(
-        line_length=int(ruff["line-length"]),
-        select=tuple(ruff["lint"]["select"]),
+    if len(blocks) < 2:
+        raise AssertionError(
+            f"Expected a mandatory and a recommended toml block under "
+            f"{FORMATTING_SECTION!r}"
+        )
+    mandatory = tomllib.loads(blocks[0])["tool"]["ruff"]
+    recommended = tomllib.loads(blocks[1])["tool"]["ruff"]["lint"]
+    return RuffPolicy(
+        mandatory_select=tuple(mandatory["lint"]["select"]),
+        recommended_line_length=int(mandatory["line-length"]),
+        recommended_select=tuple(recommended["select"]),
     )
 
 
@@ -136,7 +156,9 @@ class Rules(NamedTuple):
     standard_version: str
     mandatory_ci_commands: tuple[str, ...]
     required_agents_sections: tuple[str, ...]
-    ruff_baseline: RuffBaseline
+    ruff_mandatory_select: tuple[str, ...]
+    ruff_recommended_line_length: int
+    ruff_recommended_select: tuple[str, ...]
     prose_width: int
     mandatory_pre_commit_entries: tuple[str, ...]
 
@@ -145,10 +167,9 @@ class Rules(NamedTuple):
             "standard_version": self.standard_version,
             "mandatory_ci_commands": list(self.mandatory_ci_commands),
             "required_agents_sections": list(self.required_agents_sections),
-            "ruff_baseline": {
-                "line_length": self.ruff_baseline.line_length,
-                "select": list(self.ruff_baseline.select),
-            },
+            "ruff_mandatory_select": list(self.ruff_mandatory_select),
+            "ruff_recommended_line_length": self.ruff_recommended_line_length,
+            "ruff_recommended_select": list(self.ruff_recommended_select),
             "prose_width": self.prose_width,
             "mandatory_pre_commit_entries": list(self.mandatory_pre_commit_entries),
         }
@@ -159,10 +180,9 @@ class Rules(NamedTuple):
             standard_version=data["standard_version"],
             mandatory_ci_commands=tuple(data["mandatory_ci_commands"]),
             required_agents_sections=tuple(data["required_agents_sections"]),
-            ruff_baseline=RuffBaseline(
-                line_length=data["ruff_baseline"]["line_length"],
-                select=tuple(data["ruff_baseline"]["select"]),
-            ),
+            ruff_mandatory_select=tuple(data["ruff_mandatory_select"]),
+            ruff_recommended_line_length=data["ruff_recommended_line_length"],
+            ruff_recommended_select=tuple(data["ruff_recommended_select"]),
             prose_width=data["prose_width"],
             mandatory_pre_commit_entries=tuple(data["mandatory_pre_commit_entries"]),
         )
@@ -179,11 +199,14 @@ def build_rules(repo_root: Path) -> Rules:
     """Parse the normative documents under `repo_root` into a `Rules` object."""
     quality_gates_doc = repo_root / "docs" / "quality-gates.md"
     repo_standard_doc = repo_root / "docs" / "repo-standard.md"
+    ruff_policy = documented_ruff_policy(quality_gates_doc)
     return Rules(
         standard_version=_standard_version(repo_root),
         mandatory_ci_commands=tuple(mandatory_ci_commands(quality_gates_doc)),
         required_agents_sections=tuple(required_agents_sections(repo_standard_doc)),
-        ruff_baseline=documented_ruff_baseline(quality_gates_doc),
+        ruff_mandatory_select=ruff_policy.mandatory_select,
+        ruff_recommended_line_length=ruff_policy.recommended_line_length,
+        ruff_recommended_select=ruff_policy.recommended_select,
         prose_width=PROSE_WIDTH,
         mandatory_pre_commit_entries=MANDATORY_PRE_COMMIT_ENTRIES,
     )

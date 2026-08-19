@@ -76,7 +76,9 @@ def _minimal_repo(tmp_path: Path) -> Path:
         encoding="utf-8",
     )
 
-    select = ", ".join(f'"{s}"' for s in RULES.ruff_baseline.select)
+    select = ", ".join(
+        f'"{s}"' for s in (*RULES.ruff_mandatory_select, *RULES.ruff_recommended_select)
+    )
     (root / "pyproject.toml").write_text(
         "[project]\n"
         'name = "compliant-repo"\n'
@@ -87,7 +89,7 @@ def _minimal_repo(tmp_path: Path) -> Path:
         "[tool.uv.build-backend]\n"
         'module-name = "compliant_repo"\n\n'
         "[tool.ruff]\n"
-        f"line-length = {RULES.ruff_baseline.line_length}\n\n"
+        f"line-length = {RULES.ruff_recommended_line_length}\n\n"
         "[tool.ruff.lint]\n"
         f"select = [{select}]\n",
         encoding="utf-8",
@@ -187,29 +189,77 @@ def test_missing_uv_lock_reports_rsk009(tmp_path: Path) -> None:
     assert "RSK009" in _rule_ids(check_repo(root, RULES))
 
 
-def test_narrower_line_length_reports_rsk010(tmp_path: Path) -> None:
+def test_missing_line_length_reports_rsk010(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    pyproject_path = root / "pyproject.toml"
+    text = pyproject_path.read_text(encoding="utf-8")
+    pyproject_path.write_text(
+        text.replace(f"line-length = {RULES.ruff_recommended_line_length}\n", ""),
+        encoding="utf-8",
+    )
+    assert "RSK010" in _rule_ids(check_repo(root, RULES))
+
+
+def test_different_but_declared_line_length_does_not_report_rsk010(
+    tmp_path: Path,
+) -> None:
+    """§13: the value is a per-repository choice; only its absence is a shall."""
     root = _minimal_repo(tmp_path)
     pyproject_path = root / "pyproject.toml"
     text = pyproject_path.read_text(encoding="utf-8")
     pyproject_path.write_text(
         text.replace(
-            f"line-length = {RULES.ruff_baseline.line_length}", "line-length = 79"
+            f"line-length = {RULES.ruff_recommended_line_length}", "line-length = 79"
         ),
         encoding="utf-8",
     )
-    assert "RSK010" in _rule_ids(check_repo(root, RULES))
+    assert "RSK010" not in _rule_ids(check_repo(root, RULES))
 
 
-def test_dropped_rule_family_reports_rsk010(tmp_path: Path) -> None:
+def test_dropped_mandatory_rule_family_reports_rsk010(tmp_path: Path) -> None:
     root = _minimal_repo(tmp_path)
     pyproject_path = root / "pyproject.toml"
     text = pyproject_path.read_text(encoding="utf-8")
-    select = ", ".join(f'"{s}"' for s in RULES.ruff_baseline.select[1:])
+    select = ", ".join(
+        f'"{s}"'
+        for s in (*RULES.ruff_mandatory_select[1:], *RULES.ruff_recommended_select)
+    )
     pyproject_path.write_text(
         text.split("[tool.ruff.lint]")[0] + f"[tool.ruff.lint]\nselect = [{select}]\n",
         encoding="utf-8",
     )
     assert "RSK010" in _rule_ids(check_repo(root, RULES))
+
+
+def test_non_recommended_line_length_reports_rsk015_as_should(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    pyproject_path = root / "pyproject.toml"
+    text = pyproject_path.read_text(encoding="utf-8")
+    pyproject_path.write_text(
+        text.replace(
+            f"line-length = {RULES.ruff_recommended_line_length}", "line-length = 100"
+        ),
+        encoding="utf-8",
+    )
+    findings = [f for f in check_repo(root, RULES) if f.rule_id == "RSK015"]
+    assert len(findings) == 1
+    assert findings[0].severity == "should"
+
+
+def test_dropped_recommended_rule_family_reports_rsk016_as_should(
+    tmp_path: Path,
+) -> None:
+    root = _minimal_repo(tmp_path)
+    pyproject_path = root / "pyproject.toml"
+    text = pyproject_path.read_text(encoding="utf-8")
+    select = ", ".join(f'"{s}"' for s in RULES.ruff_mandatory_select)
+    pyproject_path.write_text(
+        text.split("[tool.ruff.lint]")[0] + f"[tool.ruff.lint]\nselect = [{select}]\n",
+        encoding="utf-8",
+    )
+    findings = [f for f in check_repo(root, RULES) if f.rule_id == "RSK016"]
+    assert len(findings) == 1
+    assert findings[0].severity == "should"
 
 
 def test_unresolved_placeholder_reports_rsk011(tmp_path: Path) -> None:

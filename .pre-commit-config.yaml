@@ -57,3 +57,9 @@ repos:
         language: system
         types_or: [python, pyi]
         require_serial: true
+      - id: ty-check
+        name: ty check
+        entry: uv run ty check
+        language: system
+        pass_filenames: false
+        types: [python]

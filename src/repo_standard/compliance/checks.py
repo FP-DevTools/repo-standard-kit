@@ -18,8 +18,9 @@ import subprocess
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
-from repo_standard.compliance.spec import Rules, prose_offenders, ruff_config_of
+from repo_standard.compliance.spec import Rules, prose_offenders
 
 RULES_JSON_PATH = Path(__file__).resolve().parent / "rules.json"
 
@@ -314,14 +315,27 @@ def _check_uv_lock(root: Path, rules: Rules) -> list[Finding]:
     return [Finding("RSK009", "shall", "uv.lock", None, "uv.lock is not present.")]
 
 
+def _read_ruff_config(pyproject_path: Path) -> dict[str, Any] | None:
+    """The `[tool.ruff]` table, or `None` if the file/table is missing or unparsable."""
+    text = _read(pyproject_path)
+    if text is None:
+        return None
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        return None
+    return data.get("tool", {}).get("ruff")
+
+
 def _check_ruff_baseline(root: Path, rules: Rules) -> list[Finding]:
-    """RSK010: Ruff `line-length` and `select` match the formatting baseline (§13)."""
+    """RSK010: `line-length` is declared explicitly and mandatory rule families
+    are selected (§13). The specific `line-length` *value* is not checked here —
+    see RSK015."""
     pyproject_path = root / "pyproject.toml"
     if not pyproject_path.exists():
         return []
-    try:
-        actual = ruff_config_of(pyproject_path)
-    except (KeyError, tomllib.TOMLDecodeError):
+    ruff = _read_ruff_config(pyproject_path)
+    if ruff is None:
         return [
             Finding(
                 "RSK010",
@@ -331,19 +345,20 @@ def _check_ruff_baseline(root: Path, rules: Rules) -> list[Finding]:
                 "No usable [tool.ruff] configuration.",
             )
         ]
+
     findings = []
-    if actual.line_length != rules.ruff_baseline.line_length:
+    if "line-length" not in ruff:
         findings.append(
             Finding(
                 "RSK010",
                 "shall",
                 "pyproject.toml",
                 None,
-                f"line-length is {actual.line_length}, baseline requires "
-                f"{rules.ruff_baseline.line_length}.",
+                "[tool.ruff] does not declare an explicit line-length.",
             )
         )
-    missing_families = sorted(set(rules.ruff_baseline.select) - set(actual.select))
+    actual_select = set(ruff.get("lint", {}).get("select", []))
+    missing_families = sorted(set(rules.ruff_mandatory_select) - actual_select)
     if missing_families:
         findings.append(
             Finding(
@@ -355,6 +370,56 @@ def _check_ruff_baseline(root: Path, rules: Rules) -> list[Finding]:
             )
         )
     return findings
+
+
+def _check_ruff_recommended_line_length(root: Path, rules: Rules) -> list[Finding]:
+    """RSK015: declared `line-length` matches the recommended value (§13)."""
+    pyproject_path = root / "pyproject.toml"
+    if not pyproject_path.exists():
+        return []
+    ruff = _read_ruff_config(pyproject_path)
+    if ruff is None or "line-length" not in ruff:
+        return []  # RSK010 already covers an undeclared line-length.
+    try:
+        actual_line_length = int(ruff["line-length"])
+    except (TypeError, ValueError):
+        return []
+    if actual_line_length == rules.ruff_recommended_line_length:
+        return []
+    return [
+        Finding(
+            "RSK015",
+            "should",
+            "pyproject.toml",
+            None,
+            f"line-length is {actual_line_length}; "
+            f"{rules.ruff_recommended_line_length} is recommended so formatting "
+            "stays comparable across repositories.",
+        )
+    ]
+
+
+def _check_ruff_recommended_select(root: Path, rules: Rules) -> list[Finding]:
+    """RSK016: recommended rule families (`PT`) are also selected (§13)."""
+    pyproject_path = root / "pyproject.toml"
+    if not pyproject_path.exists():
+        return []
+    ruff = _read_ruff_config(pyproject_path)
+    if ruff is None:
+        return []
+    actual_select = set(ruff.get("lint", {}).get("select", []))
+    missing = sorted(set(rules.ruff_recommended_select) - actual_select)
+    if not missing:
+        return []
+    return [
+        Finding(
+            "RSK016",
+            "should",
+            "pyproject.toml",
+            None,
+            f"Ruff select does not include recommended rule families: {missing}.",
+        )
+    ]
 
 
 def _check_no_placeholders(root: Path, rules: Rules) -> list[Finding]:
@@ -525,6 +590,8 @@ _STRUCTURAL_CHECKS = (
     _check_uv_build_backend,
     _check_uv_lock,
     _check_ruff_baseline,
+    _check_ruff_recommended_line_length,
+    _check_ruff_recommended_select,
     _check_no_placeholders,
     _check_adr_dir,
     _check_prose_width,
