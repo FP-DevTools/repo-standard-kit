@@ -1,8 +1,7 @@
 """Runs even before the first package exists, so the gate chain is green from birth."""
 
-from pathlib import Path
-
 import tomllib
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 

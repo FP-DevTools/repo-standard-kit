@@ -429,7 +429,7 @@ def test_cli_exits_zero_for_a_compliant_repo(
     exit_code = cli.main([str(root)])
     captured = capsys.readouterr()
     assert exit_code == 0
-    assert "no findings" in captured.out
+    assert "All checks passed!" in captured.out
 
 
 def test_cli_json_format_is_valid_json(

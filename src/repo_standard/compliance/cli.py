@@ -45,7 +45,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def _format_text(findings: list[Finding]) -> str:
     if not findings:
-        return "repo-check: no findings. Repository is structurally aligned.\n"
+        return "All checks passed!\n"
     lines = [
         f"{finding.severity.upper():8} {finding.rule_id}  {finding.path}"
         + (f":{finding.line}" if finding.line is not None else "")
