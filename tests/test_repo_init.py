@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import tarfile
 import tomllib
 import zipfile
 from pathlib import Path
@@ -15,6 +16,7 @@ from conftest import (
     ruff_config_of,
 )
 
+from repo_standard.policy import load_compiled_policy
 from repo_standard.repo_init import (
     bootstrap_repo,
     ensure_git_repository,
@@ -40,18 +42,9 @@ IGNORED_ARTIFACT_PARTS = {
 
 MANDATORY_CI_COMMANDS = mandatory_ci_commands()
 
+POLICY = load_compiled_policy()
 MANDATORY_PRE_COMMIT_ENTRIES = [
-    "uv run check-yaml",
-    "uv run check-toml",
-    "uv run check-json",
-    "uv run trailing-whitespace-fixer",
-    "uv run end-of-file-fixer",
-    "uv run check-merge-conflict",
-    "uv run detect-private-key",
-    "uv run detect-secrets-hook",
-    "uv run check-added-large-files",
-    "uv run ruff check --fix --force-exclude",
-    "uv run ruff format --force-exclude",
+    hook["entry"] for hook in POLICY.rule("RSK007").check.config["hooks"]
 ]
 
 
@@ -97,6 +90,10 @@ def test_bootstrap_repo_renders_python_single_starter(tmp_path: Path) -> None:
     assert 'importlib.import_module("demo_service")' in smoke_test_text
     assert "## First 10 Minutes" in readme_text
     assert (output_dir / ".github" / "workflows" / "quality.yml").exists()
+    assert (output_dir / ".github" / "dependabot.yml").exists()
+    assert pyproject_text.count("[tool.repo-standard]") == 1
+    assert 'profile = "python-single"' in pyproject_text
+    assert 'standard = "1"' in pyproject_text
     for command in MANDATORY_CI_COMMANDS:
         assert command in agents_text
         assert command in workflow_text
@@ -154,6 +151,11 @@ def test_bootstrap_repo_renders_python_workspace_starter(tmp_path: Path) -> None
 
     assert "Python workspace" in readme_text
     assert (output_dir / ".github" / "workflows" / "quality.yml").exists()
+    assert (output_dir / ".github" / "dependabot.yml").exists()
+    assert pyproject_data["tool"]["repo-standard"] == {
+        "profile": "python-workspace",
+        "standard": "1",
+    }
     for command in MANDATORY_CI_COMMANDS:
         assert command in agents_text
         assert command in workflow_text
@@ -229,6 +231,7 @@ def test_built_wheel_contains_clean_packaged_starter_kits(tmp_path: Path) -> Non
             "--out-dir",
             str(tmp_path),
             "--no-create-gitignore",
+            "--native-tls",
         ],
         cwd=repo_root,
         check=True,
@@ -240,12 +243,34 @@ def test_built_wheel_contains_clean_packaged_starter_kits(tmp_path: Path) -> Non
 
     assert "repo_standard/starter_kits/python-single/AGENTS.md" in names
     assert "repo_standard/starter_kits/python-workspace/AGENTS.md" in names
+    assert "repo_standard/policy/compiled.json" in names
     assert any(name.endswith(".dist-info/entry_points.txt") for name in names)
     assert not any(
         any(part in IGNORED_ARTIFACT_PARTS for part in name.split("/"))
         or name.endswith(".pyc")
         for name in names
     )
+
+
+def test_built_sdist_contains_source_policy_and_docs(tmp_path: Path) -> None:
+    subprocess.run(
+        [
+            "uv",
+            "build",
+            "--sdist",
+            "--out-dir",
+            str(tmp_path),
+            "--no-create-gitignore",
+            "--native-tls",
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+    )
+    sdist_path = next(tmp_path.glob("repo_standard_kit-*.tar.gz"))
+    with tarfile.open(sdist_path, "r:gz") as archive:
+        names = set(archive.getnames())
+    assert any(name.endswith("/policy/base.yaml") for name in names)
+    assert any(name.endswith("/docs/policy-reference.md") for name in names)
 
 
 def test_bootstrap_repo_uses_uv_build_backend_for_python_single(

@@ -52,6 +52,8 @@ uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v1.0.0" r
 
 The generated repository derives its `AGENTS.md`, CI workflow, `pyproject.toml`,
 and starter files from the version of this repository that `uv` resolves.
+Its `pyproject.toml` declares the selected profile and standard major under
+`[tool.repo-standard]`, so later checks do not have to guess from layout.
 
 ### Golden Path: Single Package
 
@@ -143,6 +145,7 @@ each package `pyproject.toml`, and no unresolved template placeholders.
 
 ```text
 widget-service/
+  .github/dependabot.yml
   .github/workflows/quality.yml
   .pre-commit-config.yaml
   .pymarkdown.json
@@ -166,6 +169,7 @@ workspace shell with an empty `packages/` directory:
 
 ```text
 widget-platform/
+  .github/dependabot.yml
   .github/workflows/quality.yml
   .pre-commit-config.yaml
   .pymarkdown.json
@@ -195,6 +199,9 @@ Each later `repo-add-package --package-name widget_api` run adds:
 - The package directory matches the requested package name
 - `AGENTS.md` is concrete enough to use immediately, with no generic filler
 - The repository passes the full `docs/quality-gates.md` chain
+- `[tool.repo-standard]` declares the generated profile and standard major
+- The quality workflow grants only `contents: read` and pins remote actions to
+  full commit SHAs; Dependabot is configured to propose GitHub Actions updates
 
 By default, `repo-init` infers the repository name from the target directory.
 If you pass `--repo-name` without `--output-dir`, `repo-init` creates

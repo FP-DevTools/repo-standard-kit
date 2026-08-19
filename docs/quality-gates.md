@@ -69,6 +69,11 @@ Local checks should remain lightweight and fast.
 - Detection of accidentally committed secrets
 - Prevention of oversized binary files
 
+RSK007 enforces this hook set at the **required** level by parsing
+`.pre-commit-config.yaml` structurally. Hook IDs, normalized entry and argument
+tokens, and material fields such as `pass_filenames`, `types`, `types_or`, and
+required arguments must match policy. Comments and unrelated text do not count.
+
 This standard treats `ty` as the approved equivalent to `mypy` for Python
 starter repositories, and `pymarkdown` as the approved Markdown linter.
 Markdown structural linting shall run with its line-length rule (`md013`)
@@ -101,6 +106,19 @@ Typical execution time should remain below **10 seconds**.
 ## 5. CI Pull Request Gates
 
 The following gates shall execute automatically for every pull request targeting `main`.
+
+RSK006 enforces the `pull_request` trigger, `quality` job, and complete
+executable commands at the **required** level. Only `jobs.quality.steps[*].run`
+is inspected; comments, echoed strings, unrelated fields, and commands hidden
+inside a shell-wrapper string do not count. Whitespace, comments, multiline
+commands, and equivalent command formatting are normalized before comparison.
+
+RSK020 enforces at the **required** level that the quality job's effective
+permissions include `contents: read` and no write permission. RSK021 enforces
+at the **required** level that every remote action and reusable workflow used
+by that job is pinned to a full 40-character commit SHA. Local `./` actions and
+`docker://` references are exempt. Keep a version comment next to each SHA so
+Dependabot updates remain understandable.
 
 ### Environment reproducibility
 
@@ -200,6 +218,9 @@ uv run pip-audit
 
 Identifies known vulnerabilities in dependencies.
 
+Vulnerability scanning remains optional for v1.0. No machine-enforced rule in
+this release requires `pip-audit` or another vulnerability scanner.
+
 ---
 
 ### Documentation validation
@@ -245,6 +266,11 @@ on every pull request still permits a merge if nothing requires it to pass.
 
 Every repository adopting this specification shall protect `main` so the
 mandatory gates are binding rather than advisory.
+
+RSK014 checks this platform configuration at the **required** level only when
+`--check-enforcement` is explicitly requested. If the platform command cannot
+run or its response cannot be interpreted, `repo-check` returns an
+indeterminate command error; it never treats unavailable evidence as a pass.
 
 ### Platform prerequisite
 
@@ -332,6 +358,10 @@ own. Two repositories can both pass while disagreeing about what formatted code
 looks like. This section fixes the configuration those gates run with.
 
 ### Ruff configuration
+
+RSK010 enforces the explicit line-length declaration and mandatory Ruff
+families at the **required** level. RSK015 checks the preferred line length and
+RSK016 checks the `PT` family at the **recommended** level.
 
 Every adopting repository shall declare an explicit `line-length` in
 `[tool.ruff]`, and shall select at least the following rule families:

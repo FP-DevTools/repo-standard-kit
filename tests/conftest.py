@@ -1,43 +1,55 @@
-"""Test fixtures.
-
-The parsers that make the normative documents authoritative used to live
-here; they now live in `repo_standard.compliance.spec` so the packaged
-checker and this test suite share one implementation instead of two copies
-drifting apart. This module keeps the zero-argument API the test suite
-already uses, bound to this checkout's own documents.
-"""
+"""Shared policy-derived test fixtures."""
 
 from __future__ import annotations
 
 import sys
+import tomllib
 from pathlib import Path
+from typing import NamedTuple
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-
 SRC = REPO_ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from repo_standard.compliance import spec  # noqa: E402
-
-RuffBaseline = spec.RuffBaseline
-RuffPolicy = spec.RuffPolicy
-ruff_config_of = spec.ruff_config_of
-
-QUALITY_GATES_DOC = REPO_ROOT / "docs" / "quality-gates.md"
-REPO_STANDARD_DOC = REPO_ROOT / "docs" / "repo-standard.md"
+from repo_standard.policy import load_compiled_policy  # noqa: E402
 
 
-def mandatory_ci_commands() -> list[str]:
-    """The mandatory CI gate chain, in order, as `docs/quality-gates.md` defines it."""
-    return spec.mandatory_ci_commands(QUALITY_GATES_DOC)
+class RuffBaseline(NamedTuple):
+    line_length: int
+    select: tuple[str, ...]
+
+
+class RuffPolicy(NamedTuple):
+    mandatory_select: tuple[str, ...]
+    recommended_line_length: int
+    recommended_select: tuple[str, ...]
+
+
+def mandatory_ci_commands(profile: str = "python-single") -> list[str]:
+    policy = load_compiled_policy()
+    rule = policy.rule("RSK006")
+    return list(rule.check.config["commands_by_profile"][profile])
 
 
 def required_agents_sections() -> list[str]:
-    """The `AGENTS.md` sections every adopting repository must provide."""
-    return spec.required_agents_sections(REPO_STANDARD_DOC)
+    policy = load_compiled_policy()
+    return list(policy.rule("RSK002").check.config["headings"])
 
 
 def documented_ruff_policy() -> RuffPolicy:
-    """Parse the mandatory and recommended Ruff configuration out of §13."""
-    return spec.documented_ruff_policy(QUALITY_GATES_DOC)
+    policy = load_compiled_policy()
+    return RuffPolicy(
+        mandatory_select=tuple(policy.rule("RSK010").check.config["required_select"]),
+        recommended_line_length=policy.rule("RSK015").check.config["value"],
+        recommended_select=tuple(policy.rule("RSK016").check.config["values"]),
+    )
+
+
+def ruff_config_of(pyproject_path: Path) -> RuffBaseline:
+    data = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+    ruff = data["tool"]["ruff"]
+    return RuffBaseline(
+        line_length=int(ruff["line-length"]),
+        select=tuple(ruff["lint"]["select"]),
+    )

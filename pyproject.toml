@@ -6,7 +6,9 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = "LicenseRef-Proprietary"
 license-files = ["LICENSE"]
-dependencies = []
+dependencies = [
+  "PyYAML>=6.0.3",
+]
 classifiers = [
   "Private :: Do Not Upload",
 ]
@@ -35,6 +37,7 @@ build-backend = "uv_build"
 module-name = "repo_standard"
 source-include = [
   "docs/**",
+  "policy/**",
   "profiles/**",
   "templates/**",
 ]
@@ -59,6 +62,10 @@ testpaths = ["tests"]
 [tool.repo-check.ignore]
 RSK005 = "repo-standard-kit is the standard's own home, not an adopting repository; asking it to link to itself is meaningless."
 RSK011 = "This repository defines, tests, and ships these placeholder tokens for repo-init's templating; they are not leftovers from an unfinished bootstrap."
+
+[tool.repo-standard]
+profile = "python-single"
+standard = "1"
 
 [tool.ty.src]
 include = ["src", "tests"]
