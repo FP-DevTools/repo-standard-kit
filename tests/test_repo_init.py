@@ -49,7 +49,7 @@ MANDATORY_PRE_COMMIT_ENTRIES = [
     "uv run detect-private-key",
     "uv run detect-secrets-hook",
     "uv run check-added-large-files",
-    "uv run ruff check --force-exclude",
+    "uv run ruff check --fix --force-exclude",
     "uv run ruff format --force-exclude",
 ]
 
