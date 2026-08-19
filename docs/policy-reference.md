@@ -250,9 +250,9 @@ Remediation: Add tool.repo-standard with a valid profile and standard = "1".
 - Enforcement: `structural`
 - Check kind: `github_workflow_permissions`
 
-Rationale: Quality checks need source read access and no repository write access.
+Rationale: The quality job only needs read access to repository contents; additional token scopes increase blast radius without supporting the gate chain.
 
-Remediation: Set effective quality-job permissions to contents read with no writes.
+Remediation: Set the quality job's effective permissions to exactly `contents: read`.
 
 ### RSK021: Quality workflow pins remote actions immutably
 

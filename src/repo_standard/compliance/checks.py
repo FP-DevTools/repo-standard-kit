@@ -673,6 +673,273 @@ def _git_remote_url(root: Path) -> str | None:
     return result.stdout.strip() or None
 
 
+def _gh_api(
+    context: CheckContext, endpoint: str, *, paginate: bool = False
+) -> tuple[subprocess.CompletedProcess[str] | None, Issue | None]:
+    command = ["gh", "api"]
+    if paginate:
+        command.extend(("--paginate", "--slurp"))
+    command.append(endpoint)
+    try:
+        result = subprocess.run(
+            command,
+            cwd=context.root,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as error:
+        return None, (
+            Issue(
+                ".",
+                f"Platform command unavailable: {error}",
+                None,
+                "GitHub enforcement response",
+                status="indeterminate",
+            )
+        )
+    return result, None
+
+
+def _platform_query_failure(
+    message: str, stderr: str, expected: Any, *, unsupported_is_violation: bool = True
+) -> Issue:
+    unsupported = unsupported_is_violation and re.search(
+        r"upgrade to github pro|branch protection (?:is )?not available",
+        stderr,
+        re.IGNORECASE,
+    )
+    return Issue(
+        ".",
+        f"{message}: {stderr}",
+        stderr,
+        expected,
+        status="violation" if unsupported else "indeterminate",
+    )
+
+
+def _json_response(
+    result: subprocess.CompletedProcess[str], expected: str
+) -> tuple[Any | None, Issue | None]:
+    try:
+        return json.loads(result.stdout), None
+    except json.JSONDecodeError as error:
+        return None, (
+            Issue(
+                ".",
+                f"Platform response was not JSON: {error}",
+                result.stdout,
+                expected,
+                status="indeterminate",
+            )
+        )
+
+
+def _ruleset_detail_endpoint(
+    owner_repo: str, source_type: str, source: str, ruleset_id: int
+) -> str | None:
+    if source_type == "Repository":
+        repository = source if "/" in source else owner_repo
+        return f"repos/{repository}/rulesets/{ruleset_id}"
+    if source_type == "Organization":
+        return f"orgs/{source}/rulesets/{ruleset_id}"
+    return None
+
+
+def _ruleset_branch_protection(
+    context: CheckContext, owner_repo: str, config: dict[str, Any]
+) -> list[Issue]:
+    endpoint = f"repos/{owner_repo}/rules/branches/{config['branch']}"
+    result, error = _gh_api(context, endpoint, paginate=True)
+    if error is not None:
+        return [error]
+    assert result is not None
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        return [
+            _platform_query_failure(
+                "Ruleset query failed",
+                stderr,
+                "effective rules for branch",
+            )
+        ]
+    pages, error = _json_response(result, "paginated ruleset response")
+    if error is not None:
+        return [error]
+    if not isinstance(pages, list) or not all(isinstance(page, list) for page in pages):
+        return [
+            Issue(
+                ".",
+                "Effective rules response was not a paginated list.",
+                pages,
+                "list of rule pages",
+                status="indeterminate",
+            )
+        ]
+
+    rules = [rule for page in pages for rule in page]
+    relevant_rules: list[dict[str, Any]] = []
+    ruleset_sources: set[tuple[str, str, int]] = set()
+    for rule in rules:
+        if not isinstance(rule, dict):
+            return [
+                Issue(
+                    ".",
+                    "Could not interpret an effective ruleset rule.",
+                    rule,
+                    "rule object",
+                    status="indeterminate",
+                )
+            ]
+        if rule.get("type") not in {"pull_request", "required_status_checks"}:
+            continue
+        parameters = rule.get("parameters")
+        source_type = rule.get("ruleset_source_type")
+        source = rule.get("ruleset_source")
+        ruleset_id = rule.get("ruleset_id")
+        if (
+            not isinstance(parameters, dict)
+            or not isinstance(source_type, str)
+            or not isinstance(source, str)
+            or isinstance(ruleset_id, bool)
+            or not isinstance(ruleset_id, int)
+        ):
+            return [
+                Issue(
+                    ".",
+                    "Could not interpret effective ruleset metadata.",
+                    rule,
+                    "rule parameters and source metadata",
+                    status="indeterminate",
+                )
+            ]
+        relevant_rules.append(rule)
+        ruleset_sources.add((source_type, source, ruleset_id))
+
+    bypass_actors: list[Any] = []
+    for source_type, source, ruleset_id in sorted(ruleset_sources):
+        detail_endpoint = _ruleset_detail_endpoint(
+            owner_repo, source_type, source, ruleset_id
+        )
+        if detail_endpoint is None:
+            return [
+                Issue(
+                    ".",
+                    f"Unsupported ruleset source type: {source_type}.",
+                    source_type,
+                    "Repository or Organization",
+                    status="indeterminate",
+                )
+            ]
+        detail_result, detail_error = _gh_api(context, detail_endpoint)
+        if detail_error is not None:
+            return [detail_error]
+        assert detail_result is not None
+        if detail_result.returncode != 0:
+            stderr = detail_result.stderr.strip()
+            return [
+                _platform_query_failure(
+                    "Ruleset detail query failed",
+                    stderr,
+                    "ruleset bypass actors",
+                    unsupported_is_violation=False,
+                )
+            ]
+        detail, detail_error = _json_response(detail_result, "ruleset detail response")
+        if detail_error is not None:
+            return [detail_error]
+        actors = detail.get("bypass_actors") if isinstance(detail, dict) else None
+        if not isinstance(actors, list):
+            return [
+                Issue(
+                    ".",
+                    "Could not obtain ruleset bypass actors.",
+                    actors,
+                    "bypass actor list",
+                    status="indeterminate",
+                )
+            ]
+        bypass_actors.extend(actors)
+
+    pull_request_rules = [
+        rule for rule in relevant_rules if rule["type"] == "pull_request"
+    ]
+    status_check_rules = [
+        rule for rule in relevant_rules if rule["type"] == "required_status_checks"
+    ]
+    review_counts: list[int] = []
+    dismiss_stale: list[bool] = []
+    conversation_resolution: list[bool] = []
+    for rule in pull_request_rules:
+        parameters = rule["parameters"]
+        reviews = parameters.get("required_approving_review_count")
+        stale = parameters.get("dismiss_stale_reviews_on_push")
+        resolution = parameters.get("required_review_thread_resolution")
+        if (
+            isinstance(reviews, bool)
+            or not isinstance(reviews, int)
+            or not isinstance(stale, bool)
+            or not isinstance(resolution, bool)
+        ):
+            return [
+                Issue(
+                    ".",
+                    "Could not interpret pull request ruleset parameters.",
+                    parameters,
+                    "review count, stale dismissal, and thread resolution",
+                    status="indeterminate",
+                )
+            ]
+        review_counts.append(reviews)
+        dismiss_stale.append(stale)
+        conversation_resolution.append(resolution)
+
+    contexts: set[str] = set()
+    strict_checks: list[bool] = []
+    for rule in status_check_rules:
+        parameters = rule["parameters"]
+        checks = parameters.get("required_status_checks")
+        strict = parameters.get("strict_required_status_checks_policy")
+        if (
+            not isinstance(checks, list)
+            or not isinstance(strict, bool)
+            or not all(
+                isinstance(check, dict) and isinstance(check.get("context"), str)
+                for check in checks
+            )
+        ):
+            return [
+                Issue(
+                    ".",
+                    "Could not interpret required status check ruleset parameters.",
+                    parameters,
+                    "status check contexts and strict policy",
+                    status="indeterminate",
+                )
+            ]
+        contexts.update(check["context"] for check in checks)
+        strict_checks.append(strict)
+
+    protection = {
+        "required_pull_request_reviews": (
+            {
+                "required_approving_review_count": max(review_counts),
+                "dismiss_stale_reviews": any(dismiss_stale),
+            }
+            if review_counts
+            else None
+        ),
+        "required_status_checks": (
+            {"contexts": sorted(contexts), "strict": any(strict_checks)}
+            if strict_checks
+            else None
+        ),
+        "required_conversation_resolution": {"enabled": any(conversation_resolution)},
+        "enforce_admins": {"enabled": not bypass_actors and bool(relevant_rules)},
+    }
+    return _branch_protection_issues(protection, config)
+
+
 def _branch_protection(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
     remote = _git_remote_url(context.root)
     match = _GITHUB_REMOTE_PATTERN.search(remote) if remote else None
@@ -686,57 +953,24 @@ def _branch_protection(context: CheckContext, config: dict[str, Any]) -> list[Is
                 status="indeterminate",
             )
         ]
-    endpoint = (
-        f"repos/{match.group('owner_repo')}/branches/{config['branch']}/protection"
-    )
-    try:
-        result = subprocess.run(
-            ["gh", "api", endpoint],
-            cwd=context.root,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-    except (FileNotFoundError, subprocess.TimeoutExpired) as error:
-        return [
-            Issue(
-                ".",
-                f"Platform command unavailable: {error}",
-                None,
-                "branch protection response",
-                status="indeterminate",
-            )
-        ]
+    owner_repo = match.group("owner_repo")
+    endpoint = f"repos/{owner_repo}/branches/{config['branch']}/protection"
+    result, error = _gh_api(context, endpoint)
+    if error is not None:
+        return [error]
+    assert result is not None
     if result.returncode != 0:
         stderr = result.stderr.strip()
-        unsupported = re.search(
-            r"branch not protected|upgrade to github pro|"
-            r"branch protection (?:is )?not available",
-            stderr,
-            re.IGNORECASE,
-        )
-        status = "violation" if unsupported else "indeterminate"
+        if re.search(r"branch not protected", stderr, re.IGNORECASE):
+            return _ruleset_branch_protection(context, owner_repo, config)
         return [
-            Issue(
-                ".",
-                f"Branch protection query failed: {stderr}",
-                stderr,
-                "configured protection",
-                status=status,
+            _platform_query_failure(
+                "Branch protection query failed", stderr, "configured protection"
             )
         ]
-    try:
-        protection = json.loads(result.stdout)
-    except json.JSONDecodeError as error:
-        return [
-            Issue(
-                ".",
-                f"Platform response was not JSON: {error}",
-                result.stdout,
-                "JSON response",
-                status="indeterminate",
-            )
-        ]
+    protection, error = _json_response(result, "branch protection response")
+    if error is not None:
+        return [error]
     if not isinstance(protection, dict):
         return [
             Issue(
@@ -747,6 +981,12 @@ def _branch_protection(context: CheckContext, config: dict[str, Any]) -> list[Is
                 status="indeterminate",
             )
         ]
+    return _branch_protection_issues(protection, config)
+
+
+def _branch_protection_issues(
+    protection: dict[str, Any], config: dict[str, Any]
+) -> list[Issue]:
 
     branch = config["branch"]
     issues: list[Issue] = []
@@ -971,12 +1211,8 @@ def _github_workflow_permissions(
     assert job is not None
     assert isinstance(document.data, dict)
     permissions = _effective_permissions(document.data, job)
-    valid = permissions == "read-all" or (
-        isinstance(permissions, dict)
-        and permissions.get("contents") == "read"
-        and not any(value == "write" for value in permissions.values())
-    )
-    if valid:
+    expected = config["permissions"]
+    if permissions == expected:
         return []
     line = document.line("jobs", config["job"], "permissions") or document.line(
         "permissions"
@@ -984,9 +1220,9 @@ def _github_workflow_permissions(
     return [
         Issue(
             config["path"],
-            "Quality job permissions are not least privilege.",
+            "Quality job permissions do not match the least-privilege policy.",
             permissions,
-            {"contents": "read", "writes": "none"},
+            expected,
             line,
         )
     ]

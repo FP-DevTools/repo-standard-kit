@@ -15,7 +15,8 @@ Options:
 
 - `--format text|json` selects human-readable or stable machine output.
 - `--profile auto|python-single|python-workspace` selects an explicit override.
-- `--check-enforcement` also queries branch protection for RSK014.
+- `--check-enforcement` also queries classic branch protection or effective
+  active rulesets for RSK014.
 - `--strict` promotes recommended findings to failures.
 
 Exit code `0` means no blocking findings. Exit code `1` means a required rule
@@ -140,12 +141,15 @@ remediation. Markdown explains policy but supplies no executable values.
   `pass_filenames`.
 - AGENTS.md remains a heading and literal-contract check. There is no
   subjective prose scoring.
-- RSK020 evaluates the quality job's effective permissions. RSK021 requires
-  full SHA pins for remote actions and reusable workflows in every job in the
-  quality workflow; local and Docker actions are exempt.
+- RSK020 requires the quality job's effective permissions to exactly match the
+  policy-owned `contents: read` mapping; extra read scopes and all write scopes
+  fail. RSK021 requires full SHA pins for remote actions and reusable workflows
+  in every job in the quality workflow; local and Docker actions are exempt.
 - RSK014 checks pull request reviews, stale approval dismissal, required status
   checks, strict up-to-date branches, conversation resolution, and
-  administrator enforcement when platform checks are requested.
+  administrator enforcement when platform checks are requested. If classic
+  branch protection is absent, it evaluates active repository and organization
+  rulesets and requires visible, empty bypass actor lists.
 
 ## What This Cannot Check
 

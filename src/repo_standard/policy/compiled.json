@@ -603,7 +603,10 @@
       "check": {
         "config": {
           "job": "quality",
-          "path": ".github/workflows/quality.yml"
+          "path": ".github/workflows/quality.yml",
+          "permissions": {
+            "contents": "read"
+          }
         },
         "kind": "github_workflow_permissions"
       },
@@ -614,8 +617,8 @@
         "python-single",
         "python-workspace"
       ],
-      "rationale": "Quality checks need source read access and no repository write access.",
-      "remediation": "Set effective quality-job permissions to contents read with no writes.",
+      "rationale": "The quality job only needs read access to repository contents; additional token scopes increase blast radius without supporting the gate chain.",
+      "remediation": "Set the quality job's effective permissions to exactly `contents: read`.",
       "source": {
         "document": "docs/quality-gates.md",
         "section": "5. CI Pull Request Gates"
