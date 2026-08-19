@@ -561,6 +561,29 @@ def _check_branch_protection(root: Path, rules: Rules) -> list[Finding]:
     return findings
 
 
+def _load_ignore_config(root: Path) -> dict[str, str]:
+    """`[tool.repo-check.ignore]`: rule ID -> recorded reason for suppression (§11).
+
+    A malformed or absent table suppresses nothing — an entry only takes
+    effect once it has a non-empty string reason recorded against it.
+    """
+    text = _read(root / "pyproject.toml")
+    if text is None:
+        return {}
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        return {}
+    ignore = data.get("tool", {}).get("repo-check", {}).get("ignore", {})
+    if not isinstance(ignore, dict):
+        return {}
+    return {
+        rule_id: reason
+        for rule_id, reason in ignore.items()
+        if isinstance(rule_id, str) and isinstance(reason, str) and reason.strip()
+    }
+
+
 _STRUCTURAL_CHECKS = (
     _check_agents_exists,
     _check_agents_sections,
@@ -594,6 +617,10 @@ def check_repo(
     rules; none of the current catalogue differs by profile, so it does not
     yet change which checks run. `include_platform` opts into RSK014, which
     needs `gh`, network access, and auth (§10).
+
+    A rule with a recorded reason in `root`'s `[tool.repo-check.ignore]` is
+    dropped from the result entirely — this is the §11 exception mechanism,
+    not a report of what was excused.
     """
     checks = list(_STRUCTURAL_CHECKS)
     if include_platform:
@@ -602,4 +629,8 @@ def check_repo(
     findings: list[Finding] = []
     for check in checks:
         findings.extend(check(root, rules))
+
+    ignored = _load_ignore_config(root)
+    if ignored:
+        findings = [f for f in findings if f.rule_id not in ignored]
     return findings

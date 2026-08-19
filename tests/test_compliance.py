@@ -32,13 +32,6 @@ STARTER_KIT_PROFILES = ("python-single", "python-workspace")
 
 RULES = load_rules()
 
-# Rules that cannot meaningfully apply to repo-standard-kit's own repository:
-# RSK005 asks a repo to link back to repo-standard-kit, which does not apply
-# to repo-standard-kit itself; RSK011 flags "__TOKEN__"-shaped strings, and
-# this repo's source is where those tokens are defined and tested, not a
-# leftover from an unfinished bootstrap. See docs/compliance.md.
-SELF_APPLICATION_EXCEPTIONS = {"RSK005", "RSK011"}
-
 
 def _minimal_repo(tmp_path: Path) -> Path:
     """A repository that satisfies every structural (non-platform) rule."""
@@ -327,6 +320,42 @@ def test_platform_check_included_with_flag_reports_something(tmp_path: Path) -> 
     assert "RSK014" in _rule_ids(findings)
 
 
+# --- [tool.repo-check.ignore] (§11 Exceptions) --------------------------
+
+
+def test_ignored_rule_with_reason_is_suppressed(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    (root / "README.md").write_text(
+        "# compliant-repo\n\nNo reference here.\n", encoding="utf-8"
+    )
+    with (root / "pyproject.toml").open("a", encoding="utf-8") as f:
+        f.write('\n[tool.repo-check.ignore]\nRSK005 = "Not applicable here."\n')
+    assert "RSK005" not in _rule_ids(check_repo(root, RULES))
+
+
+def test_ignore_entry_without_a_reason_does_not_suppress(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    (root / "README.md").write_text(
+        "# compliant-repo\n\nNo reference here.\n", encoding="utf-8"
+    )
+    with (root / "pyproject.toml").open("a", encoding="utf-8") as f:
+        f.write('\n[tool.repo-check.ignore]\nRSK005 = "   "\n')
+    assert "RSK005" in _rule_ids(check_repo(root, RULES))
+
+
+def test_ignore_only_suppresses_the_named_rule(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    (root / "README.md").write_text(
+        "# compliant-repo\n\nNo reference here.\n", encoding="utf-8"
+    )
+    (root / "AGENTS.md").unlink()
+    with (root / "pyproject.toml").open("a", encoding="utf-8") as f:
+        f.write('\n[tool.repo-check.ignore]\nRSK005 = "Not applicable here."\n')
+    ids = _rule_ids(check_repo(root, RULES))
+    assert "RSK005" not in ids
+    assert "RSK001" in ids
+
+
 # --- the dogfood tests -------------------------------------------------
 
 
@@ -357,18 +386,16 @@ def test_generated_repos_pass_their_own_compliance_check(
 
 
 def test_repo_root_has_no_unexpected_shall_findings() -> None:
-    """repo-standard-kit checks itself, modulo the rules that cannot apply to it.
+    """repo-standard-kit checks itself the same way an adopting repository would.
 
     RSK005 and RSK011 are structurally inapplicable to the standard's own
-    repository; see SELF_APPLICATION_EXCEPTIONS.
+    repository; the exception is recorded in `[tool.repo-check.ignore]` in
+    this repository's own `pyproject.toml` — the §11 mechanism every adopter
+    gets, not a special case inside the checker or the test suite.
     """
     findings = check_repo(REPO_ROOT, RULES)
-    unexpected = [
-        f
-        for f in findings
-        if f.severity == "shall" and f.rule_id not in SELF_APPLICATION_EXCEPTIONS
-    ]
-    assert unexpected == []
+    shall_findings = [f for f in findings if f.severity == "shall"]
+    assert shall_findings == []
 
 
 def test_rules_json_matches_generated_output() -> None:

@@ -37,6 +37,25 @@ passes no `--strict`), and the reusable CI workflow (`strict` defaults to
 never the reason a run fails, unless something explicitly opts into
 `--strict`.
 
+## Suppressing A Rule
+
+A rule can be structurally inapplicable to a specific repository — asking a
+repository to link to itself, for instance. §11 *Exceptions* requires an
+explicit, recorded justification for that; `repo-check` reads it from the
+checked repository's own `pyproject.toml`:
+
+```toml
+[tool.repo-check.ignore]
+RSK005 = "This repository is the standard's own home; linking to itself is meaningless."
+```
+
+A rule ID is suppressed only once it has a non-empty string reason recorded
+against it — an empty or missing reason changes nothing, so the table can
+never silently swallow a finding. Suppressed findings never appear in either
+output format; the reason lives in version control, next to the code it
+excuses, which is what makes it explicit and reviewable rather than a private
+understanding between the checker and one repository.
+
 ## Consumption Surfaces
 
 Three ways to run `repo-check` against a repository, from lowest to highest
@@ -154,8 +173,11 @@ admits its limits.
   quality generally is not mechanically assessable.
 - **"Tests are part of the change, not follow-up work"** is a review
   judgement about a diff, not a property of a tree.
-- **§11 Exceptions** — whether an exemption was justified, approved, and
-  time-limited — is social, not structural.
+- **§11 Exceptions.** `[tool.repo-check.ignore]` (see "Suppressing A Rule"
+  above) records *that* a reason was given and machine-enforces it is
+  non-empty. Whether that reason is actually sound, was reviewed, and stays
+  time-limited rather than permanent is still a judgement for the pull
+  request, not something the checker can decide.
 - **Gate effectiveness.** The checker confirms `uv run pytest` appears in the
   workflow. It cannot tell you the test suite is meaningful.
 
@@ -166,9 +188,10 @@ it, so two rules do not apply to it the way they apply everywhere else:
 `RSK005` would ask this repository to link itself, and `RSK011` flags the
 known placeholder tokens this repository defines, tests, and ships (in
 `repo_init.py`, the starter kits, and `compliance/rules.json` itself) for
-templating, not leftovers from an unfinished bootstrap.
-`tests/test_compliance.py` documents this exception explicitly rather than
-special-casing it inside the checker.
+templating, not leftovers from an unfinished bootstrap. Both are recorded in
+this repository's own `[tool.repo-check.ignore]` — the same mechanism any
+adopter uses, run against itself rather than special-cased in the checker or
+the test suite.
 
 ## Status
 

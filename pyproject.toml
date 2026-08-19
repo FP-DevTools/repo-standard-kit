@@ -56,5 +56,9 @@ select = ["E", "F", "I", "B", "UP", "PT"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
+[tool.repo-check.ignore]
+RSK005 = "repo-standard-kit is the standard's own home, not an adopting repository; asking it to link to itself is meaningless."
+RSK011 = "This repository defines, tests, and ships these placeholder tokens for repo-init's templating; they are not leftovers from an unfinished bootstrap."
+
 [tool.ty.src]
 include = ["src", "tests"]
