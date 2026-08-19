@@ -1,16 +1,14 @@
-name: Quality
+name: Compliance
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
 
 permissions:
   contents: read
 
 jobs:
-  quality:
+  compliance:
+    name: compliance
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -19,14 +17,8 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
 
-      - name: Install dependencies
-        run: uv sync --locked
-
-      - name: Run pre-commit
-        run: uv run pre-commit run --all-files
-
-      - name: Run pytest
-        run: uv run pytest
-
-      - name: Build package
-        run: uv build
+      - name: Check repository compliance
+        run: >-
+          uvx --from
+          "git+https://github.com/FP-DevTools/repo-standard-kit.git@v1.0.0"
+          repo-check .

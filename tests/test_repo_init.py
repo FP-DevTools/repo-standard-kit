@@ -2,20 +2,22 @@ from __future__ import annotations
 
 import re
 import subprocess
+import tarfile
+import tomllib
 import zipfile
 from pathlib import Path
 
 import pytest
+import yaml
 from conftest import (
-    PROSE_WIDTH,
     REPO_ROOT,
-    documented_ruff_baseline,
+    documented_ruff_policy,
     mandatory_ci_commands,
-    prose_offenders,
     required_agents_sections,
     ruff_config_of,
 )
 
+from repo_standard.policy import load_compiled_policy
 from repo_standard.repo_init import (
     bootstrap_repo,
     ensure_git_repository,
@@ -41,18 +43,9 @@ IGNORED_ARTIFACT_PARTS = {
 
 MANDATORY_CI_COMMANDS = mandatory_ci_commands()
 
+POLICY = load_compiled_policy()
 MANDATORY_PRE_COMMIT_ENTRIES = [
-    "uv run check-yaml",
-    "uv run check-toml",
-    "uv run check-json",
-    "uv run trailing-whitespace-fixer",
-    "uv run end-of-file-fixer",
-    "uv run check-merge-conflict",
-    "uv run detect-private-key",
-    "uv run detect-secrets-hook",
-    "uv run check-added-large-files",
-    "uv run ruff check --force-exclude",
-    "uv run ruff format --force-exclude",
+    hook["entry"] for hook in POLICY.rule("RSK007").check.config["hooks"]
 ]
 
 
@@ -98,7 +91,12 @@ def test_bootstrap_repo_renders_python_single_starter(tmp_path: Path) -> None:
     assert 'importlib.import_module("demo_service")' in smoke_test_text
     assert "## First 10 Minutes" in readme_text
     assert (output_dir / ".github" / "workflows" / "quality.yml").exists()
-    for command in MANDATORY_CI_COMMANDS:
+    assert (output_dir / ".github" / "workflows" / "compliance.yml").exists()
+    assert (output_dir / ".github" / "dependabot.yml").exists()
+    assert pyproject_text.count("[tool.repo-standard]") == 1
+    assert 'profile = "python-single"' in pyproject_text
+    assert 'standard = "1"' in pyproject_text
+    for command in mandatory_ci_commands("python-single"):
         assert command in agents_text
         assert command in workflow_text
     for entry in MANDATORY_PRE_COMMIT_ENTRIES:
@@ -149,10 +147,19 @@ def test_bootstrap_repo_renders_python_workspace_starter(tmp_path: Path) -> None
     pre_commit_text = (output_dir / ".pre-commit-config.yaml").read_text(
         encoding="utf-8"
     )
+    pyproject_data = tomllib.loads(
+        (output_dir / "pyproject.toml").read_text(encoding="utf-8")
+    )
 
     assert "Python workspace" in readme_text
     assert (output_dir / ".github" / "workflows" / "quality.yml").exists()
-    for command in MANDATORY_CI_COMMANDS:
+    assert (output_dir / ".github" / "workflows" / "compliance.yml").exists()
+    assert (output_dir / ".github" / "dependabot.yml").exists()
+    assert pyproject_data["tool"]["repo-standard"] == {
+        "profile": "python-workspace",
+        "standard": "1",
+    }
+    for command in mandatory_ci_commands("python-workspace"):
         assert command in agents_text
         assert command in workflow_text
     for entry in MANDATORY_PRE_COMMIT_ENTRIES:
@@ -160,6 +167,24 @@ def test_bootstrap_repo_renders_python_workspace_starter(tmp_path: Path) -> None
     assert not (output_dir / ".ruff_cache").exists()
     assert (output_dir / "packages" / ".gitkeep").exists()
     assert not (output_dir / "src").exists()
+
+    # M1: pytest must not exit 5 (empty collection) before any package exists.
+    assert (output_dir / "tests" / "test_workspace_shell.py").exists()
+    assert pyproject_data["tool"]["pytest"]["ini_options"]["testpaths"] == [
+        "tests",
+        "packages",
+    ]
+
+    # M2: packages/* must be registered as uv workspace members so uv sync
+    # actually installs them, or a package added by repo-add-package is
+    # never importable.
+    assert pyproject_data["tool"]["uv"]["workspace"]["members"] == ["packages/*"]
+
+    # M3: the workspace root carries no distributable artifact of its own,
+    # so `uv build` there cannot silently fall back to the setuptools
+    # default backend; the CI build step scopes to actual packages instead.
+    assert pyproject_data["tool"]["uv"]["package"] is False
+    assert "uv build --all-packages" in workflow_text
 
 
 def test_pre_commit_configs_use_mandatory_local_uv_managed_hooks() -> None:
@@ -209,6 +234,7 @@ def test_built_wheel_contains_clean_packaged_starter_kits(tmp_path: Path) -> Non
             "--out-dir",
             str(tmp_path),
             "--no-create-gitignore",
+            "--native-tls",
         ],
         cwd=repo_root,
         check=True,
@@ -220,12 +246,42 @@ def test_built_wheel_contains_clean_packaged_starter_kits(tmp_path: Path) -> Non
 
     assert "repo_standard/starter_kits/python-single/AGENTS.md" in names
     assert "repo_standard/starter_kits/python-workspace/AGENTS.md" in names
+    assert (
+        "repo_standard/starter_kits/python-single/.github/workflows/compliance.yml"
+        in names
+    )
+    assert (
+        "repo_standard/starter_kits/python-workspace/.github/workflows/compliance.yml"
+        in names
+    )
+    assert "repo_standard/policy/compiled.json" in names
     assert any(name.endswith(".dist-info/entry_points.txt") for name in names)
     assert not any(
         any(part in IGNORED_ARTIFACT_PARTS for part in name.split("/"))
         or name.endswith(".pyc")
         for name in names
     )
+
+
+def test_built_sdist_contains_source_policy_and_docs(tmp_path: Path) -> None:
+    subprocess.run(
+        [
+            "uv",
+            "build",
+            "--sdist",
+            "--out-dir",
+            str(tmp_path),
+            "--no-create-gitignore",
+            "--native-tls",
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+    )
+    sdist_path = next(tmp_path.glob("repo_standard_kit-*.tar.gz"))
+    with tarfile.open(sdist_path, "r:gz") as archive:
+        names = set(archive.getnames())
+    assert any(name.endswith("/policy/base.yaml") for name in names)
+    assert any(name.endswith("/docs/policy-reference.md") for name in names)
 
 
 def test_bootstrap_repo_uses_uv_build_backend_for_python_single(
@@ -265,6 +321,67 @@ def test_quality_workflows_use_mandatory_ci_gate_set() -> None:
         workflow_text = workflow_path.read_text(encoding="utf-8")
         for command in MANDATORY_CI_COMMANDS:
             assert command in workflow_text
+
+
+def test_compliance_workflows_emit_an_independent_required_status() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    workflow_paths = [
+        repo_root / ".github" / "workflows" / "compliance.yml",
+        *(
+            starter_kit_dir(profile) / ".github" / "workflows" / "compliance.yml"
+            for profile in STARTER_KIT_PROFILES
+        ),
+    ]
+
+    for workflow_path in workflow_paths:
+        assert workflow_path.name == "compliance.yml"
+        workflow_text = workflow_path.read_text(encoding="utf-8")
+        assert "  pull_request:\n" in workflow_text
+        assert "permissions:\n  contents: read\n" in workflow_text
+        assert "  compliance:\n    name: compliance\n" in workflow_text
+        assert re.search(r"uses: actions/checkout@[0-9a-f]{40}", workflow_text)
+        assert re.search(r"uses: astral-sh/setup-uv@[0-9a-f]{40}", workflow_text)
+
+    root_workflow = workflow_paths[0].read_text(encoding="utf-8")
+    assert "  workflow_call:\n" in root_workflow
+    assert "uv run --locked --no-dev repo-check ." in root_workflow
+    for workflow_path in workflow_paths[1:]:
+        assert "repo-standard-kit.git@v1.0.0" in workflow_path.read_text(
+            encoding="utf-8"
+        )
+
+
+def test_reusable_compliance_workflow_keeps_inputs_out_of_shell_source() -> None:
+    workflow_path = REPO_ROOT / ".github" / "workflows" / "compliance.yml"
+    workflow_text = workflow_path.read_text(encoding="utf-8")
+    workflow = yaml.safe_load(workflow_text)
+    run_step = next(
+        step
+        for step in workflow["jobs"]["compliance"]["steps"]
+        if step.get("name") == "Run repo-check"
+    )
+
+    assert run_step["env"] == {
+        "REPO_STANDARD_REF": "${{ inputs.standard-ref }}",
+        "STRICT": "${{ inputs.strict }}",
+        "CHECK_ENFORCEMENT": "${{ inputs.check-enforcement }}",
+    }
+    run = run_step["run"]
+    assert "${{ inputs." not in run
+    assert "$REPO_STANDARD_REF" in run
+    assert '$STRICT" = "true' in run
+    assert '$CHECK_ENFORCEMENT" = "true' in run
+
+
+def test_reusable_compliance_workflow_validates_standard_ref() -> None:
+    workflow_text = (REPO_ROOT / ".github" / "workflows" / "compliance.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert '[[ ! "$REPO_STANDARD_REF" =~ ^[A-Za-z0-9._/-]+$ ]]' in workflow_text
+    assert 'echo "Invalid repo-standard-kit ref" >&2' in workflow_text
+    assert "exit 2" in workflow_text
+    assert "repo-standard-kit.git@$REPO_STANDARD_REF" in workflow_text
 
 
 def test_root_pyproject_uses_uv_build_backend() -> None:
@@ -611,12 +728,15 @@ def test_generated_agents_files_carry_every_required_section(
 
 def test_gate_chain_is_defined_by_the_normative_document() -> None:
     """The chain must come from docs/quality-gates.md, not a literal in this file."""
-    commands = mandatory_ci_commands()
-    assert commands[0] == "uv sync --locked", (
-        "the chain must start by verifying a reproducible environment"
-    )
-    assert commands[-1] == "uv build", "the chain must end with build validation"
-    assert len(commands) == len(set(commands)), "duplicate gate in the spec"
+    for profile in STARTER_KIT_PROFILES:
+        commands = mandatory_ci_commands(profile)
+        assert commands[0] == "uv sync --locked", (
+            "the chain must start by verifying a reproducible environment"
+        )
+        assert commands[-1].startswith("uv build"), (
+            "the chain must end with build validation"
+        )
+        assert len(commands) == len(set(commands)), "duplicate gate in the spec"
 
 
 def test_profiles_neither_add_nor_relax_gates() -> None:
@@ -631,21 +751,23 @@ def test_profiles_neither_add_nor_relax_gates() -> None:
 
 
 @pytest.mark.parametrize(
-    "agents_path",
+    ("agents_path", "profile"),
     [
-        Path("AGENTS.md"),
-        Path("templates/AGENTS.md"),
+        (Path("AGENTS.md"), "python-single"),
+        (Path("templates/AGENTS.md"), "python-single"),
         *(
-            starter_kit_dir(p).relative_to(REPO_ROOT) / "AGENTS.md"
+            (starter_kit_dir(p).relative_to(REPO_ROOT) / "AGENTS.md", p)
             for p in STARTER_KIT_PROFILES
         ),
     ],
     ids=["repo-root", "template", "starter-single", "starter-workspace"],
 )
-def test_shipped_agents_files_state_the_exact_gate_chain(agents_path: Path) -> None:
+def test_shipped_agents_files_state_the_exact_gate_chain(
+    agents_path: Path, profile: str
+) -> None:
     """The contract requires exact gate commands in AGENTS.md; hold each copy to it."""
     text = (REPO_ROOT / agents_path).read_text(encoding="utf-8")
-    missing = [c for c in mandatory_ci_commands() if c not in text]
+    missing = [c for c in mandatory_ci_commands(profile) if c not in text]
     assert not missing, f"{agents_path} omits mandatory gates: {missing}"
 
 
@@ -738,6 +860,10 @@ def test_starter_kit_repo_check_hook_pin_matches_the_package_version(
     assert rev_match.group(1) == version, (
         f"{profile} starter kit pins v{rev_match.group(1)}, package is {version}"
     )
+    compliance = (
+        starter_kit_dir(profile) / ".github" / "workflows" / "compliance.yml"
+    ).read_text(encoding="utf-8")
+    assert f"repo-standard-kit.git@v{version}" in compliance
 
 
 @pytest.mark.parametrize(
@@ -752,33 +878,25 @@ def test_starter_kit_repo_check_hook_pin_matches_the_package_version(
     ids=["repo-root", "starter-single", "starter-workspace"],
 )
 def test_ruff_config_matches_the_documented_baseline(pyproject_path: Path) -> None:
-    """Passing the format gate is not enough; the config behind it must be the same."""
-    documented = documented_ruff_baseline()
+    """Passing the format gate is not enough; the config behind it must be the same.
+
+    repo-standard-kit's own repos hold themselves to the full recommended
+    baseline (§13) — line-length 88 and the PT family — not just the
+    mandatory floor every adopter must clear.
+    """
+    policy = documented_ruff_policy()
     actual = ruff_config_of(REPO_ROOT / pyproject_path)
 
-    assert actual.line_length == documented.line_length, (
-        f"{pyproject_path} sets line-length {actual.line_length}, "
-        f"baseline requires {documented.line_length}"
-    )
-    missing = set(documented.select) - set(actual.select)
+    missing = set(policy.mandatory_select) - set(actual.select)
     assert not missing, (
         f"{pyproject_path} drops required rule families: {sorted(missing)}"
     )
-
-
-def test_markdown_wraps_at_the_documented_prose_width() -> None:
-    """The prose width in the formatting baseline applies to the docs we ship."""
-    tracked = subprocess.run(
-        ["git", "ls-files", "*.md"],
-        cwd=REPO_ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.split()
-
-    over_long = [
-        f"{name}:{line} ({width} cols)"
-        for name in tracked
-        for line, width in prose_offenders(REPO_ROOT / name)
-    ]
-    assert not over_long, f"prose exceeds {PROSE_WIDTH} columns: {over_long}"
+    assert actual.line_length == policy.recommended_line_length, (
+        f"{pyproject_path} sets line-length {actual.line_length}, "
+        f"recommended baseline is {policy.recommended_line_length}"
+    )
+    missing_recommended = set(policy.recommended_select) - set(actual.select)
+    assert not missing_recommended, (
+        f"{pyproject_path} drops recommended rule families: "
+        f"{sorted(missing_recommended)}"
+    )

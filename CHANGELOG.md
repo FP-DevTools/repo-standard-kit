@@ -24,6 +24,240 @@ the changes listed under **Adopters must**.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-08-19
+
+### Added
+
+- Canonical, versioned policy in `policy/base.yaml` and `policy/profiles/`,
+  strict schema models, and deterministic generation of the packaged
+  `src/repo_standard/policy/compiled.json` runtime artifact and normative
+  `docs/policy-reference.md` catalogue. Markdown no longer supplies executable
+  checker values.
+- Operational profile resolution: explicit CLI override, then valid
+  `[tool.repo-standard]` metadata, then policy-owned deterministic detection.
+  `repo-init` also obtains its supported profile choices from compiled policy.
+- RSK019 requires the repository profile and standard major declaration;
+  RSK020 requires least-privilege quality-workflow permissions; and RSK021
+  requires full commit-SHA pins for remote Actions and reusable workflows.
+- Actionable findings now include title, canonical level, actual and expected
+  values, remediation, and status. The legacy JSON `severity` field remains a
+  derived compatibility field through v1.
+- Structural GitHub Actions and pre-commit parsing with YAML/TOML locations,
+  plus regression coverage for lookalike comments, echo, malformed documents,
+  material hook fields, permissions, and action pins.
+- GitHub Actions Dependabot configuration in this repository and both starter
+  kits so immutable pins receive automated update proposals.
+- Independent pull-request `compliance` jobs in this repository and both
+  starter kits. RSK014 now requires both `quality` and `compliance`: quality
+  proves the gate chain passes, while compliance prevents the chain and wider
+  repository standard from drifting unnoticed.
+- RSK022 recommends one approving review when repository staffing permits,
+  without making that recommendation a default merge blocker.
+
+- §4 now mandates static type checking as a local pre-commit gate
+  (`uv run ty check`), so it can be verified in CI exclusively through the
+  existing "Local gate verification" re-run instead of a separate,
+  duplicate CI step.
+- Two new `should`-level `repo-check` rules, split out of `RSK010`:
+  `RSK015` (declared Ruff `line-length` matches the recommended `88`) and
+  `RSK016` (the recommended `PT` rule family is selected). Neither needs a
+  §11 exemption.
+- `CHANGELOG.md` added to `docs/repo-layout.md`'s canonical layout,
+  `should`-level like `docs/adr/`. New `RSK017` (`should`) checks for it.
+  Both starter kits ship a minimal `CHANGELOG.md`, matching how they
+  already ship a `docs/adr/0001-template.md` for the same-severity
+  `RSK012`. `docs/bootstrap-workflow.md`'s expected-output trees updated
+  to match (also adding `.pymarkdown.json`, which they'd missed since it
+  was introduced).
+- `LICENSE` added to `docs/repo-layout.md`'s canonical layout, also
+  `should`-level. New `RSK018` checks for it. Unlike `CHANGELOG.md`, the
+  starter kits do not ship one — license text is a real per-repository
+  choice (`templates/README.md` already treats it as one, via a
+  `<license-name>` placeholder), not something with a universally correct
+  default the way an empty changelog or ADR template has.
+- §4 now mandates Markdown structural linting as a local pre-commit gate
+  (`uv run pymarkdown --config .pymarkdown.json scan`), approving
+  `pymarkdown` as the tool. Configured to disable `md024` restricted to
+  sibling headings (Keep a Changelog-style files repeat "### Added" once
+  per version section by design), and `md036`/`md033` disabled entirely
+  (both false-positive on conventions this standard itself relies on —
+  `__DUNDER__`-shaped bootstrap tokens, which are valid Markdown
+  strong-emphasis syntax, and `templates/`'s `<angle-bracket>`
+  fill-in-the-blank placeholders). It does not lint the contents of fenced
+  code blocks, so it cannot conflict with Ruff's ownership of Python
+  formatting and linting. `md013` (line-length) ships configured
+  (`line_length: 88`) but disabled by default — see the `RSK013` retirement
+  below.
+- The mandatory `ruff check` pre-commit hook now runs with `--fix`
+  (`uv run ruff check --fix --force-exclude`). §4's mandatory local-gate
+  list already said "lint auto-fixes where safe"; the mandated hook command
+  only linted, it never fixed. `ty check` has no equivalent `--fix` mode —
+  type errors are not generally mechanically fixable — so this only applies
+  to Ruff. Safe: `ruff-format` already rewrites files in place in the same
+  hook chain unguarded, and pre-commit's own "hook modified files" gate
+  already forces a review-and-restage before the fix can be committed.
+- §11 *Exceptions* now has a tooling counterpart: a `[tool.repo-check.ignore]`
+  table in the checked repository's `pyproject.toml` suppresses a named rule,
+  but only once a non-empty reason string is recorded against it. Previously
+  the only way to silence a false positive was to delete the rule or stop
+  running the checker; this repository's own `RSK005`/`RSK011` exception
+  moved out of `tests/test_compliance.py` and into its own
+  `[tool.repo-check.ignore]`, which now runs the same check the same way an
+  adopter would rather than special-casing itself.
+
+### Fixed
+
+- The standards repository's self-compliance workflow now excludes the default
+  development dependency group, so `repo-check` no longer installs unrelated
+  quality tools before checking a pull request.
+- `RSK011` no longer matches any `__DUNDER__`-shaped token as an
+  "unresolved placeholder" — only `repo_init.py`'s actual six-token
+  vocabulary (`__REPO_NAME__`, `__PACKAGE_NAME__`, `__DESCRIPTION__`,
+  `__REPO_TYPE__`, `__PYTHON_VERSION__`, `__AUTHOR__`). A pilot run against
+  a real repository (`wombat_configs`) flagged its own
+  `__PDC_GENERATED_NAME__` sentinel constant as a false positive; the
+  pattern was never meant to catch anything outside this standard's own
+  bootstrap templating.
+- The `python-workspace` starter kit could not pass its own mandatory gate
+  chain immediately after bootstrap. `packages/` shipped empty, so the test
+  runner collected zero tests and exited nonzero; the workspace root never
+  registered `packages/*` as a `uv` workspace member, so syncing never
+  installed a package `repo-add-package` had just created and that
+  package's own smoke test could never import it; and the root declared no
+  `[build-system]`, so building it fell back to PEP 517's implicit
+  `setuptools` backend and produced a wheel containing test files plus
+  untracked `*.egg-info/` litter. Fixed by shipping a root `tests/` with a
+  shell-well-formedness smoke test (`testpaths` now `["tests",
+  "packages"]`), adding `[tool.uv.workspace] members = ["packages/*"]`,
+  marking the root `[tool.uv] package = false` so it carries no
+  distributable artifact of its own, and scoping the CI build step to
+  `--all-packages` — a documented no-op before the first package exists,
+  rather than a failure or a meaningless root build.
+
+### Changed
+
+- `repo-check` now dispatches through a `check.kind` registry. Handlers do not
+  own rule IDs, levels, profile applicability, titles, or remediation.
+- `--profile` now filters applicable rules. Valid repository metadata wins
+  over conflicting layout markers; invalid metadata reports RSK019 while
+  fallback detection allows the rest of the catalogue to run.
+- Required workflow commands must be complete executable commands under
+  `jobs.quality.steps[*].run`; comments, echo, unrelated fields, and
+  shell-wrapper strings no longer produce false passes. Pre-commit hooks are
+  compared by ID, normalized entry and args, and material semantic fields.
+- Root, reusable, and starter workflows grant `contents: read` and pin
+  `actions/checkout` and `astral-sh/setup-uv` to v5 release commits, retaining
+  version comments.
+
+- **§5 CI Pull Request Gates collapsed from seven gates to four.**
+  Formatting, Linting, and Static type checking are no longer separately
+  mandated CI steps — piloting `repo-check` against real repositories
+  (`wombat_configs`, `platform_map`) showed these tools already run via the
+  mandatory local pre-commit hooks, so CI's "Local gate verification" step
+  (`uv run pre-commit run --all-files`) already re-verifies them; running
+  them again as standalone steps duplicated the same tools against the same
+  files for no additional coverage. `RSK006` narrows accordingly (it checks
+  for the same four gates, not seven).
+- **§13 relaxed: `line-length` is a `shall`-declare, `should`-match-88, not
+  a `shall`-equal-88.** A repository shall declare an explicit `line-length`
+  in `[tool.ruff]`, but the specific value is now a per-repository decision
+  — `88` is recommended, not required. `RSK010` narrows to checking only
+  that a value is declared and that the mandatory rule families
+  (`E, F, I, B, UP`) are selected; `RSK015` covers the recommended value.
+- **§13 relaxed: `PT` is now a recommended rule family, not a mandatory
+  one.** Dropping it no longer needs a §11 exemption. `RSK016` reports it
+  as a `should`.
+- `docs/compliance.md` now distinguishes optional early pre-commit feedback
+  from the independently required `compliance` CI status. Starter repositories
+  intentionally run the structural check in pre-commit and as a separate
+  protected status so removing or weakening the quality workflow cannot pass
+  unnoticed. `should` findings remain non-blocking everywhere `repo-check`
+  runs.
+- **Section 10 approval count relaxed from required to recommended.** RSK014
+  still requires pull-request protection and every other documented enforcement
+  property, but accepts zero mandatory approvals. RSK022 reports fewer than one
+  approval as a non-blocking `should` finding unless strict mode is requested.
+- **§13 prose width downgraded from a `shall` to a `should`, matching how
+  the Ruff `line-length` *value* already worked.** Checking `md013`
+  ourselves via `repo_standard.compliance.spec.prose_offenders` duplicated
+  what a real linter already does correctly — verified empirically: its
+  defaults already exempt fenced code, link reference definitions, and
+  unbreakable long tokens, matching the custom exemptions exactly. Its one
+  real gap (table rows can't be exempted via config) turned out to be a
+  smaller, more honest tradeoff than maintaining bespoke line-wrapping
+  logic. A repository may enable `md013` locally to enforce prose width;
+  this standard no longer mandates it.
+
+### Removed
+
+- Removed Markdown extraction, `compliance/spec.py`, `rules.json`, and
+  `scripts/generate_rules.py` after the preserved catalogue and retired RSK013
+  gap were encoded and tested in canonical policy.
+
+- `RSK013` (Markdown prose width) and the underlying
+  `prose_offenders`/`PROSE_WIDTH` implementation in
+  `repo_standard.compliance.spec`, along with this repository's own
+  `test_markdown_wraps_at_the_documented_prose_width` test — retired in
+  favor of `pymarkdown`'s `md013`, per the `should`-not-`shall` change
+  above. `repo-check` no longer reports a prose-width finding at all;
+  a repository that wants one runs `pymarkdown` with `md013` enabled.
+
+### Adopters must
+
+- Add `[tool.repo-standard]` to `pyproject.toml` with
+  `profile = "python-single"` or `profile = "python-workspace"`, and
+  `standard = "1"`.
+- Give the standard `quality` job effective permissions exactly equivalent to
+  `contents: read`.
+- Add a pull-request compliance workflow that emits a `compliance` status, and
+  require both `quality` and `compliance` in branch protection or rulesets.
+- Replace mutable remote action and reusable-workflow refs in the quality job
+  with full 40-character commit SHAs. Retain version comments and add a
+  GitHub Actions Dependabot entry so those pins remain maintainable.
+- Ensure each mandatory pre-commit hook has the policy-owned ID, normalized
+  entry and arguments, and material fields. Textual lookalikes no longer count.
+- Expect richer JSON findings while continuing to consume the existing
+  `rule_id`, `severity`, `path`, `line`, and `message` fields unchanged.
+
+- Add `uv run ty check` as a mandatory local pre-commit hook if not already
+  present; `RSK007` now requires it. Repositories generated by `repo-init`
+  already do.
+- Add a `pymarkdown` pre-commit hook and a `.pymarkdown.json` config
+  (disabling `md013`, `md033`, `md036`, and scoping `md024` to sibling
+  headings — see above); `RSK007` now requires the exact
+  `uv run pymarkdown --config .pymarkdown.json scan` entry. Repositories
+  generated by `repo-init` already do.
+- Nothing for the §13 relaxations (`line-length` value, `PT`) — they make
+  `RSK010`/§13 easier to satisfy, not harder. A repository that already met
+  the old bar still does.
+- Nothing for the collapsed §5 gate count — a workflow that still runs the
+  old seven steps remains aligned (`RSK006` checks for a subset, not an
+  exact match); removing the now-redundant standalone steps is recommended
+  cleanup, not required.
+- Nothing for the retired `RSK013` — a repository loses a `should`-level
+  finding, not a requirement. Enabling `md013` locally to keep enforcing
+  prose width is a choice, not something this release asks for.
+- Nothing for `RSK017`. `CHANGELOG.md` is a `should`, like `docs/adr/`; a
+  repository without one remains aligned.
+- Nothing for `RSK018`. `LICENSE` is a `should`; a repository without one
+  remains aligned.
+- Nothing for the relaxed approval count. A zero-approval ruleset now satisfies
+  RSK014; requiring one approving review remains the RSK022 recommendation.
+- Add `--fix` to the `ruff check` pre-commit hook entry if not already
+  present; `RSK007` now requires the exact
+  `uv run ruff check --fix --force-exclude` entry, so a hook that still
+  reads `uv run ruff check --force-exclude` (no `--fix`) now fails `RSK007`.
+  Repositories generated by `repo-init` already do.
+- Nothing for `[tool.repo-check.ignore]` — it is new, opt-in suppression
+  tooling. A repository with no exceptions to record needs no table.
+- A `python-workspace` repository bootstrapped before this fix should add
+  `[tool.uv.workspace] members = ["packages/*"]` and `[tool.uv] package =
+  false` to its root `pyproject.toml`, add `tests` to `testpaths`, add a
+  root `tests/` smoke test, and change its CI build step to
+  `uv build --all-packages` (guarded for the case of an empty `packages/`).
+  Existing packages under `packages/` are unaffected; only the workspace
+  root's own wiring was broken.
+
 ## [0.4.0] - 2026-08-18
 
 ### Added
@@ -204,7 +438,8 @@ the changes listed under **Adopters must**.
 Initial standard, Python starter kits, and the `repo-init` and
 `repo-add-package` bootstrap tools.
 
-[Unreleased]: https://github.com/FP-DevTools/repo-standard-kit/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/FP-DevTools/repo-standard-kit/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/FP-DevTools/repo-standard-kit/compare/v0.4.0...v1.0.0
 [0.4.0]: https://github.com/FP-DevTools/repo-standard-kit/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/FP-DevTools/repo-standard-kit/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/FP-DevTools/repo-standard-kit/compare/v0.2.0...v0.3.0

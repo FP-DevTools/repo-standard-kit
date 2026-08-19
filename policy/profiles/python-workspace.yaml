@@ -1,0 +1,10 @@
+schema_version: 1
+id: python-workspace
+title: Python workspace repository
+description: A Python monorepo with per-package projects under packages/.
+detection:
+  priority: 100
+  default: false
+  markers:
+    - path: packages
+      kind: directory

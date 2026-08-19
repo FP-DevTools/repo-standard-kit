@@ -1,0 +1,8 @@
+schema_version: 1
+id: python-single
+title: Python single-package repository
+description: A repository producing one Python package from the root.
+detection:
+  priority: 10
+  default: true
+  markers: []

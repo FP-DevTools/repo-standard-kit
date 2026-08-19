@@ -11,6 +11,7 @@ dev = [
   "detect-secrets>=1.5.0",
   "pre-commit>=4.0.0",
   "pre-commit-hooks>=5.0.0",
+  "pymarkdownlnt>=0.9.39",
   "pytest>=8.0.0",
   "ruff>=0.6.0",
   "ty>=0.0.1a16",
@@ -25,6 +26,10 @@ module-name = "__PACKAGE_NAME__"
 
 [tool.ruff]
 line-length = 88
+
+[tool.repo-standard]
+profile = "python-single"
+standard = "1"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "PT"]

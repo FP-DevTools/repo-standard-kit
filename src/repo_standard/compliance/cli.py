@@ -4,13 +4,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
-from repo_standard.compliance.checks import Finding, check_repo, load_rules
+from repo_standard.compliance.checks import Finding, check_repo, load_policy
+
+_POSITIVE = "\033[38;2;35;209;111m"
+_RESET = "\033[0m"
 
 
 def build_parser() -> argparse.ArgumentParser:
+    policy = load_policy()
     parser = argparse.ArgumentParser(
         description="Check a repository's structural alignment with repo-standard-kit."
     )
@@ -23,7 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--format", choices=["text", "json"], default="text")
     parser.add_argument(
         "--profile",
-        choices=["auto", "python-single", "python-workspace"],
+        choices=["auto", *policy.profile_ids],
         default="auto",
     )
     parser.add_argument(
@@ -43,15 +48,33 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return build_parser().parse_args(argv)
 
 
-def _format_text(findings: list[Finding]) -> str:
+def _supports_color() -> bool:
+    """Follows ruff/ty: colored unless NO_COLOR is set or stdout isn't a tty."""
+    if os.environ.get("NO_COLOR"):
+        return False
+    if os.environ.get("FORCE_COLOR"):
+        return True
+    return sys.stdout.isatty()
+
+
+def _format_text(findings: list[Finding], *, color: bool) -> str:
     if not findings:
-        return "repo-check: no findings. Repository is structurally aligned.\n"
-    lines = [
-        f"{finding.severity.upper():8} {finding.rule_id}  {finding.path}"
-        + (f":{finding.line}" if finding.line is not None else "")
-        + f"  {finding.message}"
-        for finding in findings
-    ]
+        message = "All checks passed!"
+        return f"{_POSITIVE}{message}{_RESET}\n" if color else f"{message}\n"
+    lines = []
+    for finding in findings:
+        location = finding.path + (
+            f":{finding.line}" if finding.line is not None else ""
+        )
+        lines.append(
+            f"{finding.level.upper():11} {finding.rule_id}  {location}  "
+            f"{finding.title}: {finding.message}"
+        )
+        if finding.actual is not None:
+            lines.append(f"  actual: {finding.actual!r}")
+        if finding.expected is not None:
+            lines.append(f"  expected: {finding.expected!r}")
+        lines.append(f"  remediation: {finding.remediation}")
     lines.append(f"\n{len(findings)} finding(s).")
     return "\n".join(lines) + "\n"
 
@@ -62,10 +85,16 @@ def _format_json(findings: list[Finding]) -> str:
             [
                 {
                     "rule_id": finding.rule_id,
+                    "title": finding.title,
+                    "level": finding.level,
                     "severity": finding.severity,
                     "path": finding.path,
                     "line": finding.line,
                     "message": finding.message,
+                    "actual": finding.actual,
+                    "expected": finding.expected,
+                    "remediation": finding.remediation,
+                    "status": finding.status,
                 }
                 for finding in findings
             ],
@@ -82,17 +111,23 @@ def main(argv: list[str] | None = None) -> int:
         print(f"repo-check: {root} is not a directory", file=sys.stderr)
         return 2
 
-    rules = load_rules()
+    policy = load_policy()
     profile = None if args.profile == "auto" else args.profile
     findings = check_repo(
-        root, rules, profile=profile, include_platform=args.check_enforcement
+        root, policy, profile=profile, include_platform=args.check_enforcement
     )
 
-    output = _format_json(findings) if args.format == "json" else _format_text(findings)
+    output = (
+        _format_json(findings)
+        if args.format == "json"
+        else _format_text(findings, color=_supports_color())
+    )
     print(output, end="")
 
-    severities = {"shall", "should"} if args.strict else {"shall"}
-    if any(finding.severity in severities for finding in findings):
+    if any(finding.status == "indeterminate" for finding in findings):
+        return 2
+    levels = {"required", "recommended"} if args.strict else {"required"}
+    if any(finding.level in levels for finding in findings):
         return 1
     return 0
 

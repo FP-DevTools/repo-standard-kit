@@ -69,7 +69,7 @@ Pick the block that matches this repo's profile and delete the other.
 
 **Single-package (`python-single`)**
 
-```
+```text
 .
 ├── src/<package_name>/   # production code
 ├── tests/                # unit and integration tests
@@ -83,7 +83,7 @@ Pick the block that matches this repo's profile and delete the other.
 
 **Workspace (`python-workspace`)**
 
-```
+```text
 .
 ├── packages/<package-slug>/
 │   ├── src/<package_name>/
@@ -100,6 +100,15 @@ Pick the block that matches this repo's profile and delete the other.
 production code), and how they relate to `src/`.>
 
 ## Development
+
+This repository declares its machine-enforced standard contract in
+`pyproject.toml`:
+
+```toml
+[tool.repo-standard]
+profile = "<python-single or python-workspace>"
+standard = "1"
+```
 
 See `AGENTS.md` for the full repo-level contract (human/agent
 responsibilities, workflow rules, coding standards). This section covers what
@@ -136,10 +145,13 @@ standards drift.
 
 The mandatory gate chain is listed in `AGENTS.md`, which is the one place this
 repository states it, and runs in CI on every PR to `main`
-(`.github/workflows/quality.yml`). Run it locally before pushing.
+(`.github/workflows/quality.yml`). A separate
+`.github/workflows/compliance.yml` job checks that the repository and quality
+workflow still match repo-standard-kit. Run the gate chain locally before
+pushing.
 
-No PR merges into `main` unless all mandatory gates pass, and branch protection
-enforces that rather than convention — see the
+No PR merges into `main` unless both `quality` and `compliance` pass, and
+branch protection enforces that rather than convention — see the
 [quality-gates spec][quality-gates]. Temporary exemptions require explicit
 justification in the PR and maintainer approval, and must stay time-limited.
 

@@ -9,9 +9,11 @@ software repositories.
 starter assets and tooling that put it into practice, so good defaults are cheap
 to adopt in a new repository and easy to check against in an existing one.
 
-This README is a guide to using the kit. It is **not normative**: the rules live
-in [docs/repo-standard.md](docs/repo-standard.md) and the companion documents it
-indexes. Where this README and the standard differ, the standard governs.
+This README is a guide to using the kit. It is **not normative**. Normative
+prose starts at [docs/repo-standard.md](docs/repo-standard.md); executable rule
+values live in `policy/`, with the generated catalogue in
+[docs/policy-reference.md](docs/policy-reference.md). Where this README and the
+standard differ, the standard governs.
 
 This repository provides:
 
@@ -24,6 +26,8 @@ This repository provides:
 - a thin bootstrap tool for generating a new repository from the starter kit
 - a `repo-check` CLI and library that verify a repository's structural
   alignment with the standard
+- versioned canonical YAML policy plus deterministic runtime and documentation
+  generation
 - GitHub Actions CI that mirrors the documented local quality gates
 - `uv`-based dependency and build configuration for Python projects
 
@@ -40,9 +44,11 @@ define the intent and rules.
 ## What Is In This Repo
 
 - `docs/`: the standard and its companion documents
+- `policy/`: canonical machine-enforced rules and profile detection metadata
 - `profiles/`: language or repo-type specific standards
 - `templates/`: reusable templates for adopting the standard in an existing repo
 - `src/repo_standard/`: packaged bootstrap implementation
+- `src/repo_standard/policy/`: strict policy models and compiled runtime policy
 - `src/repo_standard/starter_kits/`: copyable repository skeletons
 
 For the layout the standard prescribes for *your* repository, see
@@ -75,7 +81,7 @@ Then:
 Pin a standards version by adding a Git ref:
 
 ```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v0.4.0" repo-init --profile python-single --repo-name widget-service
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v1.0.0" repo-init --profile python-single --repo-name widget-service
 ```
 
 For repeated use, install the tool once. That puts `repo-init` and
@@ -104,9 +110,10 @@ Run `repo-check` against any repository the same way, with `uvx` or after
 uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-check /path/to/repository
 ```
 
-It reports structural findings against the same normative documents
-`repo-init` generates from — see [docs/compliance.md](docs/compliance.md)
-for the full rule catalogue and what it does not check.
+It reports structural findings from the same compiled YAML policy that drives
+`repo-init`. See [docs/policy-reference.md](docs/policy-reference.md) for the
+generated rule catalogue and [docs/compliance.md](docs/compliance.md) for
+resolution, output, and structural-check details.
 
 ## Current Profiles
 
