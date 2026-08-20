@@ -733,6 +733,41 @@
         "section": "File Shapes"
       },
       "title": "pyproject.toml declares tables in the canonical order"
+    },
+    {
+      "check": {
+        "config": {
+          "dials": [
+            {
+              "label": "Verbosity",
+              "level": 2,
+              "scale": 5
+            },
+            {
+              "label": "Precision, repeatability, determinism",
+              "level": 4,
+              "scale": 5
+            }
+          ],
+          "path": "AGENTS.md",
+          "section": "Agent Operating Mode"
+        },
+        "kind": "agents_operating_dials"
+      },
+      "enforcement": "structural",
+      "id": "RSK026",
+      "level": "required",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "Agent behaviour left to model defaults varies between runs and between repositories. Stating the calibration where agents already read their operating boundaries is what makes the work consistent across every repository adopting the standard.",
+      "remediation": "State each dial in the Agent Operating Mode section of AGENTS.md, in the declared order and at the declared level.",
+      "source": {
+        "document": "docs/repo-standard.md",
+        "section": "Agent Operating Mode"
+      },
+      "title": "AGENTS.md states the calibrated agent operating dials"
     }
   ],
   "schema_version": 1,
@@ -758,6 +793,16 @@
         {
           "heading": "Human And Agent Responsibilities",
           "id": "human-and-agent-responsibilities",
+          "level": "required"
+        },
+        {
+          "heading": "Agent Operating Mode",
+          "id": "agent-operating-mode",
+          "level": "required"
+        },
+        {
+          "heading": "Single Source Of Truth",
+          "id": "single-source-of-truth",
           "level": "required"
         },
         {

@@ -44,6 +44,8 @@ documents are produced by walking it in the order below.
 | `repository-purpose` | `Repository Purpose` | `required` |
 | `repository-context` | `Repository Context` | `required` |
 | `human-and-agent-responsibilities` | `Human And Agent Responsibilities` | `required` |
+| `agent-operating-mode` | `Agent Operating Mode` | `required` |
+| `single-source-of-truth` | `Single Source Of Truth` | `required` |
 | `workflow` | `Workflow` | `required` |
 | `quality-gates` | `Quality Gates` | `required` |
 | `coding-standards` | `Coding Standards` | `required` |
@@ -396,6 +398,23 @@ Remediation: Add an Unreleased section, and keep any Compatibility Policy sectio
 Rationale: A predictable table order keeps related configuration together and stops generated and hand-edited manifests from diverging.
 
 Remediation: Order the declared pyproject tables as the pyproject shape declares; tables the shape does not list may appear anywhere.
+
+### RSK026: AGENTS.md states the calibrated agent operating dials
+
+- Level: `required`
+- Profiles: `python-single`, `python-workspace`
+- Source: [`docs/repo-standard.md` — Agent Operating Mode](../docs/repo-standard.md)
+- Enforcement: `structural`
+- Check kind: `agents_operating_dials`
+
+Rationale: Agent behaviour left to model defaults varies between runs and between repositories. Stating the calibration where agents already read their operating boundaries is what makes the work consistent across every repository adopting the standard.
+
+Remediation: State each dial in the Agent Operating Mode section of AGENTS.md, in the declared order and at the declared level.
+
+| Dial | Level |
+| --- | --- |
+| Verbosity | 2 / 5 |
+| Precision, repeatability, determinism | 4 / 5 |
 
 ## Retired Rule IDs
 

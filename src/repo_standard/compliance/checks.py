@@ -324,24 +324,30 @@ def _text_contains_all(context: CheckContext, config: dict[str, Any]) -> list[Is
     ]
 
 
+def _section_body(text: str, heading: str) -> str | None:
+    """Return the body of the level-two section named `heading`, if present."""
+    match = re.search(
+        rf"^##\s+{re.escape(heading)}\s*$\n?(?P<body>.*?)(?=^##\s+|\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    return match.group("body") if match is not None else None
+
+
 def _agents_quality_commands(
     context: CheckContext, config: dict[str, Any]
 ) -> list[Issue]:
     text = _read(context.root / config["path"])
     if text is None:
         return []
-    section_match = re.search(
-        r"^##\s+Quality Gates\s*$\n?(?P<body>.*?)(?=^##\s+|\Z)",
-        text,
-        re.MULTILINE | re.DOTALL,
-    )
+    body = _section_body(text, "Quality Gates")
     actual: list[str] = []
-    if section_match is not None:
+    if body is not None:
         actual = [
             re.sub(r"\s+", " ", command).strip()
             for command in re.findall(
                 r"^\s*(?:\d+[.)]|[-*+])\s+`([^`\r\n]+)`\s*$",
-                section_match.group("body"),
+                body,
                 re.MULTILINE,
             )
         ]
@@ -353,6 +359,52 @@ def _agents_quality_commands(
             config["path"],
             "Quality Gates must list the exact ordered commands for profile "
             f"{context.profile!r}.",
+            actual,
+            expected,
+        )
+    ]
+
+
+_DIAL_LINE = re.compile(
+    r"^[ \t]*[-*+][ \t]+\*\*(?P<label>[^*\r\n]+?)[ \t]*:?\*\*[ \t]*"
+    r"(?P<level>\d+)[ \t]*/[ \t]*(?P<scale>\d+)[ \t]*$",
+    re.MULTILINE,
+)
+
+
+def _dial(label: str, level: object, scale: object) -> str:
+    return f"{label}: {level} / {scale}"
+
+
+def _agents_operating_dials(
+    context: CheckContext, config: dict[str, Any]
+) -> list[Issue]:
+    """RSK026: the operating dials are policy values, not prose an editor owns.
+
+    Deliberately parallel to `_agents_quality_commands`: the section must state
+    every dial, in the declared order, at the declared level. Prose around them
+    is the repository's business.
+    """
+    text = _read(context.root / config["path"])
+    if text is None:
+        return []
+    body = _section_body(text, config["section"])
+    actual: list[str] = []
+    if body is not None:
+        actual = [
+            _dial(
+                match.group("label").strip(), match.group("level"), match.group("scale")
+            )
+            for match in _DIAL_LINE.finditer(body)
+        ]
+    expected = [_dial(d["label"], d["level"], d["scale"]) for d in config["dials"]]
+    if actual == expected:
+        return []
+    return [
+        Issue(
+            config["path"],
+            f"{config['section']} must state every dial, in order, at the level "
+            "policy declares.",
             actual,
             expected,
         )
@@ -1450,6 +1502,7 @@ CHECK_HANDLERS: dict[str, CheckHandler] = {
     "toml_table_order": _toml_table_order,
     "text_contains_all": _text_contains_all,
     "agents_quality_commands": _agents_quality_commands,
+    "agents_operating_dials": _agents_operating_dials,
     "text_pattern_each": _text_pattern_each,
     "github_workflow_commands": _github_workflow_commands,
     "pre_commit_hooks": _pre_commit_hooks,

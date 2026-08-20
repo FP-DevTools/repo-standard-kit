@@ -491,3 +491,32 @@ rules:
     remediation: >-
       Order the declared pyproject tables as the pyproject shape declares;
       tables the shape does not list may appear anywhere.
+
+  - id: RSK026
+    title: AGENTS.md states the calibrated agent operating dials
+    level: required
+    profiles: [python-single, python-workspace]
+    source:
+      document: docs/repo-standard.md
+      section: Agent Operating Mode
+    enforcement: structural
+    check:
+      kind: agents_operating_dials
+      config:
+        path: AGENTS.md
+        section: Agent Operating Mode
+        dials:
+          - label: Verbosity
+            level: 2
+            scale: 5
+          - label: Precision, repeatability, determinism
+            level: 4
+            scale: 5
+    rationale: >-
+      Agent behaviour left to model defaults varies between runs and between
+      repositories. Stating the calibration where agents already read their
+      operating boundaries is what makes the work consistent across every
+      repository adopting the standard.
+    remediation: >-
+      State each dial in the Agent Operating Mode section of AGENTS.md, in the
+      declared order and at the declared level.

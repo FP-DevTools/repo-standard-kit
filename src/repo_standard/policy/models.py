@@ -35,6 +35,7 @@ CHECK_SCHEMAS: dict[str, tuple[set[str], set[str]]] = {
     "toml_table_order": ({"shape"}, set()),
     "text_contains_all": ({"path", "values"}, set()),
     "agents_quality_commands": ({"path", "commands_by_profile"}, set()),
+    "agents_operating_dials": ({"path", "section", "dials"}, set()),
     "text_pattern_each": ({"paths", "pattern"}, set()),
     "github_workflow_commands": (
         {"path", "job", "trigger", "commands_by_profile"},
@@ -340,6 +341,24 @@ def _validate_hook(value: Any, location: str) -> None:
             _boolean(data[key], f"{location}.{key}")
 
 
+def _validate_dials(value: Any, location: str) -> None:
+    """A dial is one calibrated behaviour, stated as a level out of a scale."""
+    if not isinstance(value, list) or not value:
+        _fail(location, "expected a non-empty list")
+    labels: list[str] = []
+    for index, item in enumerate(value):
+        where = f"{location}[{index}]"
+        data = _mapping(item, where)
+        _keys(data, where, required={"label", "level", "scale"})
+        labels.append(_string(data["label"], f"{where}.label"))
+        level = _integer(data["level"], f"{where}.level")
+        scale = _integer(data["scale"], f"{where}.scale")
+        if not 1 <= level <= scale:
+            _fail(f"{where}.level", f"expected 1..{scale}, got {level}")
+    if len(labels) != len(set(labels)):
+        _fail(location, "contains duplicate labels")
+
+
 def _validate_check_config(kind: str, config: dict[str, Any], location: str) -> None:
     required, optional = CHECK_SCHEMAS[kind]
     _keys(config, location, required=required, optional=optional)
@@ -353,6 +372,7 @@ def _validate_check_config(kind: str, config: dict[str, Any], location: str) -> 
         "trigger",
         "standard_major",
         "shape",
+        "section",
     ):
         if key in config:
             _string(config[key], f"{location}.{key}")
@@ -414,6 +434,8 @@ def _validate_check_config(kind: str, config: dict[str, Any], location: str) -> 
             _fail(f"{location}.hooks", "expected a non-empty list")
         for index, hook in enumerate(hooks):
             _validate_hook(hook, f"{location}.hooks[{index}]")
+    if "dials" in config:
+        _validate_dials(config["dials"], f"{location}.dials")
 
 
 @dataclass(frozen=True)

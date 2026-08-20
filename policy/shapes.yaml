@@ -16,6 +16,12 @@ shapes:
       - id: human-and-agent-responsibilities
         heading: Human And Agent Responsibilities
         level: required
+      - id: agent-operating-mode
+        heading: Agent Operating Mode
+        level: required
+      - id: single-source-of-truth
+        heading: Single Source Of Truth
+        level: required
       - id: workflow
         heading: Workflow
         level: required
