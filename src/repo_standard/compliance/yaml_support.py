@@ -2,31 +2,16 @@
 
 from __future__ import annotations
 
-import copy
-import re
 from dataclasses import dataclass
 from typing import Any
 
-import yaml
-from yaml.nodes import MappingNode, Node, ScalarNode, SequenceNode
+from ruamel.yaml import YAML
+from ruamel.yaml.error import YAMLError
+from ruamel.yaml.nodes import MappingNode, Node, ScalarNode, SequenceNode
 
-
-class GitHubSafeLoader(yaml.SafeLoader):
-    """Safe loader with YAML 1.2 boolean behavior (`on` stays a string)."""
-
-
-GitHubSafeLoader.yaml_implicit_resolvers = copy.deepcopy(
-    yaml.SafeLoader.yaml_implicit_resolvers
-)
-for first_character, resolvers in GitHubSafeLoader.yaml_implicit_resolvers.items():
-    GitHubSafeLoader.yaml_implicit_resolvers[first_character] = [
-        resolver for resolver in resolvers if resolver[0] != "tag:yaml.org,2002:bool"
-    ]
-GitHubSafeLoader.add_implicit_resolver(
-    "tag:yaml.org,2002:bool",
-    re.compile(r"^(?:true|false)$", re.IGNORECASE),
-    list("tTfF"),
-)
+# ruamel resolves the YAML 1.2 core schema, where only `true`/`false` are
+# booleans, so a workflow's `on:` trigger key survives loading as a string.
+_GITHUB_YAML = YAML(typ="safe")
 
 
 @dataclass(frozen=True)
@@ -64,9 +49,9 @@ def _node_lines(
 def load_github_yaml(text: str) -> YamlDocument:
     """Safely load YAML and retain best-effort line numbers for value nodes."""
     try:
-        data = yaml.load(text, Loader=GitHubSafeLoader)
-        node = yaml.compose(text, Loader=GitHubSafeLoader)
-    except yaml.YAMLError as error:
+        data = _GITHUB_YAML.load(text)
+        node = _GITHUB_YAML.compose(text)
+    except YAMLError as error:
         mark = getattr(error, "problem_mark", None)
         line = mark.line + 1 if mark is not None else None
         column = mark.column + 1 if mark is not None else None

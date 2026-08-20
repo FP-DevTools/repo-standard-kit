@@ -10,10 +10,10 @@ import zipfile
 from pathlib import Path
 
 import pytest
-import yaml
 from conftest import (
     REPO_ROOT,
     documented_ruff_policy,
+    load_yaml,
     mandatory_ci_commands,
     required_agents_sections,
     ruff_config_of,
@@ -245,6 +245,10 @@ def test_built_wheel_contains_clean_packaged_starter_kits(tmp_path: Path) -> Non
     wheel_path = next(tmp_path.glob("repo_standard_kit-*.whl"))
     with zipfile.ZipFile(wheel_path) as wheel:
         names = set(wheel.namelist())
+        entry_points_path = next(
+            name for name in names if name.endswith(".dist-info/entry_points.txt")
+        )
+        entry_points = wheel.read(entry_points_path).decode("utf-8")
 
     assert "repo_standard/starter_kits/python-single/AGENTS.md" in names
     assert "repo_standard/starter_kits/python-workspace/AGENTS.md" in names
@@ -257,7 +261,7 @@ def test_built_wheel_contains_clean_packaged_starter_kits(tmp_path: Path) -> Non
         in names
     )
     assert "repo_standard/policy/compiled.json" in names
-    assert any(name.endswith(".dist-info/entry_points.txt") for name in names)
+    assert "repo-adopt = repo_standard.repo_adopt:main" in entry_points
     assert not any(
         any(part in IGNORED_ARTIFACT_PARTS for part in name.split("/"))
         or name.endswith(".pyc")
@@ -362,7 +366,7 @@ def test_compliance_workflows_emit_an_independent_required_status() -> None:
     assert "uv run --locked --no-dev repo-check ." in root_workflow
     assert "uvx \\" in root_workflow
     for workflow_path in workflow_paths[1:]:
-        assert "repo-standard-kit.git@v1.1.0" in workflow_path.read_text(
+        assert "repo-standard-kit.git@v1.2.0" in workflow_path.read_text(
             encoding="utf-8"
         )
 
@@ -370,7 +374,7 @@ def test_compliance_workflows_emit_an_independent_required_status() -> None:
 def test_reusable_compliance_workflow_keeps_inputs_out_of_shell_source() -> None:
     workflow_path = REPO_ROOT / ".github" / "workflows" / "compliance.yml"
     workflow_text = workflow_path.read_text(encoding="utf-8")
-    workflow = yaml.safe_load(workflow_text)
+    workflow = load_yaml(workflow_text)
     run_step = next(
         step
         for step in workflow["jobs"]["compliance"]["steps"]
@@ -402,7 +406,7 @@ def test_reusable_compliance_workflow_validates_standard_ref() -> None:
 
 @pytest.mark.parametrize(
     ("standard_ref", "expected_returncode"),
-    [("v1.1.0", 42), ("", 41)],
+    [("v1.2.0", 42), ("", 41)],
     ids=["adopter-pull-request", "direct-pull-request"],
 )
 def test_reusable_compliance_workflow_selects_the_correct_checker_environment(
@@ -411,7 +415,7 @@ def test_reusable_compliance_workflow_selects_the_correct_checker_environment(
     expected_returncode: int,
 ) -> None:
     workflow_path = REPO_ROOT / ".github" / "workflows" / "compliance.yml"
-    workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+    workflow = load_yaml(workflow_path.read_text(encoding="utf-8"))
     run = next(
         step["run"]
         for step in workflow["jobs"]["compliance"]["steps"]

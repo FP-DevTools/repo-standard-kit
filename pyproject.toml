@@ -1,13 +1,14 @@
 [project]
 name = "repo-standard-kit"
-version = "1.1.0"
+version = "1.2.0"
 description = "Portable development standards, starter kits, and bootstrap tooling for software repositories."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "LicenseRef-Proprietary"
 license-files = ["LICENSE"]
 dependencies = [
-  "PyYAML>=6.0.3",
+  "ruamel.yaml>=0.18.10",
+  "tomlkit>=0.13.3",
 ]
 classifiers = [
   "Private :: Do Not Upload",
@@ -15,6 +16,7 @@ classifiers = [
 
 [project.scripts]
 repo-add-package = "repo_standard.repo_add_package:main"
+repo-adopt = "repo_standard.repo_adopt:main"
 repo-check = "repo_standard.compliance.cli:main"
 repo-init = "repo_standard.repo_init:main"
 

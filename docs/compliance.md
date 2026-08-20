@@ -59,7 +59,7 @@ platform command derives the legacy `platform` value plus
 `status: "indeterminate"`.
 
 YAML and TOML parse failures report parser locations. Workflow findings report
-the relevant node line when PyYAML exposes one.
+the relevant node line when the YAML parser exposes one.
 
 ## Suppressing A Rule
 
@@ -107,7 +107,7 @@ required compliance job; that defense-in-depth duplication is intentional.
 ```yaml
 repos:
   - repo: https://github.com/FP-DevTools/repo-standard-kit
-    rev: v1.1.0
+    rev: v1.2.0
     hooks:
       - id: repo-check
 ```
@@ -124,7 +124,7 @@ jobs:
   compliance:
     uses: FP-DevTools/repo-standard-kit/.github/workflows/compliance.yml@<full-sha>
     with:
-      standard-ref: v1.1.0
+      standard-ref: v1.2.0
 ```
 
 The reusable workflow itself SHALL be pinned to a full commit SHA. That
@@ -132,7 +132,7 @@ immutable `uses:` reference selects the workflow implementation the caller
 trusts. The distinct `standard-ref` input selects the released
 `repo-standard-kit` revision whose packaged checker and compiled policy are
 executed. A commit SHA gives the strongest reproducibility. A human-readable
-release tag such as `v1.1.0` is permitted only when repository governance keeps
+release tag such as `v1.2.0` is permitted only when repository governance keeps
 release tags immutable.
 The workflow passes that input through the environment, validates it against a
 narrow Git-ref character allowlist, and never interpolates caller-controlled

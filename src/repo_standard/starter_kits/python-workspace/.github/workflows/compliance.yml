@@ -20,5 +20,5 @@ jobs:
       - name: Check repository compliance
         run: >-
           uvx --from
-          "git+https://github.com/FP-DevTools/repo-standard-kit.git@v1.1.0"
+          "git+https://github.com/FP-DevTools/repo-standard-kit.git@v1.2.0"
           repo-check .

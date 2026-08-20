@@ -11,7 +11,8 @@ repo root.
 - root `src/<package_name>/`
 - root `tests/`
 - shared tool config at the repo root
-- root `uv_build` backend with `module-name` set to the package name
+- root PEP 517 build backend; `uv_build` with `module-name` set to the package
+  name is the recommended and generated default
 - root pre-commit hooks that run Ruff and generic file checks through `uv`
 - root GitHub Actions workflow for quality gates
 

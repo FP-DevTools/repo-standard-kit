@@ -24,6 +24,45 @@ the changes listed under **Adopters must**.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-08-20
+
+### Added
+
+- A packaged `repo-adopt` command for conflict-aware adoption in existing
+  `python-single` and `python-workspace` repositories. It provides a fully
+  read-only dry run, clean-worktree preflight, policy-owned profile detection,
+  structural TOML/YAML reconciliation, post-adoption `repo-check` reporting,
+  optional lock/install escape hatches, and full-gate execution.
+- Regression coverage for zero-required-finding adoption of both profiles,
+  preservation of project-owned workflow/hook/prose content, idempotency,
+  dirty-worktree refusal, parse failures, dry runs, conflicts, and interrupted
+  commands.
+- A `repo-adopt --native-tls` option that propagates the platform certificate
+  store setting to child lock, sync, and quality-gate commands.
+
+### Changed
+
+- RSK008 now recommends rather than requires `uv_build`. Starter repositories
+  and new workspace packages still use it by default, while established
+  packages may retain another PEP 517 backend without blocking normal
+  compliance or `repo-adopt`.
+- Policy and workflow loading now use `ruamel.yaml`, the parser `repo-adopt`
+  already required, so `PyYAML` is no longer a runtime dependency. YAML 1.2
+  core-schema booleans are now native rather than resolver patches, which keeps
+  a workflow's `on:` trigger key a string as before.
+- This repository's own `README.md` and `AGENTS.md` are restructured onto the
+  reference section shape intended for every Python repository: `README.md`
+  carries `Overview`, `Install`, `Usage`, `Development`, and `License` in that
+  order, with all command examples reduced to a single consistent one-liner
+  form, and `AGENTS.md` adopts the reference `Repository Context` keys. No
+  policy rule enforces this shape yet, so no adopting repository is affected.
+
+### Adopters must
+
+- Nothing. RSK008 is relaxed, and `repo-adopt` is an optional capability for
+  repositories that want automated incremental adoption; already aligned
+  repositories remain aligned.
+
 ## [1.1.0] - 2026-08-20
 
 ### Fixed
@@ -456,7 +495,8 @@ the changes listed under **Adopters must**.
 Initial standard, Python starter kits, and the `repo-init` and
 `repo-add-package` bootstrap tools.
 
-[Unreleased]: https://github.com/FP-DevTools/repo-standard-kit/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/FP-DevTools/repo-standard-kit/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/FP-DevTools/repo-standard-kit/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/FP-DevTools/repo-standard-kit/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/FP-DevTools/repo-standard-kit/compare/v0.4.0...v1.0.0
 [0.4.0]: https://github.com/FP-DevTools/repo-standard-kit/compare/v0.3.1...v0.4.0

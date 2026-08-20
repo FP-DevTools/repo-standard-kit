@@ -9,9 +9,12 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, NoReturn
 
-import yaml
+from ruamel.yaml import YAML
+from ruamel.yaml.error import YAMLError
 
 COMPILED_POLICY_PATH = Path(__file__).resolve().parent / "compiled.json"
+
+_SAFE_YAML = YAML(typ="safe")
 
 LEVELS = {"required", "recommended"}
 ENFORCEMENT_MODES = {"structural", "platform"}
@@ -520,8 +523,8 @@ class Policy:
 
 def _safe_yaml(path: Path) -> Any:
     try:
-        return yaml.safe_load(path.read_text(encoding="utf-8"))
-    except yaml.YAMLError as error:
+        return _SAFE_YAML.load(path.read_text(encoding="utf-8"))
+    except YAMLError as error:
         mark = getattr(error, "problem_mark", None)
         location = f"{path}:{mark.line + 1}:{mark.column + 1}" if mark else str(path)
         raise PolicyError(f"{location}: malformed YAML: {error}") from error

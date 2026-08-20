@@ -1,5 +1,5 @@
 schema_version: 1
-standard_version: 1.1.0
+standard_version: 1.2.0
 standard_major: "1"
 retired_rule_ids:
   - RSK013
@@ -193,8 +193,8 @@ rules:
     remediation: Configure every required hook with the documented semantic fields.
 
   - id: RSK008
-    title: Python packages use uv_build
-    level: required
+    title: Python packages prefer uv_build
+    level: recommended
     profiles: [python-single, python-workspace]
     source:
       document: docs/repo-standard.md
@@ -206,8 +206,8 @@ rules:
         path: pyproject.toml
         backend: uv_build
         allow_missing_profiles: [python-workspace]
-    rationale: One build backend keeps generated repositories reproducible.
-    remediation: Configure uv_build, or keep a workspace root explicitly non-package.
+    rationale: A preferred backend keeps generated repositories consistent without forcing migrations in established packages.
+    remediation: Prefer uv_build for new packages; retain another PEP 517 backend when migration would not preserve project behavior.
 
   - id: RSK009
     title: uv.lock exists
