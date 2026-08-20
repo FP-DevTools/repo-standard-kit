@@ -49,9 +49,7 @@ jobs:
           if [ "$CHECK_ENFORCEMENT" = "true" ]; then
             args+=(--check-enforcement)
           fi
-          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            uv run --locked --no-dev repo-check . "${args[@]}"
-          else
+          if [ -n "$REPO_STANDARD_REF" ]; then
             if [[ ! "$REPO_STANDARD_REF" =~ ^[A-Za-z0-9._/-]+$ ]]; then
               echo "Invalid repo-standard-kit ref" >&2
               exit 2
@@ -59,4 +57,6 @@ jobs:
             uvx \
               --from "git+https://github.com/FP-DevTools/repo-standard-kit.git@$REPO_STANDARD_REF" \
               repo-check . "${args[@]}"
+          else
+            uv run --locked --no-dev repo-check . "${args[@]}"
           fi

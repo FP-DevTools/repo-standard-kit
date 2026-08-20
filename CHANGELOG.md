@@ -24,6 +24,22 @@ the changes listed under **Adopters must**.
 
 ## [Unreleased]
 
+### Fixed
+
+- The reusable compliance workflow now selects its isolated `uvx` path from
+  the required `standard-ref` workflow-call input. An adopter pull request no
+  longer inherits `GITHUB_EVENT_NAME=pull_request` and incorrectly attempts to
+  run `repo-check` from the adopter's locked non-development environment.
+- The root and both starter compliance workflows now share the same immutable
+  checkout and setup-uv action pins. Starter compliance remains isolated from
+  adopter dependencies and lockfiles.
+
+### Adopters must
+
+- Reusable-workflow callers should pin the corrected workflow commit after the
+  patch release. Keep `repo-standard-kit` out of project dependencies; the
+  workflow installs the selected `standard-ref` with `uvx`.
+
 ## [1.0.0] - 2026-08-19
 
 ### Added
