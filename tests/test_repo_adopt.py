@@ -308,7 +308,7 @@ def test_recognized_older_compliance_step_is_updated_in_place(tmp_path: Path) ->
         step for step in steps if step.get("name") == "Check repository compliance"
     ]
     assert len(compliance_steps) == 1
-    assert "@v1.1.0" in compliance_steps[0]["run"]
+    assert "@v1.2.0" in compliance_steps[0]["run"]
 
 
 def test_interrupted_command_reports_the_exact_command(

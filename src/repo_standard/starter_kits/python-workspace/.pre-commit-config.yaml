@@ -69,6 +69,6 @@ repos:
         language: system
         types: [markdown]
   - repo: https://github.com/FP-DevTools/repo-standard-kit
-    rev: v1.1.0
+    rev: v1.2.0
     hooks:
       - id: repo-check

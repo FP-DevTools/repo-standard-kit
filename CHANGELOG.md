@@ -24,6 +24,8 @@ the changes listed under **Adopters must**.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-08-20
+
 ### Added
 
 - A packaged `repo-adopt` command for conflict-aware adoption in existing
@@ -473,7 +475,8 @@ the changes listed under **Adopters must**.
 Initial standard, Python starter kits, and the `repo-init` and
 `repo-add-package` bootstrap tools.
 
-[Unreleased]: https://github.com/FP-DevTools/repo-standard-kit/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/FP-DevTools/repo-standard-kit/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/FP-DevTools/repo-standard-kit/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/FP-DevTools/repo-standard-kit/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/FP-DevTools/repo-standard-kit/compare/v0.4.0...v1.0.0
 [0.4.0]: https://github.com/FP-DevTools/repo-standard-kit/compare/v0.3.1...v0.4.0
