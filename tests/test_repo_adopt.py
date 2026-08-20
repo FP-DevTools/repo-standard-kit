@@ -173,6 +173,28 @@ def test_existing_documentation_directories_are_not_seeded(tmp_path: Path) -> No
     assert "docs/diagrams" in plan.unchanged
 
 
+def test_quality_gates_prose_before_list_stays_in_place(tmp_path: Path) -> None:
+    root = tmp_path / "existing"
+    _write_minimal_repo(root, "python-single")
+    (root / "AGENTS.md").write_text(
+        "# Local Instructions\n\n"
+        "## Quality Gates\n\n"
+        "Run from repo root:\n\n"
+        "1. `uv sync --locked`\n"
+        "2. `uv run pre-commit run --all-files`\n"
+        "3. `uv run pytest`\n"
+        "4. `uv build`\n\n"
+        "The quality job's effective permissions must be exactly `contents: read`.\n",
+        encoding="utf-8",
+    )
+
+    apply_plan(plan_adoption(root, "python-single"))
+
+    agents = (root / "AGENTS.md").read_text(encoding="utf-8")
+    assert "\n\nRun from repo root:\n\n1. `uv sync --locked`" in agents
+    assert "4. `uv build`\n\nThe quality job's effective permissions" in agents
+
+
 def test_non_uv_build_backend_is_preserved_without_conflict(tmp_path: Path) -> None:
     root = tmp_path / "existing"
     _write_minimal_repo(root, "python-single")

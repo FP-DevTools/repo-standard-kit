@@ -71,6 +71,10 @@ _MANAGED_SURFACES = (
 )
 _REMOTE_ACTION = re.compile(r"^[^./\s]+/[^@\s]+@(?P<ref>[^\s]+)$")
 _FULL_SHA = re.compile(r"^[0-9a-fA-F]{40}$")
+_COMMAND_LIST_BLOCK = re.compile(
+    r"(?:^[ \t]*(?:\d+[.)]|[-*+])[ \t]+`[^`\r\n]+`[ \t]*\r?\n?)+",
+    re.MULTILINE,
+)
 _ROUND_TRIP_YAML = YAML()
 _ROUND_TRIP_YAML.preserve_quotes = True
 _ROUND_TRIP_YAML.width = 88
@@ -535,19 +539,20 @@ def _merge_agents(path: Path, profile: str, values: dict[str, str]) -> str:
     assert quality is not None
     block = quality[2]
     heading_line, _, body = block.partition("\n")
-    body = re.sub(
-        r"^\s*(?:\d+[.)]|[-*+])\s+`[^`\r\n]+`\s*$\r?\n?",
-        "",
-        body,
-        flags=re.MULTILINE,
-    ).lstrip("\r\n")
     commands = load_policy().rule("RSK003").check.config["commands_by_profile"][profile]
     command_block = "\n".join(
         f"{index}. `{command}`" for index, command in enumerate(commands, 1)
     )
-    replacement = f"{heading_line}\n\n{command_block}\n"
-    if body:
-        replacement += "\n" + body.rstrip() + "\n"
+    list_match = _COMMAND_LIST_BLOCK.search(body)
+    if list_match is not None:
+        body = (
+            body[: list_match.start()] + command_block + "\n" + body[list_match.end() :]
+        )
+        replacement = f"{heading_line}\n{body}"
+    else:
+        replacement = f"{heading_line}\n\n{command_block}\n"
+        if body.strip():
+            replacement += "\n" + body.strip("\r\n") + "\n"
     replacement = replacement.rstrip() + "\n\n"
     text = text[: quality[0]] + replacement + text[quality[1] :]
     if "repo-standard-kit" not in text:
