@@ -54,14 +54,13 @@ Every repository adopting this standard must provide:
 - alignment with `docs/quality-gates.md` for mandatory local and CI quality gates
 - a documented repository layout
 - clear API, schema, or migration rules where relevant
-- `uv` as the default Python package manager and build backend
+- `uv` as the default Python project and package manager
 
 The following machine-enforced rules are **required**: RSK001 requires the
 root `AGENTS.md`; RSK004 requires the root `README.md`; RSK005 requires both
-documents to reference `repo-standard-kit`; RSK008 requires Python packages to
-use `uv_build` (a tooling-only workspace root may omit a build system); RSK009
-requires `uv.lock`; RSK011 rejects only the kit's known unresolved bootstrap
-tokens; and RSK019 requires this explicit repository metadata:
+documents to reference `repo-standard-kit`; RSK009 requires `uv.lock`; RSK011
+rejects only the kit's known unresolved bootstrap tokens; and RSK019 requires
+this explicit repository metadata:
 
 ```toml
 [tool.repo-standard]
@@ -72,6 +71,12 @@ standard = "1"
 The declaration wins over filesystem heuristics. A missing or invalid
 declaration is an RSK019 required finding, but deterministic auto-detection
 still selects a profile so all other applicable checks can run.
+
+RSK008 is **recommended** and checks for `uv_build` in Python packages. It
+remains the generated default for starter repositories and new workspace
+packages, while an established package may retain another PEP 517 backend
+without failing normal compliance. Strict checking keeps the recommendation
+visible. A tooling-only workspace root may omit a build system entirely.
 
 ## Core Rules
 

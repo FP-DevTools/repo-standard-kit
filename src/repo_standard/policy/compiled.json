@@ -342,18 +342,18 @@
       },
       "enforcement": "structural",
       "id": "RSK008",
-      "level": "required",
+      "level": "recommended",
       "profiles": [
         "python-single",
         "python-workspace"
       ],
-      "rationale": "One build backend keeps generated repositories reproducible.",
-      "remediation": "Configure uv_build, or keep a workspace root explicitly non-package.",
+      "rationale": "A preferred backend keeps generated repositories consistent without forcing migrations in established packages.",
+      "remediation": "Prefer uv_build for new packages; retain another PEP 517 backend when migration would not preserve project behavior.",
       "source": {
         "document": "docs/repo-standard.md",
         "section": "Repository Contract"
       },
-      "title": "Python packages use uv_build"
+      "title": "Python packages prefer uv_build"
     },
     {
       "check": {

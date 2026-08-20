@@ -110,17 +110,17 @@ Rationale: Structural matching prevents comments or unrelated text from imperson
 
 Remediation: Configure every required hook with the documented semantic fields.
 
-### RSK008: Python packages use uv_build
+### RSK008: Python packages prefer uv_build
 
-- Level: `required`
+- Level: `recommended`
 - Profiles: `python-single`, `python-workspace`
 - Source: [`docs/repo-standard.md` — Repository Contract](../docs/repo-standard.md)
 - Enforcement: `structural`
 - Check kind: `uv_build_backend`
 
-Rationale: One build backend keeps generated repositories reproducible.
+Rationale: A preferred backend keeps generated repositories consistent without forcing migrations in established packages.
 
-Remediation: Configure uv_build, or keep a workspace root explicitly non-package.
+Remediation: Prefer uv_build for new packages; retain another PEP 517 backend when migration would not preserve project behavior.
 
 ### RSK009: uv.lock exists
 

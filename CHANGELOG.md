@@ -38,10 +38,18 @@ the changes listed under **Adopters must**.
   dirty-worktree refusal, parse failures, dry runs, conflicts, and interrupted
   commands.
 
+### Changed
+
+- RSK008 now recommends rather than requires `uv_build`. Starter repositories
+  and new workspace packages still use it by default, while established
+  packages may retain another PEP 517 backend without blocking normal
+  compliance or `repo-adopt`.
+
 ### Adopters must
 
-- Nothing. `repo-adopt` is an optional capability for repositories that want
-  automated incremental adoption; already aligned repositories remain aligned.
+- Nothing. RSK008 is relaxed, and `repo-adopt` is an optional capability for
+  repositories that want automated incremental adoption; already aligned
+  repositories remain aligned.
 
 ## [1.1.0] - 2026-08-20
 

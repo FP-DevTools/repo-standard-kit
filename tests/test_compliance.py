@@ -448,6 +448,27 @@ def test_finding_contains_actionable_contract_fields(tmp_path: Path) -> None:
     assert finding.remediation
 
 
+def test_non_uv_build_backend_is_a_strict_only_recommendation(
+    tmp_path: Path,
+) -> None:
+    root = _minimal_repo(tmp_path)
+    pyproject = root / "pyproject.toml"
+    text = pyproject.read_text(encoding="utf-8")
+    text = text.replace(
+        'requires = ["uv_build>=0.11.20,<0.12"]',
+        'requires = ["hatchling>=1.27"]',
+    ).replace('build-backend = "uv_build"', 'build-backend = "hatchling.build"')
+    pyproject.write_text(text, encoding="utf-8")
+
+    finding = next(
+        finding for finding in check_repo(root, POLICY) if finding.rule_id == "RSK008"
+    )
+    assert finding.level == "recommended"
+    assert finding.severity == "should"
+    assert cli.main([str(root)]) == 0
+    assert cli.main([str(root), "--strict"]) == 1
+
+
 # --- GitHub workflow structure, commands, permissions, and pins -----------
 
 

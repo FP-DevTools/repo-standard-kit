@@ -174,6 +174,37 @@ def test_existing_documentation_directories_are_not_seeded(tmp_path: Path) -> No
     assert "docs/diagrams" in plan.unchanged
 
 
+def test_non_uv_build_backend_is_preserved_without_conflict(tmp_path: Path) -> None:
+    root = tmp_path / "existing"
+    _write_minimal_repo(root, "python-single")
+    pyproject = root / "pyproject.toml"
+    text = pyproject.read_text(encoding="utf-8")
+    text = text.replace(
+        'requires = ["uv_build>=0.11.20,<0.12"]',
+        'requires = ["hatchling>=1.27"]',
+    ).replace('build-backend = "uv_build"', 'build-backend = "hatchling.build"')
+    pyproject.write_text(text, encoding="utf-8")
+
+    plan = plan_adoption(root, "python-single")
+
+    assert plan.conflicts == ()
+    assert main([str(root), "--profile", "python-single", "--dry-run"]) == 0
+    adopted_pyproject = next(
+        change.content
+        for change in plan.changes
+        if change.path.as_posix() == "pyproject.toml"
+    )
+    assert 'build-backend = "hatchling.build"' in adopted_pyproject
+
+    apply_plan(plan)
+    findings = check_repo(root, load_policy(), profile="python-single")
+    backend_finding = next(
+        finding for finding in findings if finding.rule_id == "RSK008"
+    )
+    assert backend_finding.level == "recommended"
+    assert not [finding for finding in findings if finding.level == "required"]
+
+
 def test_structurally_compliant_repository_is_a_no_op(tmp_path: Path) -> None:
     root = tmp_path / "existing"
     _write_minimal_repo(root, "python-single")

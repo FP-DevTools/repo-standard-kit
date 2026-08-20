@@ -54,9 +54,11 @@ the checkout:
 - `README.md` and `AGENTS.md` remain project-owned. The adopter appends the
   standard reference and missing required sections, and reconciles the exact
   policy-owned Quality Gates command list without replacing other prose.
-- A non-`uv_build` package backend, unsupported standard metadata, malformed
-  configuration, or another merge that changes project intent is not guessed
-  through. The command reports an actionable conflict or stops before writes.
+- A non-`uv_build` package backend is preserved and remains visible as the
+  recommended RSK008 finding under strict checking. Unsupported standard
+  metadata, malformed configuration, or another merge that changes project
+  intent is not guessed through; the command reports an actionable conflict or
+  stops before writes.
 - License terms are never selected automatically. A missing `LICENSE` remains
   a recommended `repo-check` finding for the maintainer.
 

@@ -287,11 +287,6 @@ def _merge_pyproject(
             dependency_changed = True
         elif not isinstance(build, dict):
             raise AdoptionError("cannot merge build-system: expected a table")
-        elif build.get("build-backend") != "uv_build":
-            conflicts.append(
-                "pyproject.toml: existing build backend is not uv_build; choose the "
-                "migration explicitly"
-            )
 
     return tomlkit.dumps(document), dependency_changed, conflicts
 

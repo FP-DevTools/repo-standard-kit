@@ -15,7 +15,8 @@ Use this profile for monorepos with per-package projects under `packages/`.
   first package exists
 - root `.pre-commit-config.yaml` with hooks that run Ruff and generic file
   checks through `uv`
-- package projects use `uv_build`
+- package projects use a PEP 517 build backend; `uv_build` is the recommended
+  and generated default
 - root GitHub Actions workflow for quality gates
 - `packages/<package-slug>/pyproject.toml`
 - `packages/<package-slug>/src/<package_name>/`
