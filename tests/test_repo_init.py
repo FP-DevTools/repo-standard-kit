@@ -362,7 +362,7 @@ def test_compliance_workflows_emit_an_independent_required_status() -> None:
     assert "uv run --locked --no-dev repo-check ." in root_workflow
     assert "uvx \\" in root_workflow
     for workflow_path in workflow_paths[1:]:
-        assert "repo-standard-kit.git@v1.0.0" in workflow_path.read_text(
+        assert "repo-standard-kit.git@v1.1.0" in workflow_path.read_text(
             encoding="utf-8"
         )
 
@@ -402,7 +402,7 @@ def test_reusable_compliance_workflow_validates_standard_ref() -> None:
 
 @pytest.mark.parametrize(
     ("standard_ref", "expected_returncode"),
-    [("v1.0.0", 42), ("", 41)],
+    [("v1.1.0", 42), ("", 41)],
     ids=["adopter-pull-request", "direct-pull-request"],
 )
 def test_reusable_compliance_workflow_selects_the_correct_checker_environment(

@@ -24,6 +24,8 @@ the changes listed under **Adopters must**.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-20
+
 ### Fixed
 
 - The reusable compliance workflow now selects its isolated `uvx` path from
@@ -36,9 +38,9 @@ the changes listed under **Adopters must**.
 
 ### Adopters must
 
-- Reusable-workflow callers should pin the corrected workflow commit after the
-  patch release. Keep `repo-standard-kit` out of project dependencies; the
-  workflow installs the selected `standard-ref` with `uvx`.
+- Reusable-workflow callers must pin the corrected v1.1.0 workflow commit and
+  set `standard-ref` to `v1.1.0`. Keep `repo-standard-kit` out of project
+  dependencies; the workflow installs the selected release with `uvx`.
 
 ## [1.0.0] - 2026-08-19
 
@@ -454,7 +456,8 @@ the changes listed under **Adopters must**.
 Initial standard, Python starter kits, and the `repo-init` and
 `repo-add-package` bootstrap tools.
 
-[Unreleased]: https://github.com/FP-DevTools/repo-standard-kit/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/FP-DevTools/repo-standard-kit/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/FP-DevTools/repo-standard-kit/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/FP-DevTools/repo-standard-kit/compare/v0.4.0...v1.0.0
 [0.4.0]: https://github.com/FP-DevTools/repo-standard-kit/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/FP-DevTools/repo-standard-kit/compare/v0.3.0...v0.3.1
