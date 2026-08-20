@@ -365,7 +365,7 @@ Remediation: Require at least one approving review when repository staffing perm
 
 ### RSK023: README.md follows the declared section shape
 
-- Level: `recommended`
+- Level: `required`
 - Profiles: `python-single`, `python-workspace`
 - Source: [`docs/repo-standard.md` — File Shapes](../docs/repo-standard.md)
 - Enforcement: `structural`
@@ -377,7 +377,7 @@ Remediation: Add the required README sections and order every declared section a
 
 ### RSK024: CHANGELOG.md follows the declared section shape
 
-- Level: `recommended`
+- Level: `required`
 - Profiles: `python-single`, `python-workspace`
 - Source: [`docs/repo-standard.md` — File Shapes](../docs/repo-standard.md)
 - Enforcement: `structural`
@@ -389,7 +389,7 @@ Remediation: Add an Unreleased section, and keep any Compatibility Policy sectio
 
 ### RSK025: pyproject.toml declares tables in the canonical order
 
-- Level: `recommended`
+- Level: `required`
 - Profiles: `python-single`, `python-workspace`
 - Source: [`docs/repo-standard.md` — File Shapes](../docs/repo-standard.md)
 - Enforcement: `structural`

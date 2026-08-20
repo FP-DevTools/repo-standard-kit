@@ -677,7 +677,7 @@
       },
       "enforcement": "structural",
       "id": "RSK023",
-      "level": "recommended",
+      "level": "required",
       "profiles": [
         "python-single",
         "python-workspace"
@@ -699,7 +699,7 @@
       },
       "enforcement": "structural",
       "id": "RSK024",
-      "level": "recommended",
+      "level": "required",
       "profiles": [
         "python-single",
         "python-workspace"
@@ -721,7 +721,7 @@
       },
       "enforcement": "structural",
       "id": "RSK025",
-      "level": "recommended",
+      "level": "required",
       "profiles": [
         "python-single",
         "python-workspace"
