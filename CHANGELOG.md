@@ -24,6 +24,71 @@ the changes listed under **Adopters must**.
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-08-20
+
+### Added
+
+- **File shapes.** `policy/shapes.yaml` declares one canonical section list per
+  governed file — which sections exist, what they are called, which are
+  mandatory, and in what order. Shapes compile into `compiled.json` and
+  `docs/policy-reference.md` alongside profiles and rules, and a shape and the
+  rule enforcing it must name each other, so neither can drift from the other.
+- RSK023 (`README.md` spine), RSK024 (`CHANGELOG.md` sections), and RSK025
+  (`pyproject.toml` table order). Every shape is checked as a subsequence:
+  sections the shape does not declare stay legal anywhere, optional sections
+  may be absent, and what a shape forbids is reordering. Markdown shapes
+  govern level-two headings only. These three rules are **recommended** as of
+  this commit and are promoted to **required** later on this branch, before
+  v2.0.0 ships.
+- `repo-init --license {proprietary,mit,apache-2.0}` writes the full licence
+  text to `LICENSE` and declares `license` and `license-files` in
+  `pyproject.toml`. Omitted, no `LICENSE` is written and the README's `License`
+  section states that terms have not been selected yet and cites RSK018.
+- A `File Shapes` section in `docs/repo-standard.md` stating the contract each
+  new rule enforces.
+
+### Changed
+
+- **The standard major moves to `2`.** Every adopting repository must declare
+  `standard = "2"` under `[tool.repo-standard]`; `standard = "1"` is now an
+  RSK019 required finding.
+- RSK002 is re-expressed on the shared shape record. Its ten required sections
+  are unchanged, but it now also enforces their **order**, which it did not
+  check before — a repository whose `AGENTS.md` carried every heading in the
+  wrong sequence used to pass. This is the change that makes the release major:
+  a previously aligned repository can now fail a required rule.
+- `repo-init --python-version` now renders the declared `__PYTHON_VERSION__`
+  placeholder instead of string-replacing a literal `>=3.12` in the starter
+  manifest, so any requested version takes effect.
+- `repo-init --author` now reaches the generated `pyproject.toml` as an
+  `authors` entry; it was previously threaded into the render values and
+  silently discarded. An unnamed author leaves the key out rather than
+  shipping it empty.
+- Starter `pyproject.toml` files declare their tables in the canonical order,
+  so `[tool.repo-standard]` no longer splits `[tool.ruff]` from
+  `[tool.ruff.lint]`. This repository's own manifest is reordered to match.
+- Starter `README.md` files follow the README spine and carry a `License`
+  section; starter `CHANGELOG.md` files declare Keep a Changelog and Semantic
+  Versioning and carry a `Compatibility Policy` section.
+
+### Adopters must
+
+- Set `standard = "2"` under `[tool.repo-standard]` in `pyproject.toml`.
+  `repo-adopt` writes the value from policy, so re-running it does this for
+  you; otherwise edit the two-line table by hand. RSK019 reports the old value
+  as a required finding.
+- Confirm `AGENTS.md` lists its required sections in the order
+  `docs/repo-standard.md` states. RSK002 already required every section; it now
+  also requires their order, so a repository that ordered them differently
+  moves from passing to a required finding. `repo-check .` names the sections
+  it found out of order.
+- Bring `README.md`, `CHANGELOG.md`, and `pyproject.toml` onto the shapes
+  `docs/repo-standard.md` declares. RSK023, RSK024, and RSK025 are still
+  recommended at this point on the branch and become required before v2.0.0
+  ships, so `repo-check .` reports them as required findings in the released
+  version. `repo-check --strict` names every section that is missing or out of
+  order.
+
 ## [1.2.0] - 2026-08-20
 
 ### Added

@@ -15,7 +15,7 @@ SRC = REPO_ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from repo_standard.policy import load_compiled_policy  # noqa: E402
+from repo_standard.policy import Shape, load_compiled_policy  # noqa: E402
 
 _SAFE_YAML = YAML(typ="safe")
 _SAFE_YAML.default_flow_style = False
@@ -53,8 +53,13 @@ def mandatory_ci_commands(profile: str = "python-single") -> list[str]:
 
 
 def required_agents_sections() -> list[str]:
+    return list(shape_of("RSK002").required)
+
+
+def shape_of(rule_id: str) -> Shape:
+    """Return the shape a shape-driven rule enforces."""
     policy = load_compiled_policy()
-    return list(policy.rule("RSK002").check.config["headings"])
+    return policy.shape(policy.rule(rule_id).check.config["shape"])
 
 
 def documented_ruff_policy() -> RuffPolicy:

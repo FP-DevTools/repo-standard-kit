@@ -2,9 +2,21 @@
 
 __DESCRIPTION__
 
-## Purpose
+## Overview
 
 This repository contains the `__PACKAGE_NAME__` Python project.
+
+## Install
+
+Requires Python `__PYTHON_VERSION__` or newer.
+
+```bash
+uv sync
+uv run pre-commit install
+```
+
+`uv run pre-commit install` needs Git to be initialized. If you used
+`repo-init` without `--no-install`, both steps have already run for you.
 
 ## First 10 Minutes
 
@@ -21,6 +33,15 @@ This repository contains the `__PACKAGE_NAME__` Python project.
 10. Review `.github/workflows/quality.yml`.
 11. Commit the generated `uv.lock`, then make the initial commit on `main`.
 
+## Usage
+
+```python
+import __PACKAGE_NAME__
+```
+
+Replace this with the entry points, commands, or API this repository is
+actually for.
+
 ## Development
 
 Repository workflow, quality gates, and coding standards are defined in
@@ -29,6 +50,10 @@ from [repo-standard-kit] — see its [quality-gates spec][quality-gates] and
 [README template][readme-template]. Keep this file's shape aligned with those
 when you update it, and check this repository against it periodically for
 standards drift.
+
+## License
+
+__LICENSE_NOTICE__
 
 [repo-standard-kit]: https://github.com/FP-DevTools/repo-standard-kit
 [quality-gates]: https://github.com/FP-DevTools/repo-standard-kit/blob/main/docs/quality-gates.md

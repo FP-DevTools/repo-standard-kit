@@ -65,7 +65,7 @@ this explicit repository metadata:
 ```toml
 [tool.repo-standard]
 profile = "python-single" # or "python-workspace"
-standard = "1"
+standard = "2"
 ```
 
 The declaration wins over filesystem heuristics. A missing or invalid
@@ -130,8 +130,41 @@ Every target repository must include:
 
 Committed copies must not contain placeholders or generic filler text.
 
-RSK002 enforces the listed headings at the **required** level. RSK003 enforces
+RSK002 enforces the listed headings at the **required** level, in the order
+above; sections the standard does not name may appear anywhere. RSK003 enforces
 at the **required** level that the `## Quality Gates` section in `AGENTS.md`
 states the exact ordered command chain defined by policy for the resolved
 profile. Commands elsewhere in the document do not count. These checks do not
 attempt subjective scoring of the section prose.
+
+## File Shapes
+
+A *shape* is the canonical section list for one governed file: which sections
+exist, what they are called, which are mandatory, and in what order they
+appear. Shapes are declared in `policy/shapes.yaml` and compiled into
+`docs/policy-reference.md`, which carries the authoritative section tables.
+The list above is the `agents` shape stated in prose.
+
+Every shape is checked as a **subsequence**. A section the shape does not
+declare is legal anywhere and is ignored. A declared section may be absent
+unless it is marked required. What a shape forbids is *reordering*: the
+declared sections a file does carry must appear in the declared order. Markdown
+shapes govern level-two headings only, matching RSK002's semantics.
+
+- `README.md` (RSK023, **recommended**): the spine runs At A Glance, Overview,
+  Install, Configuration, Usage, Repo Structure, Development, Deployment,
+  Compatibility And Versioning, Maintainers And Support, License. Overview,
+  Install, Usage, Development, and License are required.
+- `CHANGELOG.md` (RSK024, **recommended**): an `[Unreleased]` section is
+  required, and a `Compatibility Policy` section, where present, precedes it.
+  Released-version sections are not enumerated.
+- `pyproject.toml` (RSK025, **recommended**): the declared tables run
+  `project`, `dependency-groups`, `build-system`, `tool.uv.build-backend`,
+  `tool.repo-standard`, `tool.ruff`, `tool.ruff.lint`,
+  `tool.pytest.ini_options`, `tool.ty.src`. Only `project` is required, and
+  tables the shape does not list — `tool.repo-check.ignore`, for instance —
+  stay legal in any position.
+
+These three rules are recommended while the generator that produces conforming
+documents is still being built; strict checking keeps them visible in the
+meantime.

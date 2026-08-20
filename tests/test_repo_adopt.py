@@ -7,12 +7,14 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import tomlkit
 from conftest import dump_yaml, load_yaml
 
 from repo_standard.compliance.checks import check_repo, load_policy
 from repo_standard.repo_adopt import (
     AdoptionError,
     CommandError,
+    _kit_version,
     _run,
     apply_plan,
     main,
@@ -226,11 +228,40 @@ def test_non_uv_build_backend_is_preserved_without_conflict(tmp_path: Path) -> N
     assert not [finding for finding in findings if finding.level == "required"]
 
 
+def _make_shape_conforming(root: Path) -> None:
+    """Bring the surfaces adoption does not yet reshape onto their shapes.
+
+    Adoption appends `[dependency-groups]` after `[build-system]` and only
+    appends a standards section to an existing README, so neither reaches the
+    shapes RSK023 and RSK025 declare. Until the generator lands, this test
+    supplies conforming versions itself so the zero-finding precondition is
+    real rather than assumed.
+    """
+    policy = load_policy()
+    readme = "\n\n".join(
+        f"## {heading}\n\nDetail." for heading in policy.shape("readme").required
+    )
+    (root / "README.md").write_text(
+        f"# Existing Project\n\nKeep this project-specific guide, "
+        f"aligned with repo-standard-kit.\n\n{readme}\n",
+        encoding="utf-8",
+    )
+    document = tomlkit.parse((root / "pyproject.toml").read_text(encoding="utf-8"))
+    groups = document.pop("dependency-groups")
+    build = document.pop("build-system")
+    tool = document.pop("tool")
+    document["dependency-groups"] = groups
+    document["build-system"] = build
+    document["tool"] = tool
+    (root / "pyproject.toml").write_text(tomlkit.dumps(document), encoding="utf-8")
+
+
 def test_structurally_compliant_repository_is_a_no_op(tmp_path: Path) -> None:
     root = tmp_path / "existing"
     _write_minimal_repo(root, "python-single")
     apply_plan(plan_adoption(root, "python-single"))
     (root / "LICENSE").write_text("Approved license terms.\n", encoding="utf-8")
+    _make_shape_conforming(root)
 
     pre_commit = root / ".pre-commit-config.yaml"
     hooks = load_yaml(pre_commit.read_text(encoding="utf-8"))
@@ -360,7 +391,7 @@ def test_recognized_older_compliance_step_is_updated_in_place(tmp_path: Path) ->
         step for step in steps if step.get("name") == "Check repository compliance"
     ]
     assert len(compliance_steps) == 1
-    assert "@v1.2.0" in compliance_steps[0]["run"]
+    assert f"@v{_kit_version()}" in compliance_steps[0]["run"]
 
 
 def test_interrupted_command_reports_the_exact_command(

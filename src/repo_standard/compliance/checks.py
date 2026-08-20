@@ -17,7 +17,7 @@ from repo_standard.compliance.yaml_support import (
     YamlParseError,
     load_github_yaml,
 )
-from repo_standard.policy import Policy, Rule, load_compiled_policy
+from repo_standard.policy import Policy, Rule, Shape, load_compiled_policy
 
 _IGNORED_DIR_PARTS = {
     ".git",
@@ -217,22 +217,94 @@ def _path_exists(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
     return [Issue(config["path"], f"Required {kind} is missing.", "missing", kind)]
 
 
-def _markdown_headings(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
-    text = _read(context.root / config["path"])
+def _shape_issues(shape: Shape, path: str, actual: list[str]) -> list[Issue]:
+    """Compare observed section names against one canonical shape.
+
+    Presence is checked for required sections only. Order is checked as a
+    subsequence: sections the shape does not list are ignored entirely, and a
+    listed section that is absent simply drops out of the comparison.
+    """
+    issues: list[Issue] = []
+    missing = [heading for heading in shape.required if heading not in actual]
+    if missing:
+        issues.append(
+            Issue(
+                path,
+                f"Missing required sections: {', '.join(missing)}.",
+                actual,
+                list(shape.required),
+            )
+        )
+    listed = set(shape.headings)
+    observed: list[str] = []
+    for heading in actual:
+        if heading in listed and heading not in observed:
+            observed.append(heading)
+    expected = [heading for heading in shape.headings if heading in observed]
+    if observed != expected:
+        issues.append(
+            Issue(
+                path,
+                "Declared sections are out of canonical order.",
+                observed,
+                expected,
+            )
+        )
+    if not shape.allow_unlisted:
+        unlisted = [heading for heading in actual if heading not in listed]
+        if unlisted:
+            issues.append(
+                Issue(
+                    path,
+                    f"Sections the shape does not declare: {', '.join(unlisted)}.",
+                    unlisted,
+                    list(shape.headings),
+                )
+            )
+    return issues
+
+
+def _markdown_shape(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
+    shape = context.policy.shape(config["shape"])
+    text = _read(context.root / shape.path)
     if text is None:
         return []
-    actual = re.findall(r"^##\s+(.+?)\s*$", text, re.MULTILINE)
-    missing = [heading for heading in config["headings"] if heading not in actual]
-    if not missing:
+    marks = "#" * (shape.heading_level or 2)
+    actual = re.findall(rf"^{marks}\s+(.+?)\s*$", text, re.MULTILINE)
+    return _shape_issues(shape, shape.path, actual)
+
+
+def _toml_table_names(text: str) -> list[str]:
+    """Return table headers in document order, ignoring multi-line strings."""
+    names: list[str] = []
+    delimiter: str | None = None
+    for line in text.splitlines():
+        if delimiter is not None:
+            if delimiter in line:
+                delimiter = None
+            continue
+        stripped = line.strip()
+        match = re.fullmatch(r"\[\[?\s*(?P<name>[^\[\]]+?)\s*\]\]?", stripped)
+        if match is not None:
+            names.append(match.group("name"))
+            continue
+        for candidate in ('"""', "'''"):
+            if line.count(candidate) % 2 == 1:
+                delimiter = candidate
+                break
+    return names
+
+
+def _toml_table_order(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
+    shape = context.policy.shape(config["shape"])
+    path = context.root / shape.path
+    text = _read(path)
+    if text is None:
         return []
-    return [
-        Issue(
-            config["path"],
-            f"Missing required headings: {', '.join(missing)}.",
-            actual,
-            config["headings"],
-        )
-    ]
+    _data, error = _load_toml(path)
+    if error is not None:
+        return [error]
+    return _shape_issues(shape, shape.path, _toml_table_names(text))
 
 
 def _text_contains_all(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
@@ -1374,7 +1446,8 @@ def _github_workflow_pins(context: CheckContext, config: dict[str, Any]) -> list
 
 CHECK_HANDLERS: dict[str, CheckHandler] = {
     "path_exists": _path_exists,
-    "markdown_headings": _markdown_headings,
+    "markdown_shape": _markdown_shape,
+    "toml_table_order": _toml_table_order,
     "text_contains_all": _text_contains_all,
     "agents_quality_commands": _agents_quality_commands,
     "text_pattern_each": _text_pattern_each,

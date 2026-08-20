@@ -97,6 +97,11 @@ projects under `packages/`. The generated repository derives its `AGENTS.md`,
 CI workflow, `pyproject.toml`, and starter files from the resolved version of
 this repository.
 
+Add `--license proprietary`, `--license mit`, or `--license apache-2.0` to write
+a real `LICENSE` and declare it in `pyproject.toml`. Without it the repository
+starts with no licence file and a `License` section saying terms have not been
+chosen, which RSK018 keeps reporting as a recommendation until they are.
+
 Then:
 
 1. Review the generated `AGENTS.md`, `README.md`, and CI workflow.
@@ -165,13 +170,14 @@ resolution, output, and structural-check details.
 Add a Git ref to the `--from` URL. This works for every command above:
 
 ```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v1.2.0" repo-init --profile python-single --repo-name widget-service
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v2.0.0" repo-init --profile python-single --repo-name widget-service
 ```
 
 ## Repo Structure
 
 - `docs/`: the standard and its companion documents
-- `policy/`: canonical machine-enforced rules and profile detection metadata
+- `policy/`: canonical machine-enforced rules, profile detection metadata, and
+  the file shapes governed documents must follow
 - `profiles/`: language or repo-type specific standards
 - `templates/`: fill-in-the-blank reference documents for adopting the standard
   by hand

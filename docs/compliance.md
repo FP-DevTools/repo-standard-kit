@@ -41,7 +41,7 @@ Every adopting repository declares:
 ```toml
 [tool.repo-standard]
 profile = "python-single" # or "python-workspace"
-standard = "1"
+standard = "2"
 ```
 
 An explicit declaration wins even when conflicting markers such as
