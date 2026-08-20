@@ -1,5 +1,5 @@
 schema_version: 1
-standard_version: 1.0.0
+standard_version: 1.1.0
 standard_major: "1"
 retired_rule_ids:
   - RSK013

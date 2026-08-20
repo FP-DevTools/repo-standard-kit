@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import re
+import shutil
 import subprocess
 import tarfile
 import tomllib
@@ -333,20 +335,34 @@ def test_compliance_workflows_emit_an_independent_required_status() -> None:
         ),
     ]
 
+    checkout_refs: set[str] = set()
+    setup_uv_refs: set[str] = set()
     for workflow_path in workflow_paths:
         assert workflow_path.name == "compliance.yml"
         workflow_text = workflow_path.read_text(encoding="utf-8")
         assert "  pull_request:\n" in workflow_text
         assert "permissions:\n  contents: read\n" in workflow_text
         assert "  compliance:\n    name: compliance\n" in workflow_text
-        assert re.search(r"uses: actions/checkout@[0-9a-f]{40}", workflow_text)
-        assert re.search(r"uses: astral-sh/setup-uv@[0-9a-f]{40}", workflow_text)
+        checkout_match = re.search(
+            r"uses: (actions/checkout@[0-9a-f]{40})", workflow_text
+        )
+        setup_uv_match = re.search(
+            r"uses: (astral-sh/setup-uv@[0-9a-f]{40})", workflow_text
+        )
+        assert checkout_match
+        assert setup_uv_match
+        checkout_refs.add(checkout_match.group(1))
+        setup_uv_refs.add(setup_uv_match.group(1))
+
+    assert len(checkout_refs) == 1
+    assert len(setup_uv_refs) == 1
 
     root_workflow = workflow_paths[0].read_text(encoding="utf-8")
     assert "  workflow_call:\n" in root_workflow
     assert "uv run --locked --no-dev repo-check ." in root_workflow
+    assert "uvx \\" in root_workflow
     for workflow_path in workflow_paths[1:]:
-        assert "repo-standard-kit.git@v1.0.0" in workflow_path.read_text(
+        assert "repo-standard-kit.git@v1.1.0" in workflow_path.read_text(
             encoding="utf-8"
         )
 
@@ -382,6 +398,60 @@ def test_reusable_compliance_workflow_validates_standard_ref() -> None:
     assert 'echo "Invalid repo-standard-kit ref" >&2' in workflow_text
     assert "exit 2" in workflow_text
     assert "repo-standard-kit.git@$REPO_STANDARD_REF" in workflow_text
+
+
+@pytest.mark.parametrize(
+    ("standard_ref", "expected_returncode"),
+    [("v1.1.0", 42), ("", 41)],
+    ids=["adopter-pull-request", "direct-pull-request"],
+)
+def test_reusable_compliance_workflow_selects_the_correct_checker_environment(
+    tmp_path: Path,
+    standard_ref: str,
+    expected_returncode: int,
+) -> None:
+    workflow_path = REPO_ROOT / ".github" / "workflows" / "compliance.yml"
+    workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+    run = next(
+        step["run"]
+        for step in workflow["jobs"]["compliance"]["steps"]
+        if step.get("name") == "Run repo-check"
+    )
+
+    bash = shutil.which("bash")
+    if os.name == "nt":
+        git_bash = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / (
+            "Git/bin/bash.exe"
+        )
+        if git_bash.is_file():
+            bash = str(git_bash)
+    if bash is None:
+        pytest.skip("Bash is required to execute the reusable-workflow step")
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for command, returncode in (("uv", 41), ("uvx", 42)):
+        stub = bin_dir / command
+        stub.write_text(
+            f"#!/usr/bin/env bash\nexit {returncode}\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        stub.chmod(0o755)
+
+    env = os.environ.copy()
+    env.update(
+        {
+            "PATH": os.pathsep.join((str(bin_dir), env["PATH"])),
+            "GITHUB_EVENT_NAME": "pull_request",
+            "REPO_STANDARD_REF": standard_ref,
+            "STRICT": "false",
+            "CHECK_ENFORCEMENT": "false",
+        }
+    )
+    result = subprocess.run([bash, "-c", run], cwd=REPO_ROOT, env=env, check=False)
+
+    assert result.returncode == expected_returncode
 
 
 def test_root_pyproject_uses_uv_build_backend() -> None:

@@ -86,6 +86,15 @@ standards repository's workflow also remains callable by adopters. A repository
 may instead call that reusable workflow from its canonical file, provided the
 resulting required status is named `compliance`.
 
+Both adopter forms execute the selected checker with `uvx`. The isolated tool
+environment neither reads nor changes the adopter's `uv.lock`, and
+`repo-standard-kit` does not belong in the adopter's project dependencies.
+Direct pull requests in `repo-standard-kit` are the exception: the root workflow
+runs the checked-out implementation with `uv run --locked --no-dev` so changes
+to the checker itself receive coverage before release. The reusable workflow
+selects these paths from the required `standard-ref` input; it does not use the
+inherited event name, which is still `pull_request` when an adopter calls it.
+
 Together with the `quality` job, this gives every adopting repository the same
 two required status names and therefore the same branch-protection ruleset.
 
@@ -98,7 +107,7 @@ required compliance job; that defense-in-depth duplication is intentional.
 ```yaml
 repos:
   - repo: https://github.com/FP-DevTools/repo-standard-kit
-    rev: v1.0.0
+    rev: v1.1.0
     hooks:
       - id: repo-check
 ```
@@ -115,18 +124,31 @@ jobs:
   compliance:
     uses: FP-DevTools/repo-standard-kit/.github/workflows/compliance.yml@<full-sha>
     with:
-      standard-ref: v1.0.0
+      standard-ref: v1.1.0
 ```
 
 The reusable workflow itself SHALL be pinned to a full commit SHA. That
 immutable `uses:` reference selects the workflow implementation the caller
 trusts. The distinct `standard-ref` input selects the released
 `repo-standard-kit` revision whose packaged checker and compiled policy are
-executed; a human-readable immutable release tag such as `v1.0.0` is permitted.
+executed. A commit SHA gives the strongest reproducibility. A human-readable
+release tag such as `v1.1.0` is permitted only when repository governance keeps
+release tags immutable.
 The workflow passes that input through the environment, validates it against a
 narrow Git-ref character allowlist, and never interpolates caller-controlled
 inputs directly into Bash source. Confirm the caller emits the required
 `compliance` status.
+
+`--check-enforcement` remains a distinct, authenticated platform audit. Enable
+the reusable workflow's `check-enforcement` input only when the job has GitHub
+CLI authentication and the repository plan exposes branch protection or
+rulesets. A green default `compliance` job proves structural alignment; it does
+not prove that GitHub requires `quality` and `compliance` before merge.
+
+The isolated `uvx` path is portable within the maintained profiles, not fully
+hermetic or universal: it currently assumes GitHub Actions on `ubuntu-latest`,
+network access to this repository and PyPI, and the pinned checkout and
+setup-uv actions.
 
 ## Canonical Policy And Generation
 

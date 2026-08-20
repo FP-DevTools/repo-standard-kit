@@ -47,7 +47,7 @@ uv tool install --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.g
 Pin a standards version by adding a Git ref:
 
 ```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v1.0.0" repo-init --profile python-single --repo-name widget-service
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v1.1.0" repo-init --profile python-single --repo-name widget-service
 ```
 
 The generated repository derives its `AGENTS.md`, CI workflow, `pyproject.toml`,
@@ -206,6 +206,12 @@ Each later `repo-add-package --package-name widget_api` run adds:
   full commit SHAs; Dependabot is configured to propose GitHub Actions updates
 - Separate `quality` and `compliance` status checks run on pull requests and
   are suitable for branch-protection enforcement
+
+The generated compliance workflow runs the released checker through `uvx` in
+an isolated tool environment. It does not add `repo-standard-kit` to the new
+repository's dependencies or couple compliance to the generated `uv.lock`.
+See [Compliance Checking](compliance.md) for the equivalent reusable-workflow
+caller and its immutable workflow pin.
 
 By default, `repo-init` infers the repository name from the target directory.
 If you pass `--repo-name` without `--output-dir`, `repo-init` creates
