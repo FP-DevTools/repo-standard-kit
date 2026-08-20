@@ -172,7 +172,5 @@ shapes govern level-two headings only, matching RSK002's semantics.
 RSK023 (`README.md`), RSK024 (`CHANGELOG.md`), and RSK025 (`pyproject.toml`)
 each refer to their generated shape table. The tables distinguish required from
 optional sections; undeclared sections and tables stay legal in any position.
-
-These three rules are recommended while the generator that produces conforming
-documents is still being built; strict checking keeps them visible in the
-meantime.
+RSK023, RSK024, and RSK025 enforce their respective shapes at the **required**
+level.

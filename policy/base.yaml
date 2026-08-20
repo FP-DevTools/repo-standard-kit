@@ -437,7 +437,7 @@ rules:
 
   - id: RSK023
     title: README.md follows the declared section shape
-    level: recommended
+    level: required
     profiles: [python-single, python-workspace]
     source:
       document: docs/repo-standard.md
@@ -456,7 +456,7 @@ rules:
 
   - id: RSK024
     title: CHANGELOG.md follows the declared section shape
-    level: recommended
+    level: required
     profiles: [python-single, python-workspace]
     source:
       document: docs/repo-standard.md
@@ -475,7 +475,7 @@ rules:
 
   - id: RSK025
     title: pyproject.toml declares tables in the canonical order
-    level: recommended
+    level: required
     profiles: [python-single, python-workspace]
     source:
       document: docs/repo-standard.md

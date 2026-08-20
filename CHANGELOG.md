@@ -159,12 +159,16 @@ the changes listed under **Adopters must**.
   reports dial levels that are missing or have drifted from the ones
   `docs/policy-reference.md` publishes. `repo-adopt` writes both sections and
   restores the levels, keeping any prose you add around them.
-- Bring `README.md`, `CHANGELOG.md`, and `pyproject.toml` onto the shapes
-  `docs/repo-standard.md` declares. RSK023, RSK024, and RSK025 are still
-  recommended at this point on the branch and become required before v2.0.0
-  ships, so `repo-check .` reports them as required findings in the released
-  version. `repo-check --strict` names every section that is missing or out of
-  order.
+- Bring `README.md` onto the RSK023 shape: add its required `Overview`,
+  `Install`, `Usage`, `Development`, and `License` headings and keep every
+  declared heading in the canonical order. `repo-adopt` repairs it.
+- Bring `CHANGELOG.md` onto the RSK024 shape: add `## [Unreleased]` and keep
+  it after an optional `## Compatibility Policy` heading. `repo-adopt` repairs
+  it.
+- Bring `pyproject.toml` onto the RSK025 table order declared in
+  `docs/repo-standard.md`. `repo-adopt` reorders the declared tables while
+  retaining unlisted tables. RSK023, RSK024, and RSK025 report each shape
+  violation as a required finding.
 
 ## [1.2.0] - 2026-08-20
 

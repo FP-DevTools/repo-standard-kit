@@ -1445,10 +1445,10 @@ def test_rsk002_uses_the_shared_agents_shape_record() -> None:
 
 
 @pytest.mark.parametrize("rule_id", ["RSK023", "RSK024", "RSK025"])
-def test_new_shape_rules_ship_recommended_for_the_migration_window(
+def test_shape_rules_are_required_for_v2(
     rule_id: str,
 ) -> None:
-    assert POLICY.rule(rule_id).level == "recommended"
+    assert POLICY.rule(rule_id).level == "required"
 
 
 def test_readme_shape_distinguishes_required_sections() -> None:
