@@ -104,8 +104,8 @@ including its `README.md`, templates, and starter kits, implements them.
 - `docs/git-workflow.md`: branching, collaboration, and history rules
 - `docs/repo-layout.md`: canonical directory layout and scope boundaries
 - `docs/bootstrap-workflow.md`: how new repositories are generated
-- `profiles/python-single.md`: single-package Python repositories
-- `profiles/python-workspace.md`: Python monorepos with `packages/`
+- `docs/policy-reference.md#profiles`: the supported profiles and their
+  canonical detection metadata
 
 Where a companion document conflicts with this one, this document governs.
 

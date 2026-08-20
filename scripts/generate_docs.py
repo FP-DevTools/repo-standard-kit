@@ -15,6 +15,7 @@ cannot collide with one.
 
 from __future__ import annotations
 
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -29,6 +30,16 @@ from repo_standard.policy.models import Policy  # noqa: E402
 
 CONTENT_ROOT = REPO_ROOT / "templates" / "content"
 STARTER_KITS = SRC / "repo_standard" / "starter_kits"
+
+# These companion documents own their subjects.  AGENTS.md is a generated
+# projection so repositories receive the same guidance without a second prose
+# copy to maintain in template fragments.
+DERIVED_SECTIONS = {
+    ("AGENTS", "human-and-agent-responsibilities"): REPO_ROOT
+    / "docs"
+    / "agent-operating-model.md",
+    ("AGENTS", "workflow"): REPO_ROOT / "docs" / "git-workflow.md",
+}
 
 PREAMBLE = "_preamble"
 EPILOGUE = "_epilogue"
@@ -80,6 +91,19 @@ def _fragment(document: str, fragment_id: str, variant: str) -> str | None:
     return None
 
 
+def _derived_section(document: str, section_id: str) -> str | None:
+    """Project a companion document into its generated AGENTS.md section."""
+    path = DERIVED_SECTIONS.get((document, section_id))
+    if path is None:
+        return None
+    title, separator, body = path.read_text(encoding="utf-8").partition("\n")
+    if not title.startswith("# ") or not separator or not body.strip():
+        raise GeneratorError(
+            f"{path.relative_to(REPO_ROOT)} must contain a title and body"
+        )
+    return re.sub(r"(?m)^#{1,5}(?=\s)", lambda match: f"#{match[0]}", body.strip())
+
+
 def _tokens(policy: Policy, profile: str) -> dict[str, str]:
     """Generator-owned substitutions, resolved before anything is written.
 
@@ -116,7 +140,9 @@ def render(policy: Policy, target: Target) -> str:
     parts = [preamble]
 
     for section in shape.sections:
-        body = _fragment(target.document, section.id, target.variant)
+        body = _derived_section(target.document, section.id)
+        if body is None:
+            body = _fragment(target.document, section.id, target.variant)
         if body is None:
             if section.level == "required":
                 raise GeneratorError(

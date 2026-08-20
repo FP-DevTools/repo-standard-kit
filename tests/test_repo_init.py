@@ -842,15 +842,9 @@ def test_gate_chain_is_defined_by_the_normative_document() -> None:
         assert len(commands) == len(set(commands)), "duplicate gate in the spec"
 
 
-def test_profiles_neither_add_nor_relax_gates() -> None:
-    """Both profiles claim to defer to the spec; hold them to it."""
-    for profile in STARTER_KIT_PROFILES:
-        text = (REPO_ROOT / "profiles" / f"{profile}.md").read_text(encoding="utf-8")
-        assert "docs/quality-gates.md" in text
-        restated = [c for c in mandatory_ci_commands() if c in text]
-        assert not restated, (
-            f"profiles/{profile}.md restates gates instead of deferring: {restated}"
-        )
+def test_starter_kit_profiles_are_declared_by_canonical_policy() -> None:
+    """Profile identity lives in policy, not an unconsumed Markdown mirror."""
+    assert STARTER_KIT_PROFILES == POLICY.profile_ids
 
 
 @pytest.mark.parametrize(

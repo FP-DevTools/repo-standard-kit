@@ -1,5 +1,0 @@
-- Long-lived branch: `main`
-- Branch prefixes: `feat/`, `fix/`, `refactor/`, `docs/`, `chore/`
-- Merge via reviewed PRs only
-- Keep PRs small and single-purpose
-- CI must mirror the documented local quality gates

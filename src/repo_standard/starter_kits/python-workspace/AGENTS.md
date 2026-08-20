@@ -22,19 +22,47 @@
 
 ## Human And Agent Responsibilities
 
+### Goal
+
+Define clear decision boundaries between humans and agents so implementation
+work can move quickly without ambiguity or accidental overreach.
+
+### Human Responsibilities
+
 Humans own:
 
-- workspace scope and package boundaries
+- product scope and intent
 - security exceptions and secret handling
 - merge and release authority
-- approval of breaking cross-package changes
+- production access and production operations sign-off
+- approval of breaking API, schema, or migration changes
+- architectural exceptions to the documented standard
+
+### Agent Responsibilities
 
 Agents own:
 
-- implementation within package or workspace boundaries
-- tests and regression coverage
-- docs updates tied to behavior changes
-- running repo-wide quality gates
+- implementation within documented repository boundaries
+- tests, regression coverage, and local verification
+- documentation updates tied to behavior changes
+- starter-kit and template maintenance
+- surfacing risks, missing decisions, and unclear contracts
+
+### Shared Expectations
+
+- Keep code, tests, and docs aligned
+- Prefer small, reviewable changes
+- Make operational boundaries explicit
+- Do not rely on undocumented local knowledge
+
+### Agent Prohibitions
+
+Agents must not:
+
+- bypass documented quality gates
+- weaken typing or test expectations without explicit instruction
+- make security, release, or breaking-change decisions alone
+- modify out-of-scope systems without explicit approval
 
 ## Agent Operating Mode
 
@@ -94,11 +122,56 @@ the defect to fix first.
 
 ## Workflow
 
-- Long-lived branch: `main`
-- Branch prefixes: `feat/`, `fix/`, `refactor/`, `docs/`, `chore/`
-- Merge via reviewed PRs only
-- Keep PRs package-scoped or clearly cross-cutting
-- CI must mirror the documented local quality gates
+### Default Model
+
+Use trunk-based development with pull requests.
+
+### Branching Rules
+
+- `main` is the primary long-lived integration branch and is always releasable
+- work happens on short-lived branches
+- use one branch per objective
+- branch prefixes:
+  - `feat/`
+  - `fix/`
+  - `refactor/`
+  - `docs/`
+  - `chore/`
+
+### Staging Multi-Phase Work
+
+Prefer additive changes or feature flags directly on `main` for incomplete
+work. When a feature's parts are not individually releasable and that is not
+viable, a repository may maintain `develop` as a second long-lived
+integration branch to stage it. Using `develop` at all is optional per
+repository; a repository that keeps `main` as its only long-lived branch is
+equally aligned with this standard.
+
+When a repository does maintain `develop`:
+
+- short-lived branches for that feature target `develop`, not `main`
+- the staged work reaches `main` one of two ways, chosen once per feature
+  and not mixed partway through:
+  - `develop` merges to `main` directly, as a single reviewed pull request,
+    once the staged work is complete; or
+  - a release branch cut from `develop`'s tip carries its accumulated
+    commits forward, plus the release-finalizing work (a version bump, a
+    changelog entry), to `main` in its own reviewed pull request
+
+### Parallel Collaboration
+
+- prefer small PRs over long-lived branches
+- use stacked PRs when a larger change needs sequencing
+- rebase private branches frequently to reduce drift
+- avoid multiple concurrent branches changing the same subsystem without
+  coordination
+
+### History Rules
+
+- rebasing private branches is allowed
+- rewriting shared branches is not allowed
+- merge through reviewed PRs only
+- cut releases from `main` with tags
 
 ## Quality Gates
 

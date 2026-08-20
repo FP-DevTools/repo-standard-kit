@@ -33,6 +33,9 @@ the changes listed under **Adopters must**.
 - Bootstrap defaults, Git commit-SHA validation, and document shapes each have
   one canonical owner; copied starter metadata is freshness-tested, and
   normative prose links to generated shape tables rather than restating them.
+- Generated `AGENTS.md` files now project the companion operating documents;
+  the redundant profile Markdown mirrors were removed in favour of the
+  canonical policy catalogue.
 
 ### Adopters must
 
