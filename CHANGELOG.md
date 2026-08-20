@@ -50,6 +50,12 @@ the changes listed under **Adopters must**.
   already required, so `PyYAML` is no longer a runtime dependency. YAML 1.2
   core-schema booleans are now native rather than resolver patches, which keeps
   a workflow's `on:` trigger key a string as before.
+- This repository's own `README.md` and `AGENTS.md` are restructured onto the
+  reference section shape intended for every Python repository: `README.md`
+  carries `Overview`, `Install`, `Usage`, `Development`, and `License` in that
+  order, with all command examples reduced to a single consistent one-liner
+  form, and `AGENTS.md` adopts the reference `Repository Context` keys. No
+  policy rule enforces this shape yet, so no adopting repository is affected.
 
 ### Adopters must
 

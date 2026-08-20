@@ -8,11 +8,19 @@ operating boundaries.
 
 ## Repository Context
 
-- Primary focus: repository standards and Python starter assets
-- Normative entry point: `docs/repo-standard.md`, which indexes every other
-  normative document
-- Normative quality gates: `docs/quality-gates.md`
-- Directory responsibilities: see Repository Layout below
+- Repository name: `repo-standard-kit`
+- Primary language(s): `Python`
+- Runtime/build system: `uv` with `uv_build` in `pyproject.toml`
+- Repository type: `python-single`
+- Standards source: this repository is the standard's own home, so it states
+  the standard rather than referencing it. `docs/repo-standard.md` is the
+  normative entry point and indexes every other normative document;
+  `docs/quality-gates.md` states the mandatory gates.
+- Key directories:
+  - `src/repo_standard/`: bootstrap, policy, and compliance implementation
+  - `tests/`: automated tests
+  - `docs/`: the standard and its companion documents
+  - full responsibilities in Repository Layout below
 
 ## Human And Agent Responsibilities
 
@@ -85,6 +93,12 @@ end in a temporary directory, on every platform.
 - Bug fixes require regression coverage
 - Generated starter output must be validated when the starter changes
 
+## Documentation Rules
+
+- Changes to standards must update the corresponding document in `docs/`
+- Changes to templates or starter kits must stay consistent with each other
+- New operating rules belong in docs before they appear in starter assets
+
 ## Repository Layout
 
 - `src/repo_standard/`: bootstrap implementation
@@ -98,13 +112,8 @@ end in a temporary directory, on every platform.
 - `docs/`: normative standards
 - `profiles/`: language-specific profiles
 - `policy/`: canonical machine-enforced policy and profile detection metadata
-- `templates/`: reusable templates for adopting the standard in an existing repo
-
-## Documentation Rules
-
-- Changes to standards must update the corresponding document in `docs/`
-- Changes to templates or starter kits must stay consistent with each other
-- New operating rules belong in docs before they appear in starter assets
+- `templates/`: fill-in-the-blank reference documents for adopting the standard
+  by hand
 
 ## Change Control Notes
 
