@@ -31,7 +31,8 @@ Apply mode requires the target itself to be a Git repository root and refuses
 a dirty worktree. The command plans and parses every affected file before it
 writes anything. It then leaves all changes unstaged and uncommitted for normal
 review. Repeated execution against the same profile and kit version is
-idempotent.
+idempotent. A repository with no required or recommended structural findings
+is already compliant and produces no planned changes.
 
 ### Adoption Ownership Model
 
@@ -40,7 +41,9 @@ the checkout:
 
 - Standard-owned assets such as the compliance workflow, GitHub Actions
   Dependabot entry, Markdown configuration, changelog skeleton, and
-  documentation directories are added when missing.
+  documentation directories are added when missing. Existing non-empty ADR
+  and diagram directories are authoritative and are never seeded with starter
+  files or conflicting decision numbers.
 - `pyproject.toml`, `.pre-commit-config.yaml`, and the quality workflow are
   structurally merged. Existing project dependencies, build settings,
   services, custom hooks, and additional steps remain in place.

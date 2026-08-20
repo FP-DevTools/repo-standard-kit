@@ -55,7 +55,7 @@ class AdoptionPlan:
     dependency_metadata_changed: bool
 
 
-_MANAGED_PATHS = (
+_MANAGED_SURFACES = (
     "pyproject.toml",
     ".pre-commit-config.yaml",
     ".github/workflows/quality.yml",
@@ -65,8 +65,8 @@ _MANAGED_PATHS = (
     "AGENTS.md",
     "README.md",
     "CHANGELOG.md",
-    "docs/adr/0001-template.md",
-    "docs/diagrams/README.md",
+    "docs/adr",
+    "docs/diagrams",
 )
 _REMOTE_ACTION = re.compile(r"^[^./\s]+/[^@\s]+@(?P<ref>[^\s]+)$")
 _FULL_SHA = re.compile(r"^[0-9a-fA-F]{40}$")
@@ -591,6 +591,21 @@ def plan_adoption(root: Path, profile: str | None = None) -> AdoptionPlan:
     root = root.resolve()
     document = _parse_toml(root / "pyproject.toml")
     selected = _resolve_profile(root, document, profile)
+    policy = load_policy()
+    if not check_repo(root, policy, profile=selected):
+        unchanged = tuple(
+            relative for relative in _MANAGED_SURFACES if (root / relative).exists()
+        )
+        return AdoptionPlan(
+            root=root,
+            profile=selected,
+            version=_kit_version(),
+            changes=(),
+            unchanged=unchanged,
+            conflicts=(),
+            dependency_metadata_changed=False,
+        )
+
     values = _project_values(root, document)
     changes: list[PlannedFile] = []
     unchanged: list[str] = []
@@ -624,16 +639,25 @@ def plan_adoption(root: Path, profile: str | None = None) -> AdoptionPlan:
         generated[relative] = content
         conflicts.extend(workflow_conflicts)
 
-    for relative in (
-        "CHANGELOG.md",
-        "docs/adr/0001-template.md",
-        "docs/diagrams/README.md",
+    changelog = root / "CHANGELOG.md"
+    if changelog.exists():
+        unchanged.append("CHANGELOG.md")
+    else:
+        generated["CHANGELOG.md"] = _render(
+            _read_starter(selected, "CHANGELOG.md"), values
+        )
+
+    for directory, starter_file in (
+        ("docs/adr", "docs/adr/0001-template.md"),
+        ("docs/diagrams", "docs/diagrams/README.md"),
     ):
-        path = root / relative
-        if path.exists():
-            unchanged.append(relative)
+        path = root / directory
+        if path.is_dir() and any(path.iterdir()):
+            unchanged.append(directory)
         else:
-            generated[relative] = _render(_read_starter(selected, relative), values)
+            generated[starter_file] = _render(
+                _read_starter(selected, starter_file), values
+            )
 
     for relative, content in generated.items():
         change = _planned(root / relative, content, root)
@@ -641,12 +665,6 @@ def plan_adoption(root: Path, profile: str | None = None) -> AdoptionPlan:
             unchanged.append(relative)
         else:
             changes.append(change)
-    for relative in _MANAGED_PATHS:
-        if relative not in unchanged and not any(
-            change.path.as_posix() == relative for change in changes
-        ):
-            if relative != "LICENSE":
-                unchanged.append(relative)
     return AdoptionPlan(
         root=root,
         profile=selected,

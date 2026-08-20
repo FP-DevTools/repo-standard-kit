@@ -107,9 +107,9 @@ def test_adoption_reaches_zero_required_findings_and_is_idempotent(
         (root / ".pre-commit-config.yaml").read_text(encoding="utf-8")
     )
     assert hooks["repos"][0]["hooks"][0]["id"] == "custom-project-hook"
-    assert "# keep hook comment" in (
-        root / ".pre-commit-config.yaml"
-    ).read_text(encoding="utf-8")
+    assert "# keep hook comment" in (root / ".pre-commit-config.yaml").read_text(
+        encoding="utf-8"
+    )
     assert "# keep workflow comment" in (
         root / ".github" / "workflows" / "quality.yml"
     ).read_text(encoding="utf-8")
@@ -151,6 +151,49 @@ def test_parse_failure_plans_no_partial_writes(tmp_path: Path) -> None:
 
     assert invalid.read_bytes() == before
     assert not (root / ".github").exists()
+
+
+def test_existing_documentation_directories_are_not_seeded(tmp_path: Path) -> None:
+    root = tmp_path / "existing"
+    _write_minimal_repo(root, "python-single")
+    adr = root / "docs" / "adr"
+    diagrams = root / "docs" / "diagrams"
+    adr.mkdir(parents=True)
+    diagrams.mkdir(parents=True)
+    (adr / "0001-existing-decision.md").write_text("# Existing ADR\n", encoding="utf-8")
+    (diagrams / "architecture.puml").write_text(
+        "@startuml\n@enduml\n", encoding="utf-8"
+    )
+
+    plan = plan_adoption(root, "python-single")
+
+    changed = {change.path.as_posix() for change in plan.changes}
+    assert "docs/adr/0001-template.md" not in changed
+    assert "docs/diagrams/README.md" not in changed
+    assert "docs/adr" in plan.unchanged
+    assert "docs/diagrams" in plan.unchanged
+
+
+def test_structurally_compliant_repository_is_a_no_op(tmp_path: Path) -> None:
+    root = tmp_path / "existing"
+    _write_minimal_repo(root, "python-single")
+    apply_plan(plan_adoption(root, "python-single"))
+    (root / "LICENSE").write_text("Approved license terms.\n", encoding="utf-8")
+
+    pre_commit = root / ".pre-commit-config.yaml"
+    hooks = yaml.safe_load(pre_commit.read_text(encoding="utf-8"))
+    hooks["repos"] = [
+        repository
+        for repository in hooks["repos"]
+        if repository.get("repo") != "https://github.com/FP-DevTools/repo-standard-kit"
+    ]
+    pre_commit.write_text(yaml.safe_dump(hooks, sort_keys=False), encoding="utf-8")
+
+    assert check_repo(root, load_policy(), profile="python-single") == []
+    plan = plan_adoption(root, "python-single")
+
+    assert plan.changes == ()
+    assert plan.conflicts == ()
 
 
 def test_dirty_checkout_is_refused_without_writes(tmp_path: Path) -> None:
