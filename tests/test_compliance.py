@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -85,9 +86,14 @@ def _minimal_repo(tmp_path: Path, profile: str = "python-single") -> Path:
             POLICY.rule("RSK003").check.config["commands_by_profile"][profile], 1
         )
     )
+    dials_config = POLICY.rule("RSK026").check.config
+    dial_block = "\n".join(
+        f"- **{dial['label']}:** {dial['level']} / {dial['scale']}"
+        for dial in dials_config["dials"]
+    )
+    bodies = {"Quality Gates": gate_chain, dials_config["section"]: dial_block}
     agents_sections = "\n\n".join(
-        f"## {heading}\n\n{gate_chain if heading == 'Quality Gates' else 'Detail.'}"
-        for heading in headings
+        f"## {heading}\n\n{bodies.get(heading, 'Detail.')}" for heading in headings
     )
     (root / "AGENTS.md").write_text(
         f"# AGENTS.md\n\n{agents_sections}\n\nSee repo-standard-kit.\n",
@@ -431,6 +437,99 @@ def test_rsk003_ignores_unrelated_quality_gate_prose(tmp_path: Path) -> None:
     )
     path.write_text(text, encoding="utf-8")
     assert "RSK003" not in _rule_ids(check_repo(root, POLICY))
+
+
+def test_rsk026_rejects_a_dial_stated_at_the_wrong_level(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    path = root / "AGENTS.md"
+    text = path.read_text(encoding="utf-8").replace(
+        "**Verbosity:** 2 / 5", "**Verbosity:** 4 / 5"
+    )
+    path.write_text(text, encoding="utf-8")
+    assert "RSK026" in _rule_ids(check_repo(root, POLICY))
+
+
+def test_rsk026_rejects_dials_stated_out_of_order(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    path = root / "AGENTS.md"
+    text = path.read_text(encoding="utf-8")
+    first, second = (
+        f"- **{dial['label']}:** {dial['level']} / {dial['scale']}"
+        for dial in POLICY.rule("RSK026").check.config["dials"]
+    )
+    text = text.replace(f"{first}\n{second}", f"{second}\n{first}")
+    path.write_text(text, encoding="utf-8")
+    assert "RSK026" in _rule_ids(check_repo(root, POLICY))
+
+
+def test_rsk026_rejects_a_section_that_states_no_dial(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    path = root / "AGENTS.md"
+    text = re.sub(
+        r"^- \*\*[^*]+\*\* \d+ / \d+$",
+        "Be brief and be precise.",
+        path.read_text(encoding="utf-8"),
+        flags=re.MULTILINE,
+    )
+    path.write_text(text, encoding="utf-8")
+    assert "RSK026" in _rule_ids(check_repo(root, POLICY))
+
+
+def test_rsk026_ignores_dials_stated_outside_the_section(tmp_path: Path) -> None:
+    """The section is the contract; a matching line elsewhere is just prose."""
+    root = _minimal_repo(tmp_path)
+    path = root / "AGENTS.md"
+    text = path.read_text(encoding="utf-8").replace("- **Verbosity:** 2 / 5\n", "", 1)
+    path.write_text(f"{text}\n- **Verbosity:** 2 / 5\n", encoding="utf-8")
+    assert "RSK026" in _rule_ids(check_repo(root, POLICY))
+
+
+def test_rsk026_ignores_unrelated_operating_mode_prose(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    path = root / "AGENTS.md"
+    section = POLICY.rule("RSK026").check.config["section"]
+    text = path.read_text(encoding="utf-8").replace(
+        f"## {section}\n\n",
+        f"## {section}\n\nEach dial runs from 1 to 5.\n\n",
+    )
+    path.write_text(text, encoding="utf-8")
+    assert "RSK026" not in _rule_ids(check_repo(root, POLICY))
+
+
+def test_no_hand_maintained_document_restates_the_dial_levels() -> None:
+    """`docs/` points at the published levels; only the generator writes them.
+
+    `CHANGELOG.md` is exempt by nature: a release entry records what a release
+    did and must not change when policy later does.
+    """
+    generated = {REPO_ROOT / "docs" / "policy-reference.md"}
+    dials = POLICY.rule("RSK026").check.config["dials"]
+    for path in sorted((REPO_ROOT / "docs").rglob("*.md")):
+        if path in generated:
+            continue
+        text = path.read_text(encoding="utf-8")
+        restated = [
+            dial["label"]
+            for dial in dials
+            if f"{dial['level']} / {dial['scale']}" in text
+        ]
+        assert not restated, (
+            f"{path.name} restates the levels for {restated}; link to "
+            "docs/policy-reference.md instead"
+        )
+
+
+def test_rsk026_holds_the_levels_the_standard_calibrates() -> None:
+    """The levels are a deliberate choice, not whatever policy happens to say."""
+    rule = POLICY.rule("RSK026")
+    assert rule.level == "required"
+    assert [
+        (dial["label"], dial["level"], dial["scale"])
+        for dial in rule.check.config["dials"]
+    ] == [
+        ("Verbosity", 2, 5),
+        ("Precision, repeatability, determinism", 4, 5),
+    ]
 
 
 @pytest.mark.parametrize(
@@ -1362,6 +1461,8 @@ def test_rsk002_is_re_expressed_on_the_shared_shape_record() -> None:
         "Repository Purpose",
         "Repository Context",
         "Human And Agent Responsibilities",
+        "Agent Operating Mode",
+        "Single Source Of Truth",
         "Workflow",
         "Quality Gates",
         "Coding Standards",

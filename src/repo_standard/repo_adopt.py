@@ -102,6 +102,10 @@ _COMMAND_LIST_BLOCK = re.compile(
     r"(?:^[ \t]*(?:\d+[.)]|[-*+])[ \t]+`[^`\r\n]+`[ \t]*\r?\n?)+",
     re.MULTILINE,
 )
+_DIAL_LIST_BLOCK = re.compile(
+    r"(?:^[ \t]*[-*+][ \t]+\*\*[^*\r\n]+\*\*[ \t]*\d+[ \t]*/[ \t]*\d+[ \t]*\r?\n?)+",
+    re.MULTILINE,
+)
 _ROUND_TRIP_YAML = YAML()
 _ROUND_TRIP_YAML.preserve_quotes = True
 _ROUND_TRIP_YAML.width = 88
@@ -659,27 +663,46 @@ def _ensure_standards_reference(text: str, shape: Shape) -> str:
     )
 
 
-def _reconcile_gate_chain(text: str, profile: str) -> str:
-    quality = _section(text, "Quality Gates")
-    assert quality is not None
-    block = quality[2]
-    heading_line, _, body = block.partition("\n")
-    commands = load_policy().rule("RSK003").check.config["commands_by_profile"][profile]
-    command_block = "\n".join(
-        f"{index}. `{command}`" for index, command in enumerate(commands, 1)
-    )
-    list_match = _COMMAND_LIST_BLOCK.search(body)
-    if list_match is not None:
-        body = (
-            body[: list_match.start()] + command_block + "\n" + body[list_match.end() :]
-        )
+def _reconcile_block(
+    text: str, heading: str, block: str, pattern: re.Pattern[str]
+) -> str:
+    """Restate a policy-owned block inside a section the document already has.
+
+    An existing block is replaced where it stands, so surrounding prose keeps
+    its position; a section that states nothing gets the block first, ahead of
+    whatever prose it does carry.
+    """
+    location = _section(text, heading)
+    assert location is not None
+    heading_line, _, body = location[2].partition("\n")
+    match = pattern.search(body)
+    if match is not None:
+        body = body[: match.start()] + block + "\n" + body[match.end() :]
         replacement = f"{heading_line}\n{body}"
     else:
-        replacement = f"{heading_line}\n\n{command_block}\n"
+        replacement = f"{heading_line}\n\n{block}\n"
         if body.strip():
             replacement += "\n" + body.strip("\r\n") + "\n"
     replacement = replacement.rstrip() + "\n\n"
-    return text[: quality[0]] + replacement + text[quality[1] :]
+    return text[: location[0]] + replacement + text[location[1] :]
+
+
+def _reconcile_gate_chain(text: str, profile: str) -> str:
+    commands = load_policy().rule("RSK003").check.config["commands_by_profile"][profile]
+    block = "\n".join(
+        f"{index}. `{command}`" for index, command in enumerate(commands, 1)
+    )
+    return _reconcile_block(text, "Quality Gates", block, _COMMAND_LIST_BLOCK)
+
+
+def _reconcile_operating_dials(text: str) -> str:
+    """RSK026: the dial levels come from policy, never from the existing text."""
+    config = load_policy().rule("RSK026").check.config
+    block = "\n".join(
+        f"- **{dial['label']}:** {dial['level']} / {dial['scale']}"
+        for dial in config["dials"]
+    )
+    return _reconcile_block(text, config["section"], block, _DIAL_LIST_BLOCK)
 
 
 def _existing(path: Path) -> str | None:
@@ -705,6 +728,7 @@ def _merge_agents(path: Path, profile: str, values: dict[str, str]) -> str:
     shape = _shape_for("RSK002")
     text = _fill_required_sections(text, shape, reference)
     text = _reconcile_gate_chain(text, profile)
+    text = _reconcile_operating_dials(text)
     return _ensure_standards_reference(text, shape)
 
 

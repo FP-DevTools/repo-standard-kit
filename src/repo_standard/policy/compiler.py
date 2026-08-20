@@ -97,6 +97,16 @@ def render_reference(policy: Policy) -> str:
                 "",
             ]
         )
+        # Most check config is machinery. Dials are calibrated values a reader
+        # of the standard needs, so publishing them here keeps prose documents
+        # from having to keep a copy that can drift.
+        if "dials" in rule.check.config:
+            lines.extend(["| Dial | Level |", "| --- | --- |"])
+            lines.extend(
+                f"| {dial['label']} | {dial['level']} / {dial['scale']} |"
+                for dial in rule.check.config["dials"]
+            )
+            lines.append("")
     if policy.retired_rule_ids:
         lines.extend(
             [

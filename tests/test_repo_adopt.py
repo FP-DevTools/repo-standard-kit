@@ -529,6 +529,31 @@ def test_adoption_invents_no_heading_the_shape_does_not_declare(
         assert "repo-standard-kit" in text
 
 
+def test_adoption_restores_a_drifted_operating_dial(tmp_path: Path) -> None:
+    """RSK026 levels are policy's, so adoption overwrites a local edit."""
+    root = tmp_path / "existing"
+    _write_minimal_repo(root, "python-single")
+    path = root / "AGENTS.md"
+    config = load_policy().rule("RSK026").check.config
+    section = config["section"]
+    path.write_text(
+        f"# Existing\n\n## {section}\n\nHouse style below.\n\n"
+        "- **Verbosity:** 5 / 5\n- **Precision, repeatability, determinism:** 1 / 5\n"
+        "\nThe rest is ours.\n",
+        encoding="utf-8",
+    )
+
+    apply_plan(plan_adoption(root, "python-single"))
+
+    text = path.read_text(encoding="utf-8")
+    for dial in config["dials"]:
+        assert f"- **{dial['label']}:** {dial['level']} / {dial['scale']}" in text
+    assert "**Verbosity:** 5 / 5" not in text
+    assert "House style below." in text, "surrounding prose must survive"
+    assert "The rest is ours." in text
+    assert not [f for f in check_repo(root, load_policy()) if f.rule_id == "RSK026"]
+
+
 def test_new_pyproject_tables_are_placed_in_declared_order(tmp_path: Path) -> None:
     """`[dependency-groups]` used to be appended after `[build-system]`."""
     root = tmp_path / "existing"

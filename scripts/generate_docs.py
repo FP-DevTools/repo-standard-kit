@@ -88,9 +88,14 @@ def _tokens(policy: Policy, profile: str) -> dict[str, str]:
     These are filled here, so no shipped file ever carries one.
     """
     commands = policy.rule("RSK003").check.config["commands_by_profile"][profile]
+    dials = policy.rule("RSK026").check.config["dials"]
     return {
         "__GATE_CHAIN__": "\n".join(
             f"{index}. `{command}`" for index, command in enumerate(commands, 1)
+        ),
+        "__AGENT_DIALS__": "\n".join(
+            f"- **{dial['label']}:** {dial['level']} / {dial['scale']}"
+            for dial in dials
         ),
         "__STANDARD_MAJOR__": policy.standard_major,
     }

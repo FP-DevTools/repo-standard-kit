@@ -120,13 +120,15 @@ Every target repository must include:
 1. Repository Purpose
 2. Repository Context
 3. Human And Agent Responsibilities
-4. Workflow
-5. Quality Gates
-6. Coding Standards
-7. Testing Policy
-8. Documentation Rules
-9. Repository Layout
-10. Change Control Notes
+4. Agent Operating Mode
+5. Single Source Of Truth
+6. Workflow
+7. Quality Gates
+8. Coding Standards
+9. Testing Policy
+10. Documentation Rules
+11. Repository Layout
+12. Change Control Notes
 
 Committed copies must not contain placeholders or generic filler text.
 
@@ -136,6 +138,35 @@ at the **required** level that the `## Quality Gates` section in `AGENTS.md`
 states the exact ordered command chain defined by policy for the resolved
 profile. Commands elsewhere in the document do not count. These checks do not
 attempt subjective scoring of the section prose.
+
+## Agent Operating Mode
+
+Agent behaviour left to model defaults varies between runs and between
+repositories, which is the opposite of what a standard is for. The standard
+therefore calibrates two dials — *verbosity*, and *precision, repeatability,
+and determinism* — and calibrates them the way it calibrates the gate chain: as
+policy values a check reports drift from, not as prose an adopter silently
+rewrites.
+
+*Low verbosity* means answering what was asked, reporting outcomes rather than
+narrating steps, preferring a diff or a `path:line` reference to prose
+describing it, and spending words on decisions, risks, and failures.
+
+*High precision, repeatability, and determinism* mean verifying against the
+repository before asserting, reusing the pattern already in the file, making
+the smallest change that satisfies the requirement, running the documented
+gates in order and reporting their real output, pinning what can be pinned,
+stating assumptions where the repository does not settle a choice, and reaching
+the same result when the same task runs again.
+
+RSK026 enforces at the **required** level that the `## Agent Operating Mode`
+section of `AGENTS.md` states every dial, in the declared order, at the level
+`policy/base.yaml` declares. The level of each dial is published in
+[`docs/policy-reference.md`](policy-reference.md#rsk026-agentsmd-states-the-calibrated-agent-operating-dials)
+and stated nowhere by hand: the generator renders it into every reference
+document from the rule, `repo-check` reports a document that has drifted, and
+`repo-adopt` restores it. The surrounding prose is the repository's own — the
+check reads the dial lines and nothing else.
 
 ## File Shapes
 

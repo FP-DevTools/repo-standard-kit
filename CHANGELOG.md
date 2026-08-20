@@ -63,6 +63,26 @@ the changes listed under **Adopters must**.
 - A self-adoption gate: `repo-adopt .` against this repository must plan zero
   changes, and the individual merges must agree with the committed files rather
   than relying on the no-findings short-circuit.
+- **Agent Operating Mode.** A new required `AGENTS.md` section, and RSK026
+  (**required**) enforcing what it states. Agent behaviour was previously left
+  to model defaults, so the same task produced materially different work in two
+  repositories adopting the same standard. The standard now calibrates two
+  dials — verbosity at 2/5, and precision, repeatability, and determinism at
+  4/5 — and calibrates them the way it calibrates the gate chain: as values in
+  `policy/base.yaml` that the generator renders into every reference document,
+  `repo-check` reports drift from, and `repo-adopt` restores. The check reads
+  the dial lines and nothing else, so the prose around them stays the
+  repository's own. `docs/policy-reference.md` publishes the levels, so no
+  prose document keeps a copy that can drift.
+- **Single Source Of Truth.** A new required `AGENTS.md` section stating the
+  rule that anything recorded twice drifts: one home per fact, derive rather
+  than copy, reference rather than restate, extend an existing definition
+  rather than adding a parallel one, make unavoidable duplication fail through
+  a check, and delete the stale copy as part of the change that staled it. It
+  applies to code, configuration, documentation, fixtures, and data alike. The
+  section is shared across profiles rather than varied per profile, because a
+  profile variant replaces the shared fragment outright and would have to
+  restate it.
 
 ### Changed
 
@@ -115,6 +135,12 @@ the changes listed under **Adopters must**.
   also requires their order, so a repository that ordered them differently
   moves from passing to a required finding. `repo-check .` names the sections
   it found out of order.
+- Add `## Agent Operating Mode` and `## Single Source Of Truth` to `AGENTS.md`,
+  in that order between `Human And Agent Responsibilities` and `Workflow`.
+  RSK002 reports either missing section as a required finding, and RSK026
+  reports dial levels that are missing or have drifted from the ones
+  `docs/policy-reference.md` publishes. `repo-adopt` writes both sections and
+  restores the levels, keeping any prose you add around them.
 - Bring `README.md`, `CHANGELOG.md`, and `pyproject.toml` onto the shapes
   `docs/repo-standard.md` declares. RSK023, RSK024, and RSK025 are still
   recommended at this point on the branch and become required before v2.0.0

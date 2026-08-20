@@ -145,6 +145,27 @@ def test_generator_tokens_never_reach_shipped_output() -> None:
         assert not leftover, f"{target.variant} {target.document} leaked {leftover}"
 
 
+def test_the_operating_dials_are_injected_from_policy_not_written_by_hand() -> None:
+    """RSK026's levels have one source, for the same reason the chain does."""
+    fragments = [
+        path
+        for path in _fragment_files()
+        if path.parent.name == "AGENTS"
+        and path.name.startswith("agent-operating-mode.")
+    ]
+    assert fragments, "the AGENTS agent-operating-mode fragments disappeared"
+    dials = POLICY.rule("RSK026").check.config["dials"]
+    for path in fragments:
+        text = path.read_text(encoding="utf-8")
+        assert "__AGENT_DIALS__" in text, f"{path.name} must defer to policy"
+        restated = [
+            dial["label"]
+            for dial in dials
+            if f"{dial['level']} / {dial['scale']}" in text
+        ]
+        assert not restated, f"{path.name} restates the levels: {restated}"
+
+
 def test_the_gate_chain_is_injected_from_policy_not_written_by_hand() -> None:
     """The chain had four hand-maintained copies; there must now be none."""
     fragments = [
