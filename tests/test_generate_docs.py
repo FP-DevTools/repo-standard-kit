@@ -22,7 +22,8 @@ from repo_standard.policy import load_source_policy
 _SPEC = importlib.util.spec_from_file_location(
     "generate_docs", REPO_ROOT / "scripts" / "generate_docs.py"
 )
-assert _SPEC is not None and _SPEC.loader is not None
+assert _SPEC is not None
+assert _SPEC.loader is not None
 generate_docs = importlib.util.module_from_spec(_SPEC)
 # `dataclasses` resolves annotations through `sys.modules`, so the module has to
 # be registered before it executes, not after.
@@ -103,9 +104,7 @@ def test_fragments_carry_no_ordering_of_their_own(path: Path) -> None:
     ceiling = shape.heading_level if fragment_id != generate_docs.PREAMBLE else 0
     offenders = [
         heading
-        for level, heading in _headings_outside_code(
-            path.read_text(encoding="utf-8")
-        )
+        for level, heading in _headings_outside_code(path.read_text(encoding="utf-8"))
         if level <= ceiling
     ]
     assert not offenders, (

@@ -68,3 +68,8 @@ repos:
         entry: uv run pymarkdown --config .pymarkdown.json scan
         language: system
         types: [markdown]
+        # templates/content/ holds prose fragments, not documents: they have no
+        # title of their own because the generator emits the heading from
+        # policy/shapes.yaml. Linting them as standalone files reports MD041 on
+        # every one. The rendered documents they produce are linted normally.
+        exclude: ^templates/content/
