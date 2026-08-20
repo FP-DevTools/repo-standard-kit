@@ -1,0 +1,4 @@
+- `src/`: production package code
+- `tests/`: automated tests
+- `docs/`: durable project knowledge
+- `scripts/`: developer helpers, not core business logic

@@ -179,7 +179,8 @@ uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v2.0.0" r
 - `policy/`: canonical machine-enforced rules, profile detection metadata, and
   the file shapes governed documents must follow
 - `profiles/`: language or repo-type specific standards
-- `templates/`: fill-in-the-blank reference documents for adopting the standard
+- `templates/`: reference documents rendered from the shapes, plus the
+  `content/` prose fragments they are rendered from
   by hand
 - `src/repo_standard/`: packaged bootstrap implementation
 - `src/repo_standard/policy/`: strict policy models and compiled runtime policy

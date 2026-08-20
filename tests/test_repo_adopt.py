@@ -2,19 +2,24 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
 
 import pytest
 import tomlkit
-from conftest import dump_yaml, load_yaml
+from conftest import REPO_ROOT, dump_yaml, load_yaml
 
 from repo_standard.compliance.checks import check_repo, load_policy
 from repo_standard.repo_adopt import (
     AdoptionError,
     CommandError,
     _kit_version,
+    _merge_agents,
+    _merge_pyproject,
+    _merge_readme,
+    _project_values,
     _run,
     apply_plan,
     main,
@@ -228,40 +233,11 @@ def test_non_uv_build_backend_is_preserved_without_conflict(tmp_path: Path) -> N
     assert not [finding for finding in findings if finding.level == "required"]
 
 
-def _make_shape_conforming(root: Path) -> None:
-    """Bring the surfaces adoption does not yet reshape onto their shapes.
-
-    Adoption appends `[dependency-groups]` after `[build-system]` and only
-    appends a standards section to an existing README, so neither reaches the
-    shapes RSK023 and RSK025 declare. Until the generator lands, this test
-    supplies conforming versions itself so the zero-finding precondition is
-    real rather than assumed.
-    """
-    policy = load_policy()
-    readme = "\n\n".join(
-        f"## {heading}\n\nDetail." for heading in policy.shape("readme").required
-    )
-    (root / "README.md").write_text(
-        f"# Existing Project\n\nKeep this project-specific guide, "
-        f"aligned with repo-standard-kit.\n\n{readme}\n",
-        encoding="utf-8",
-    )
-    document = tomlkit.parse((root / "pyproject.toml").read_text(encoding="utf-8"))
-    groups = document.pop("dependency-groups")
-    build = document.pop("build-system")
-    tool = document.pop("tool")
-    document["dependency-groups"] = groups
-    document["build-system"] = build
-    document["tool"] = tool
-    (root / "pyproject.toml").write_text(tomlkit.dumps(document), encoding="utf-8")
-
-
 def test_structurally_compliant_repository_is_a_no_op(tmp_path: Path) -> None:
     root = tmp_path / "existing"
     _write_minimal_repo(root, "python-single")
     apply_plan(plan_adoption(root, "python-single"))
     (root / "LICENSE").write_text("Approved license terms.\n", encoding="utf-8")
-    _make_shape_conforming(root)
 
     pre_commit = root / ".pre-commit-config.yaml"
     hooks = load_yaml(pre_commit.read_text(encoding="utf-8"))
@@ -457,3 +433,120 @@ def test_native_tls_is_forwarded_to_dependency_commands(
 
     assert main([str(root), "--profile", "python-single", "--native-tls"]) == 0
     assert commands == [(["uv", "lock"], True), (["uv", "sync"], True)]
+
+
+def test_this_repository_is_its_own_first_adopter() -> None:
+    """`repo-adopt .` must plan nothing against the kit that publishes it."""
+    plan = plan_adoption(REPO_ROOT, "python-single")
+
+    assert plan.changes == ()
+    assert plan.conflicts == ()
+
+
+def test_self_adoption_is_a_real_no_op_not_a_short_circuit() -> None:
+    """Prove the merges agree with the committed files.
+
+    `plan_adoption` returns early when the repository already has no findings,
+    so the plan being empty would also be satisfied by merges that disagree
+    with what is committed. Run them directly instead.
+    """
+    path = REPO_ROOT / "pyproject.toml"
+    document = tomlkit.parse(path.read_text(encoding="utf-8"))
+    values = _project_values(REPO_ROOT, document)
+
+    for relative, merge in (("AGENTS.md", _merge_agents), ("README.md", _merge_readme)):
+        target = REPO_ROOT / relative
+        assert merge(target, "python-single", values) == target.read_text(
+            encoding="utf-8"
+        ), f"repo-adopt would rewrite {relative}"
+
+    merged, _changed, conflicts = _merge_pyproject(path, document, "python-single")
+    assert conflicts == []
+    assert merged == path.read_text(encoding="utf-8")
+
+
+def _h2(text: str) -> list[str]:
+    return re.findall(r"^##\s+(.+?)\s*$", text, re.MULTILINE)
+
+
+def _is_subsequence(actual: list[str], declared: tuple[str, ...]) -> bool:
+    seen = [item for item in actual if item in declared]
+    return seen == [item for item in declared if item in seen]
+
+
+@pytest.mark.parametrize(
+    ("document", "rule_id", "last_section"),
+    [
+        ("AGENTS.md", "RSK002", "Change Control Notes"),
+        ("README.md", "RSK023", "License"),
+    ],
+)
+def test_repaired_sections_land_in_shape_order(
+    tmp_path: Path, document: str, rule_id: str, last_section: str
+) -> None:
+    """A missing section must not be appended past the ones that follow it.
+
+    Appending was safe while RSK002 only checked presence. Now that shapes are
+    order-enforced, appending would trade a missing-section finding for an
+    out-of-order one.
+    """
+    root = tmp_path / "existing"
+    _write_minimal_repo(root, "python-single")
+    (root / document).write_text(
+        f"# Existing\n\nKeep this.\n\n## {last_section}\n\nProject-owned prose.\n",
+        encoding="utf-8",
+    )
+
+    apply_plan(plan_adoption(root, "python-single"))
+
+    policy = load_policy()
+    shape = policy.shape(policy.rule(rule_id).check.config["shape"])
+    headings = _h2((root / document).read_text(encoding="utf-8"))
+    assert headings[-1] == last_section, "the project's own section moved"
+    assert _is_subsequence(headings, shape.headings), (
+        f"{document} sections are out of canonical order: {headings}"
+    )
+    assert "Project-owned prose." in (root / document).read_text(encoding="utf-8")
+
+
+def test_adoption_invents_no_heading_the_shape_does_not_declare(
+    tmp_path: Path,
+) -> None:
+    """The RSK005 reference used to arrive as a `Repository Standards` section."""
+    root = tmp_path / "existing"
+    _write_minimal_repo(root, "python-single")
+
+    apply_plan(plan_adoption(root, "python-single"))
+
+    policy = load_policy()
+    for document, rule_id in (("AGENTS.md", "RSK002"), ("README.md", "RSK023")):
+        text = (root / document).read_text(encoding="utf-8")
+        declared = policy.shape(policy.rule(rule_id).check.config["shape"]).headings
+        assert "Repository Standards" not in _h2(text)
+        assert set(_h2(text)) <= set(declared), (
+            f"adoption added headings to {document} that no shape declares"
+        )
+        assert "repo-standard-kit" in text
+
+
+def test_new_pyproject_tables_are_placed_in_declared_order(tmp_path: Path) -> None:
+    """`[dependency-groups]` used to be appended after `[build-system]`."""
+    root = tmp_path / "existing"
+    _write_minimal_repo(root, "python-single")
+    pyproject = root / "pyproject.toml"
+    pyproject.write_text(
+        pyproject.read_text(encoding="utf-8") + '\n[tool.ty.src]\nroot = "src"\n',
+        encoding="utf-8",
+    )
+
+    apply_plan(plan_adoption(root, "python-single"))
+
+    policy = load_policy()
+    shape = policy.shape(policy.rule("RSK025").check.config["shape"])
+    tables = re.findall(
+        r"^\[\[?\s*([^\]\s]+)\s*\]\]?$",
+        pyproject.read_text(encoding="utf-8"),
+        re.MULTILINE,
+    )
+    assert _is_subsequence(tables, shape.headings), f"table order is wrong: {tables}"
+    assert tables.index("dependency-groups") < tables.index("build-system")

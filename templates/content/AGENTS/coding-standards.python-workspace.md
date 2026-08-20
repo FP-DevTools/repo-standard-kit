@@ -1,0 +1,4 @@
+- Shared tool config lives at the repo root
+- Package metadata lives in each package's `pyproject.toml`
+- Cross-package changes must be explicit and small
+- Treat package boundaries as stable by default

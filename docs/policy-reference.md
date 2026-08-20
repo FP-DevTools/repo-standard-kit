@@ -65,6 +65,7 @@ documents are produced by walking it in the order below.
 | `at-a-glance` | `At A Glance` | `optional` |
 | `overview` | `Overview` | `required` |
 | `install` | `Install` | `required` |
+| `first-10-minutes` | `First 10 Minutes` | `optional` |
 | `configuration` | `Configuration` | `optional` |
 | `usage` | `Usage` | `required` |
 | `repo-structure` | `Repo Structure` | `optional` |

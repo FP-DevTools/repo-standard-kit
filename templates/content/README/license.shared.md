@@ -1,0 +1,1 @@
+__LICENSE_NOTICE__

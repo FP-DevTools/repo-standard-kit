@@ -45,11 +45,14 @@ actually for.
 ## Development
 
 Repository workflow, quality gates, and coding standards are defined in
-`AGENTS.md`. The mandatory quality gates and this README's structure derive
-from [repo-standard-kit] — see its [quality-gates spec][quality-gates] and
-[README template][readme-template]. Keep this file's shape aligned with those
-when you update it, and check this repository against it periodically for
-standards drift.
+`AGENTS.md`. The mandatory quality gates derive from [repo-standard-kit] — see
+its [quality-gates spec][quality-gates].
+
+This README's section order is RSK023, whose canonical section list lives in
+the kit's `policy/shapes.yaml` and is published in the
+[policy reference][policy-reference]. Run `repo-check .` after editing this
+file and it names any section that is missing or out of order; `repo-adopt .`
+inserts the required ones.
 
 ## License
 
@@ -57,4 +60,4 @@ __LICENSE_NOTICE__
 
 [repo-standard-kit]: https://github.com/FP-DevTools/repo-standard-kit
 [quality-gates]: https://github.com/FP-DevTools/repo-standard-kit/blob/main/docs/quality-gates.md
-[readme-template]: https://github.com/FP-DevTools/repo-standard-kit/blob/main/templates/README.md
+[policy-reference]: https://github.com/FP-DevTools/repo-standard-kit/blob/main/docs/policy-reference.md

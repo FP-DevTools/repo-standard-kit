@@ -152,9 +152,9 @@ declared sections a file does carry must appear in the declared order. Markdown
 shapes govern level-two headings only, matching RSK002's semantics.
 
 - `README.md` (RSK023, **recommended**): the spine runs At A Glance, Overview,
-  Install, Configuration, Usage, Repo Structure, Development, Deployment,
-  Compatibility And Versioning, Maintainers And Support, License. Overview,
-  Install, Usage, Development, and License are required.
+  Install, First 10 Minutes, Configuration, Usage, Repo Structure, Development,
+  Deployment, Compatibility And Versioning, Maintainers And Support, License.
+  Overview, Install, Usage, Development, and License are required.
 - `CHANGELOG.md` (RSK024, **recommended**): an `[Unreleased]` section is
   required, and a `Compatibility Policy` section, where present, precedes it.
   Released-version sections are not enumerated.

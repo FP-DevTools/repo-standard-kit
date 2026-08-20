@@ -48,14 +48,20 @@ Agents must not:
 
 1. Update canonical YAML policy and its explanatory normative docs together
    when changing a machine-enforced rule.
-2. Update templates and starter kits in the same change.
+2. Update templates and starter kits in the same change. Never edit
+   `templates/{README,AGENTS}.md` or a starter kit's Markdown directly: they
+   are generated. Edit the prose fragment under `templates/content/` or, for
+   section order, `policy/shapes.yaml`.
 3. After changing `policy/` or a policy-linked normative section, run
    `uv run python scripts/generate_policy.py` and commit the regenerated
    `src/repo_standard/policy/compiled.json` and `docs/policy-reference.md`;
    `uv run pytest` fails otherwise.
-4. Validate bootstrap behavior with `uv run pytest`, which generates into a
+4. After changing `policy/shapes.yaml` or `templates/content/`, run
+   `uv run python scripts/generate_docs.py` and commit the regenerated
+   templates and starter-kit documents; `uv run pytest` fails otherwise.
+5. Validate bootstrap behavior with `uv run pytest`, which generates into a
    temporary directory rather than a fixed path.
-5. Keep changes small and focused by concern.
+6. Keep changes small and focused by concern.
 
 ## Quality Gates
 
@@ -112,7 +118,8 @@ end in a temporary directory, on every platform.
 - `docs/`: normative standards
 - `profiles/`: language-specific profiles
 - `policy/`: canonical machine-enforced policy and profile detection metadata
-- `templates/`: fill-in-the-blank reference documents for adopting the standard
+- `templates/`: reference documents rendered from the shapes, plus the
+  `content/` prose fragments they are rendered from
   by hand
 
 ## Change Control Notes

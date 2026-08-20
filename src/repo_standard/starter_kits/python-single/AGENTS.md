@@ -23,23 +23,23 @@
 Humans own:
 
 - product scope and intent
+- security exceptions and secret handling
 - merge and release authority
 - approval of breaking changes
-- security exceptions and secrets
 
 Agents own:
 
-- implementation within documented boundaries
+- implementation within documented repo boundaries
 - tests and regression coverage
-- docs updates for behavior changes
+- docs updates tied to behavior changes
 - running documented quality gates
 
 ## Workflow
 
 - Long-lived branch: `main`
 - Branch prefixes: `feat/`, `fix/`, `refactor/`, `docs/`, `chore/`
-- Merge through reviewed PRs only
-- Keep PRs focused and small
+- Merge via reviewed PRs only
+- Keep PRs small and single-purpose
 - CI must mirror the documented local quality gates
 
 ## Quality Gates
@@ -67,6 +67,8 @@ ruleset applies to every adopting repository.
 - Minimize `Any` and justify it when required
 - Keep I/O boundaries explicit
 - Separate side effects from business logic
+- Separate durable logic from scripts
+- Preserve public interface stability by default
 
 ## Testing Policy
 
@@ -91,8 +93,8 @@ ruleset applies to every adopting repository.
 
 ## Change Control Notes
 
-Document API, schema, or migration-specific rules here when the repository
-introduces them.
+Document any repo-specific API, schema, migration, or operational constraints
+here when the repository introduces them.
 
 [repo-standard-kit]: https://github.com/FP-DevTools/repo-standard-kit
 [quality-gates]: https://github.com/FP-DevTools/repo-standard-kit/blob/main/docs/quality-gates.md

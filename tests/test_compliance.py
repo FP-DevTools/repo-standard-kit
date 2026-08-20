@@ -1386,6 +1386,7 @@ def test_readme_shape_declares_the_documented_spine() -> None:
         "At A Glance",
         "Overview",
         "Install",
+        "First 10 Minutes",
         "Configuration",
         "Usage",
         "Repo Structure",

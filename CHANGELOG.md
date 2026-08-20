@@ -46,6 +46,23 @@ the changes listed under **Adopters must**.
   section states that terms have not been selected yet and cites RSK018.
 - A `File Shapes` section in `docs/repo-standard.md` stating the contract each
   new rule enforces.
+- **The shape now produces the documents, not merely describes them.**
+  `scripts/generate_docs.py` walks a shape's ordered section list and renders
+  `templates/{README,AGENTS}.md` and both starter kits'
+  `{README,AGENTS,CHANGELOG}.md`. Prose lives in
+  `templates/content/<DOC>/<section-id>.<variant>.md` fragments keyed by section
+  id and carrying no ordering of their own; a section the shape does not declare
+  cannot be emitted, and reordering a document means editing
+  `policy/shapes.yaml`. Fragment resolution falls back from the variant to
+  `shared`, so a section identical across profiles is written once. A staleness
+  test fails when a committed document differs from a fresh render, mirroring
+  the existing policy-regeneration gate.
+- `First 10 Minutes` joins the README spine as an optional section between
+  `Install` and `Configuration`. The starter READMEs already shipped it, so the
+  shape could not render what the kit itself publishes without it.
+- A self-adoption gate: `repo-adopt .` against this repository must plan zero
+  changes, and the individual merges must agree with the committed files rather
+  than relying on the no-findings short-circuit.
 
 ### Changed
 
@@ -57,9 +74,12 @@ the changes listed under **Adopters must**.
   check before — a repository whose `AGENTS.md` carried every heading in the
   wrong sequence used to pass. This is the change that makes the release major:
   a previously aligned repository can now fail a required rule.
-- `repo-init --python-version` now renders the declared `__PYTHON_VERSION__`
-  placeholder instead of string-replacing a literal `>=3.12` in the starter
-  manifest, so any requested version takes effect.
+- `repo-init --python-version` now sets `requires-python` structurally through
+  `tomlkit` instead of string-replacing a literal `>=3.12` in the starter
+  manifest, so any requested version takes effect. The starter manifest keeps a
+  real version rather than the `__PYTHON_VERSION__` token, because Ruff resolves
+  configuration by walking up the tree and rejects a placeholder there; the
+  token is rendered into the starter README's `Install` line instead.
 - `repo-init --author` now reaches the generated `pyproject.toml` as an
   `authors` entry; it was previously threaded into the render values and
   silently discarded. An unnamed author leaves the key out rather than
@@ -70,6 +90,19 @@ the changes listed under **Adopters must**.
 - Starter `README.md` files follow the README spine and carry a `License`
   section; starter `CHANGELOG.md` files declare Keep a Changelog and Semantic
   Versioning and carry a `Compatibility Policy` section.
+- **`repo-adopt` repairs documents in shape order.** A missing required section
+  used to be appended to the end of `AGENTS.md`, which was safe only while
+  RSK002 checked presence alone; it now lands where the shape says it belongs,
+  and the same insertion drives `README.md`. `repo-adopt` no longer invents a
+  `Repository Standards` heading no shape declares — the RSK005 reference goes
+  into `Repository Context` and `Development`, which the shapes already require.
+- `repo-adopt` places new `pyproject.toml` tables in the order RSK025 declares
+  rather than appending them, so `[dependency-groups]` no longer lands after
+  `[build-system]` and `[tool.repo-standard]` no longer splits the Ruff tables.
+- `templates/README.md` states that its section order comes from RSK023 and is
+  checked by `repo-check`, replacing the claim that adopters should keep their
+  README aligned with `templates/` — a path no tooling reads. The same
+  correction lands in the starter READMEs.
 
 ### Adopters must
 

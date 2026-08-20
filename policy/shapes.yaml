@@ -54,6 +54,9 @@ shapes:
       - id: install
         heading: Install
         level: required
+      - id: first-10-minutes
+        heading: First 10 Minutes
+        level: optional
       - id: configuration
         heading: Configuration
         level: optional
