@@ -34,10 +34,12 @@ the changes listed under **Adopters must**.
   `docs/policy-reference.md` alongside profiles and rules, and a shape and the
   rule enforcing it must name each other, so neither can drift from the other.
 - RSK023 (`README.md` spine), RSK024 (`CHANGELOG.md` sections), and RSK025
-  (`pyproject.toml` table order), all at the **recommended** level. Every shape
-  is checked as a subsequence: sections the shape does not declare stay legal
-  anywhere, optional sections may be absent, and what a shape forbids is
-  reordering. Markdown shapes govern level-two headings only.
+  (`pyproject.toml` table order). Every shape is checked as a subsequence:
+  sections the shape does not declare stay legal anywhere, optional sections
+  may be absent, and what a shape forbids is reordering. Markdown shapes
+  govern level-two headings only. These three rules are **recommended** as of
+  this commit and are promoted to **required** later on this branch, before
+  v2.0.0 ships.
 - `repo-init --license {proprietary,mit,apache-2.0}` writes the full licence
   text to `LICENSE` and declares `license` and `license-files` in
   `pyproject.toml`. Omitted, no `LICENSE` is written and the README's `License`
@@ -80,10 +82,12 @@ the changes listed under **Adopters must**.
   also requires their order, so a repository that ordered them differently
   moves from passing to a required finding. `repo-check .` names the sections
   it found out of order.
-- Nothing for the new shape rules yet. RSK023, RSK024, and RSK025 ship as
-  recommendations so that repositories get a migration window before the
-  shapes bind; run `repo-check --strict` to see those findings now and fix
-  them at your own pace. They become required in a later major version.
+- Bring `README.md`, `CHANGELOG.md`, and `pyproject.toml` onto the shapes
+  `docs/repo-standard.md` declares. RSK023, RSK024, and RSK025 are still
+  recommended at this point on the branch and become required before v2.0.0
+  ships, so `repo-check .` reports them as required findings in the released
+  version. `repo-check --strict` names every section that is missing or out of
+  order.
 
 ## [1.2.0] - 2026-08-20
 

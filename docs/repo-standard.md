@@ -165,6 +165,6 @@ shapes govern level-two headings only, matching RSK002's semantics.
   tables the shape does not list — `tool.repo-check.ignore`, for instance —
   stay legal in any position.
 
-These three rules are recommended so that adopting repositories get a migration
-window; strict checking keeps them visible. They become required in the next
-major version of the standard.
+These three rules are recommended while the generator that produces conforming
+documents is still being built; strict checking keeps them visible in the
+meantime.
