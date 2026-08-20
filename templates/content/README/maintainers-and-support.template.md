@@ -1,0 +1,3 @@
+- Maintainers: `<names / team, @github-handles>`
+- Questions: `<Slack channel, mailing list, or discussion board>`
+- Bugs and feature requests: `<issue tracker link>`

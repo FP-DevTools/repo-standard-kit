@@ -1,0 +1,3 @@
+- `packages/`: one directory per workspace package.
+- `tests/`: workspace-level tests that span packages.
+- `docs/`: architecture decision records and diagrams.

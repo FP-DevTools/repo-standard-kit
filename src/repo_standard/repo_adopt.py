@@ -23,6 +23,7 @@ from ruamel.yaml.error import YAMLError
 from tomlkit.exceptions import ParseError
 
 from repo_standard.compliance.checks import Finding, check_repo, load_policy
+from repo_standard.policy import Shape
 from repo_standard.repo_init import (
     PLACEHOLDERS,
     UNLICENSED_NOTICE,
@@ -30,6 +31,26 @@ from repo_standard.repo_init import (
 )
 
 ADOPTED_LICENSE_NOTICE = "See [`LICENSE`](LICENSE) for the terms that apply."
+
+_STANDARDS_LINK = (
+    "[repo-standard-kit]: https://github.com/FP-DevTools/repo-standard-kit"
+)
+# RSK005 wants an explicit, linked reference in both documents. Rather than
+# inventing a heading no shape declares, the note goes into a section the shape
+# already requires, so adoption never introduces a section shape of its own.
+_STANDARDS_NOTE = {
+    "agents": (
+        "repository-context",
+        "Standards source: [repo-standard-kit] — quality gates derive from it, "
+        "and this repository is reviewed against it periodically for standards "
+        "drift.",
+    ),
+    "readme": (
+        "development",
+        "Repository workflow and quality gates follow [repo-standard-kit]. "
+        "Review this repository against the pinned standard when upgrading.",
+    ),
+}
 
 
 class AdoptionError(RuntimeError):
@@ -243,11 +264,46 @@ def _resolve_profile(root: Path, document: Any, override: str | None) -> str:
     return default
 
 
-def _ensure_table(parent: Any, key: str) -> Any:
+def _sibling_order(shape: Shape, prefix: tuple[str, ...]) -> list[str]:
+    """Child names the shape declares under `prefix`, in declared order."""
+    order: list[str] = []
+    for heading in shape.headings:
+        parts = heading.split(".")
+        if len(parts) <= len(prefix) or tuple(parts[: len(prefix)]) != prefix:
+            continue
+        if parts[len(prefix)] not in order:
+            order.append(parts[len(prefix)])
+    return order
+
+
+def _place(
+    parent: Any, key: str, value: Any, shape: Shape, prefix: tuple[str, ...]
+) -> None:
+    """Add `key` where the shape says it belongs among its siblings.
+
+    tomlkit appends, and a table appended past the ones that should follow it is
+    an RSK025 finding. There is no insert-before in the public API, so the
+    declared tables that come after `key` are lifted out and put back in order;
+    each carries its own contents and trivia, so only their position moves.
+    """
+    order = _sibling_order(shape, prefix)
+    if key not in order:
+        parent[key] = value
+        return
+    following = [name for name in order[order.index(key) + 1 :] if name in parent]
+    moved = [(name, parent.pop(name)) for name in following]
+    parent[key] = value
+    for name, table in moved:
+        parent[name] = table
+
+
+def _ensure_table(
+    parent: Any, key: str, shape: Shape, prefix: tuple[str, ...] = ()
+) -> Any:
     value = parent.get(key)
     if value is None:
-        value = tomlkit.table()
-        parent[key] = value
+        _place(parent, key, tomlkit.table(), shape, prefix)
+        value = parent[key]
     if not isinstance(value, dict):
         raise AdoptionError(f"cannot merge TOML key {key!r}: expected a table")
     return value
@@ -257,11 +313,12 @@ def _merge_pyproject(
     path: Path, document: Any, profile: str
 ) -> tuple[str, bool, list[str]]:
     starter = tomllib.loads(_read_starter(profile, "pyproject.toml"))
+    shape = _shape_for("RSK025")
     conflicts: list[str] = []
     dependency_changed = False
 
-    tool = _ensure_table(document, "tool")
-    metadata = _ensure_table(tool, "repo-standard")
+    tool = _ensure_table(document, "tool", shape)
+    metadata = _ensure_table(tool, "repo-standard", shape, ("tool",))
     unknown = set(metadata) - {"profile", "standard"}
     if unknown:
         conflicts.append(
@@ -271,7 +328,7 @@ def _merge_pyproject(
     metadata["profile"] = profile
     metadata["standard"] = load_policy().standard_major
 
-    groups = _ensure_table(document, "dependency-groups")
+    groups = _ensure_table(document, "dependency-groups", shape)
     dev = groups.get("dev")
     if dev is None:
         dev = tomlkit.array().multiline(True)
@@ -288,10 +345,10 @@ def _merge_pyproject(
             dev.append(requirement)
             dependency_changed = True
 
-    ruff = _ensure_table(tool, "ruff")
+    ruff = _ensure_table(tool, "ruff", shape, ("tool",))
     if "line-length" not in ruff:
         ruff["line-length"] = starter["tool"]["ruff"]["line-length"]
-    lint = _ensure_table(ruff, "lint")
+    lint = _ensure_table(ruff, "lint", shape, ("tool", "ruff"))
     select = lint.get("select")
     if select is None:
         select = tomlkit.array()
@@ -308,7 +365,7 @@ def _merge_pyproject(
             build = tomlkit.table()
             build["requires"] = starter["build-system"]["requires"]
             build["build-backend"] = starter["build-system"]["build-backend"]
-            document["build-system"] = build
+            _place(document, "build-system", build, shape, ())
             dependency_changed = True
         elif not isinstance(build, dict):
             raise AdoptionError("cannot merge build-system: expected a table")
@@ -534,23 +591,75 @@ def _section(text: str, heading: str) -> tuple[int, int, str] | None:
     return (match.start(), match.end(), match.group(0)) if match else None
 
 
-def _merge_agents(path: Path, profile: str, values: dict[str, str]) -> str:
-    template = _render(_read_starter(profile, "AGENTS.md"), values)
-    try:
-        text = path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return template
-    except UnicodeDecodeError as error:
-        raise AdoptionError(f"could not parse {path} as UTF-8") from error
-    policy = load_policy()
-    headings = policy.shape(policy.rule("RSK002").check.config["shape"]).required
-    for heading in headings:
-        if _section(text, heading) is not None:
-            continue
-        source = _section(template, heading)
-        assert source is not None
-        text = text.rstrip() + "\n\n" + source[2].rstrip() + "\n"
+_LINK_DEFINITIONS = re.compile(r"(?:^\[[^\]\r\n]+\]:[^\r\n]*\r?\n?)+\Z", re.MULTILINE)
 
+
+def _append_block(text: str, block: str) -> str:
+    """Append `block`, keeping any trailing link-reference definitions last."""
+    body = text.rstrip() + "\n"
+    match = _LINK_DEFINITIONS.search(body)
+    if match is None:
+        return f"{body.rstrip()}\n\n{block.rstrip()}\n"
+    head = body[: match.start()].rstrip()
+    return f"{head}\n\n{block.rstrip()}\n\n{body[match.start() :].strip()}\n"
+
+
+def _append_link_definition(text: str, definition: str) -> str:
+    body = text.rstrip() + "\n"
+    match = _LINK_DEFINITIONS.search(body)
+    if match is None:
+        return f"{body}\n{definition}\n"
+    return f"{body[: match.end()].rstrip()}\n{definition}\n"
+
+
+def _insert_section(text: str, shape: Shape, heading: str, block: str) -> str:
+    """Insert `block` where `shape` says the section belongs.
+
+    Appending was safe while RSK002 checked presence alone. Shapes are
+    order-enforced, so a repaired section has to land before the first declared
+    section that follows it canonically, or the repair trades a missing-section
+    finding for an out-of-order one.
+    """
+    order = list(shape.headings)
+    for following in order[order.index(heading) + 1 :]:
+        location = _section(text, following)
+        if location is None:
+            continue
+        head = text[: location[0]].rstrip()
+        return f"{head}\n\n{block.rstrip()}\n\n{text[location[0] :]}"
+    return _append_block(text, block)
+
+
+def _fill_required_sections(text: str, shape: Shape, reference: str) -> str:
+    """Add every required section `text` lacks, taken from `reference`."""
+    for section in shape.sections:
+        if section.level != "required" or _section(text, section.heading) is not None:
+            continue
+        source = _section(reference, section.heading)
+        if source is None:
+            raise AdoptionError(
+                f"cannot reconcile {shape.path}: the reference document has no "
+                f"{section.heading!r} section"
+            )
+        text = _insert_section(text, shape, section.heading, source[2])
+    return text
+
+
+def _ensure_standards_reference(text: str, shape: Shape) -> str:
+    """Satisfy RSK005 inside a section the shape already declares."""
+    if "repo-standard-kit" in text:
+        return text
+    section_id, note = _STANDARDS_NOTE[shape.id]
+    location = _section(text, shape.section(section_id).heading)
+    if location is None:
+        return _append_block(text, f"{note}\n\n{_STANDARDS_LINK}")
+    block = f"{location[2].rstrip()}\n\n{note}\n\n"
+    return _append_link_definition(
+        text[: location[0]] + block + text[location[1] :], _STANDARDS_LINK
+    )
+
+
+def _reconcile_gate_chain(text: str, profile: str) -> str:
     quality = _section(text, "Quality Gates")
     assert quality is not None
     block = quality[2]
@@ -570,31 +679,43 @@ def _merge_agents(path: Path, profile: str, values: dict[str, str]) -> str:
         if body.strip():
             replacement += "\n" + body.strip("\r\n") + "\n"
     replacement = replacement.rstrip() + "\n\n"
-    text = text[: quality[0]] + replacement + text[quality[1] :]
-    if "repo-standard-kit" not in text:
-        text = text.rstrip() + (
-            "\n\nThis repository adopts [repo-standard-kit] and its documented quality "
-            "baseline.\n\n[repo-standard-kit]: "
-            "https://github.com/FP-DevTools/repo-standard-kit\n"
-        )
-    return text
+    return text[: quality[0]] + replacement + text[quality[1] :]
+
+
+def _existing(path: Path) -> str | None:
+    try:
+        return path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    except UnicodeDecodeError as error:
+        raise AdoptionError(f"could not parse {path} as UTF-8") from error
+
+
+def _shape_for(rule_id: str) -> Shape:
+    """Resolve a shape through the rule that enforces it, never by literal id."""
+    policy = load_policy()
+    return policy.shape(policy.rule(rule_id).check.config["shape"])
+
+
+def _merge_agents(path: Path, profile: str, values: dict[str, str]) -> str:
+    reference = _render(_read_starter(profile, "AGENTS.md"), values)
+    text = _existing(path)
+    if text is None:
+        return reference
+    shape = _shape_for("RSK002")
+    text = _fill_required_sections(text, shape, reference)
+    text = _reconcile_gate_chain(text, profile)
+    return _ensure_standards_reference(text, shape)
 
 
 def _merge_readme(path: Path, profile: str, values: dict[str, str]) -> str:
-    try:
-        text = path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return _render(_read_starter(profile, "README.md"), values)
-    except UnicodeDecodeError as error:
-        raise AdoptionError(f"could not parse {path} as UTF-8") from error
-    if "repo-standard-kit" in text:
-        return text
-    return text.rstrip() + (
-        "\n\n## Repository Standards\n\nRepository workflow and quality gates follow "
-        "[repo-standard-kit]. Review this repository against the pinned standard "
-        "when upgrading.\n\n[repo-standard-kit]: "
-        "https://github.com/FP-DevTools/repo-standard-kit\n"
-    )
+    reference = _render(_read_starter(profile, "README.md"), values)
+    text = _existing(path)
+    if text is None:
+        return reference
+    shape = _shape_for("RSK023")
+    text = _fill_required_sections(text, shape, reference)
+    return _ensure_standards_reference(text, shape)
 
 
 def _planned(path: Path, content: str, root: Path) -> PlannedFile | None:

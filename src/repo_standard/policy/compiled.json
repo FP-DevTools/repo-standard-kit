@@ -821,6 +821,11 @@
           "level": "required"
         },
         {
+          "heading": "First 10 Minutes",
+          "id": "first-10-minutes",
+          "level": "optional"
+        },
+        {
           "heading": "Configuration",
           "id": "configuration",
           "level": "optional"

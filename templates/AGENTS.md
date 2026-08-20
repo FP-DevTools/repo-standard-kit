@@ -63,7 +63,9 @@ ruleset applies to every adopting repository.
 ## Coding Standards
 
 - Type all production function signatures
+- Minimize `Any` and justify it when required
 - Keep I/O boundaries explicit
+- Separate side effects from business logic
 - Separate durable logic from scripts
 - Preserve public interface stability by default
 
@@ -83,14 +85,15 @@ ruleset applies to every adopting repository.
 
 ## Repository Layout
 
-- `src/`: production code
-- `tests/`: tests
+- `src/`: production package code
+- `tests/`: automated tests
 - `docs/`: durable project knowledge
-- `scripts/`: developer or operational helpers
+- `scripts/`: developer helpers, not core business logic
 
 ## Change Control Notes
 
-Document any repo-specific API, schema, migration, or operational constraints.
+Document any repo-specific API, schema, migration, or operational constraints
+here when the repository introduces them.
 
 [repo-standard-kit]: https://github.com/FP-DevTools/repo-standard-kit
 [quality-gates]: https://github.com/FP-DevTools/repo-standard-kit/blob/main/docs/quality-gates.md

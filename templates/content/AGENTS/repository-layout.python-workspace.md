@@ -1,0 +1,3 @@
+- `packages/`: package projects under `packages/<package-slug>/`
+- `docs/`: durable workspace knowledge
+- `scripts/`: workspace-level helpers

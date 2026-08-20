@@ -25,22 +25,22 @@
 Humans own:
 
 - workspace scope and package boundaries
+- security exceptions and secret handling
 - merge and release authority
 - approval of breaking cross-package changes
-- security exceptions and secrets
 
 Agents own:
 
 - implementation within package or workspace boundaries
 - tests and regression coverage
-- docs updates for behavior changes
+- docs updates tied to behavior changes
 - running repo-wide quality gates
 
 ## Workflow
 
 - Long-lived branch: `main`
 - Branch prefixes: `feat/`, `fix/`, `refactor/`, `docs/`, `chore/`
-- Merge through reviewed PRs only
+- Merge via reviewed PRs only
 - Keep PRs package-scoped or clearly cross-cutting
 - CI must mirror the documented local quality gates
 
