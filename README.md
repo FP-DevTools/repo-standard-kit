@@ -55,23 +55,47 @@ define the intent and rules.
 For the layout the standard prescribes for *your* repository, see
 [docs/repo-layout.md](docs/repo-layout.md).
 
-## Bootstrap A New Python Repository
+## Current Profiles
 
-Run the initializer directly with `uvx`, from the parent directory of the
-repository you want to create:
+- `python-single`: one package rooted at `src/<package_name>/`
+- `python-workspace`: monorepo with per-package projects under `packages/`
+
+Python is the only supported language today. Other languages are added only
+once a profile is fully documented and maintained.
+
+## Usage
+
+Every command below ships in this package and runs without installing it,
+through `uvx` — the short form of `uv tool run`. `uvx` installs the kit from
+this standards repository into an isolated tool environment and then runs the
+requested command, so the version `uv` resolves determines the assets and rules
+that get applied.
+
+Pick the entry point that matches the target repository:
+
+- new repository: [bootstrap](#bootstrap-a-new-repository) it with `repo-init`,
+  which renders the `python-single` or `python-workspace` starter kit
+- existing repository:
+  [adopt](#adopt-the-standard-in-an-existing-repository) the standard with
+  `repo-adopt`, review the unstaged result, and resolve any manual findings
+
+The examples use SSH. If you prefer HTTPS, use the same command shape with the
+HTTPS Git URL for this repository. Do not clone this standards repository as
+the starting point for a product repository; generate or reconcile the target
+repository instead.
+
+### Bootstrap A New Repository
+
+Run `repo-init` from the parent directory of the repository you want to create:
 
 ```bash
 uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-init --profile python-single --repo-name widget-service
 ```
 
 Use `--profile python-workspace` instead for a monorepo with per-package
-projects under `packages/`.
-
-`uvx` is the short form of `uv tool run`. It installs the bootstrap package
-from this standards repository into an isolated tool environment, then runs
-the packaged `repo-init` command. The generated repository derives its
-`AGENTS.md`, CI workflow, `pyproject.toml`, and starter files from the version
-of this repository that `uv` resolves.
+projects under `packages/`. The generated repository derives its `AGENTS.md`,
+CI workflow, `pyproject.toml`, and starter files from the resolved version of
+this repository.
 
 Then:
 
@@ -79,43 +103,32 @@ Then:
 2. Run the quality gates in the generated repository.
 3. Make the initial commit on `main`.
 
-Pin a standards version by adding a Git ref:
-
-```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v1.2.0" repo-init --profile python-single --repo-name widget-service
-```
-
-For repeated use, install the tool once. That puts `repo-init` and
-`repo-add-package` on your path:
-
-```bash
-uv tool install --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-standard-kit
-```
-
-If you prefer HTTPS instead of SSH, use the same command shape with the HTTPS
-Git URL for this repository.
-
-Do not clone this standards repository as the starting point for a product
-repository. Generate or template the target repository separately.
-
 See [docs/bootstrap-workflow.md](docs/bootstrap-workflow.md) for the full
-option reference, the workspace `repo-add-package` flow, and the expected
-generated output.
+option reference and the expected generated output.
 
-## Adopt The Standard In An Existing Repository
+### Add A Package To A Workspace
+
+Run `repo-add-package` from the root of a `python-workspace` repository:
+
+```bash
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-add-package --package-name widget_api --description "Service package for widget API behavior"
+```
+
+The new package lands under `packages/<package-slug>/` with its own
+`pyproject.toml`, `README.md`, source package, and tests.
+
+### Adopt The Standard In An Existing Repository
 
 From a clean existing Git repository, preview the reconciliation first:
 
 ```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" \
-  repo-adopt . --profile python-single --dry-run
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-adopt . --profile python-single --dry-run
 ```
 
 Then apply it:
 
 ```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" \
-  repo-adopt . --profile python-single
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-adopt . --profile python-single
 ```
 
 `repo-adopt` adds missing standard-owned assets and structurally reconciles
@@ -126,41 +139,43 @@ runs `repo-check`, and leaves every change unstaged and uncommitted.
 
 Use `--no-lock` or `--no-install` in constrained environments,
 `--native-tls` when child uv commands need the platform certificate store, and
-`--run-gates` when the full profile gate chain should run immediately. The
-command never changes GitHub branch protection or rulesets. See
-[docs/bootstrap-workflow.md](docs/bootstrap-workflow.md) for the ownership and
-safety contract.
+`--run-gates` when the full profile gate chain should run immediately. Omit
+`--profile` to let the command resolve the profile from repository metadata and
+policy detection markers. The command never changes GitHub branch protection or
+rulesets. See [docs/bootstrap-workflow.md](docs/bootstrap-workflow.md) for the
+ownership and safety contract.
 
-## Check A Repository's Alignment
+### Check A Repository's Alignment
 
-Run `repo-check` against any repository the same way, with `uvx` or after
-`uv sync`:
+Run `repo-check` from the root of the repository you want to check:
 
 ```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-check /path/to/repository
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-check .
 ```
 
-It reports structural findings from the same compiled YAML policy that drives
-`repo-init`. See [docs/policy-reference.md](docs/policy-reference.md) for the
-generated rule catalogue and [docs/compliance.md](docs/compliance.md) for
+Replace `.` with any repository path. It reports structural findings from the
+same compiled YAML policy that drives `repo-init` and `repo-adopt`. Add
+`--strict` to fail on recommended findings and `--format json` for stable
+machine output. See [docs/policy-reference.md](docs/policy-reference.md) for
+the generated rule catalogue and [docs/compliance.md](docs/compliance.md) for
 resolution, output, and structural-check details.
 
-## Current Profiles
+### Pin A Standards Version
 
-- `python-single`: one package rooted at `src/<package_name>/`
-- `python-workspace`: monorepo with per-package projects under `packages/`
+Add a Git ref to the `--from` URL. This works for every command above:
 
-Python is the only supported language today. Other languages are added only
-once a profile is fully documented and maintained.
+```bash
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v1.2.0" repo-init --profile python-single --repo-name widget-service
+```
 
-## Adoption Paths
+### Install The Commands For Repeated Use
 
-Use this repository in one of two ways:
+Install the kit once to put `repo-init`, `repo-add-package`, `repo-adopt`, and
+`repo-check` on your path:
 
-- New repository: bootstrap with `repo-init`, which renders the
-  `python-single` or `python-workspace` starter kit
-- Existing repository: reconcile it with `repo-adopt`, review the unstaged
-  result, and resolve any explicit manual findings
+```bash
+uv tool install --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-standard-kit
+```
 
 ## Design Principles
 
