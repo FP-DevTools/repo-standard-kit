@@ -13,8 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-import yaml
-from conftest import REPO_ROOT
+from conftest import REPO_ROOT, dump_yaml, load_yaml
 
 from repo_standard.compliance import checks, cli
 from repo_standard.compliance.checks import (
@@ -39,9 +38,7 @@ def _rule_ids(findings: list[Finding]) -> set[str]:
 
 def _write_pre_commit(root: Path, hooks: list[dict[str, object]]) -> None:
     data = {"repos": [{"repo": "local", "hooks": hooks}]}
-    (root / ".pre-commit-config.yaml").write_text(
-        yaml.safe_dump(data, sort_keys=False), encoding="utf-8"
-    )
+    (root / ".pre-commit-config.yaml").write_text(dump_yaml(data), encoding="utf-8")
 
 
 def _workflow_text(profile: str = "python-single") -> str:
@@ -122,9 +119,7 @@ def _minimal_repo(tmp_path: Path, profile: str = "python-single") -> Path:
 
 
 def _load_pre_commit(root: Path) -> list[dict[str, object]]:
-    data = yaml.safe_load(
-        (root / ".pre-commit-config.yaml").read_text(encoding="utf-8")
-    )
+    data = load_yaml((root / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
     return data["repos"][0]["hooks"]
 
 
@@ -141,10 +136,10 @@ def _policy_checkout(tmp_path: Path) -> Path:
 
 def _mutate_base(root: Path, mutation: Callable[[dict[str, object]], None]) -> None:
     base = root / "policy" / "base.yaml"
-    data = yaml.safe_load(base.read_text(encoding="utf-8"))
+    data = load_yaml(base.read_text(encoding="utf-8"))
     assert isinstance(data, dict)
     mutation(data)
-    base.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    base.write_text(dump_yaml(data), encoding="utf-8")
 
 
 # --- strict policy schema and generation ---------------------------------
@@ -1314,7 +1309,7 @@ def test_repo_check_console_script_runs_end_to_end(tmp_path: Path) -> None:
 
 
 def test_pre_commit_manifest_declares_repo_check() -> None:
-    [hook] = yaml.safe_load(
+    [hook] = load_yaml(
         (REPO_ROOT / ".pre-commit-hooks.yaml").read_text(encoding="utf-8")
     )
     assert hook["id"] == "repo-check"

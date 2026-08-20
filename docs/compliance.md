@@ -59,7 +59,7 @@ platform command derives the legacy `platform` value plus
 `status: "indeterminate"`.
 
 YAML and TOML parse failures report parser locations. Workflow findings report
-the relevant node line when PyYAML exposes one.
+the relevant node line when the YAML parser exposes one.
 
 ## Suppressing A Rule
 

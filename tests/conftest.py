@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import sys
 import tomllib
+from io import StringIO
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
+
+from ruamel.yaml import YAML
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC = REPO_ROOT / "src"
@@ -13,6 +16,23 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from repo_standard.policy import load_compiled_policy  # noqa: E402
+
+_SAFE_YAML = YAML(typ="safe")
+_SAFE_YAML.default_flow_style = False
+_SAFE_YAML.width = 4096
+_SAFE_YAML.representer.sort_base_mapping_type_on_output = False
+
+
+def load_yaml(text: str) -> Any:
+    """Load YAML the way the checkers do, without round-trip decoration."""
+    return _SAFE_YAML.load(text)
+
+
+def dump_yaml(data: Any) -> str:
+    """Dump YAML in declaration order, matching the loader's plain types."""
+    stream = StringIO()
+    _SAFE_YAML.dump(data, stream)
+    return stream.getvalue()
 
 
 class RuffBaseline(NamedTuple):

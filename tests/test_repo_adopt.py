@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-import yaml
+from conftest import dump_yaml, load_yaml
 
 from repo_standard.compliance.checks import check_repo, load_policy
 from repo_standard.repo_adopt import (
@@ -96,7 +96,7 @@ def test_adoption_reaches_zero_required_findings_and_is_idempotent(
     assert "Keep this project-specific guide." in (root / "README.md").read_text(
         encoding="utf-8"
     )
-    workflow = yaml.safe_load(
+    workflow = load_yaml(
         (root / ".github" / "workflows" / "quality.yml").read_text(encoding="utf-8")
     )
     assert workflow["jobs"]["quality"]["services"]["redis"]["image"] == "redis:7"
@@ -104,9 +104,7 @@ def test_adoption_reaches_zero_required_findings_and_is_idempotent(
         step.get("run") == "echo keep-me"
         for step in workflow["jobs"]["quality"]["steps"]
     )
-    hooks = yaml.safe_load(
-        (root / ".pre-commit-config.yaml").read_text(encoding="utf-8")
-    )
+    hooks = load_yaml((root / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
     assert hooks["repos"][0]["hooks"][0]["id"] == "custom-project-hook"
     assert "# keep hook comment" in (root / ".pre-commit-config.yaml").read_text(
         encoding="utf-8"
@@ -114,7 +112,7 @@ def test_adoption_reaches_zero_required_findings_and_is_idempotent(
     assert "# keep workflow comment" in (
         root / ".github" / "workflows" / "quality.yml"
     ).read_text(encoding="utf-8")
-    compliance = yaml.safe_load(
+    compliance = load_yaml(
         (root / ".github" / "workflows" / "compliance.yml").read_text(encoding="utf-8")
     )
     permissions = compliance["jobs"]["compliance"].get(
@@ -213,13 +211,13 @@ def test_structurally_compliant_repository_is_a_no_op(tmp_path: Path) -> None:
     (root / "LICENSE").write_text("Approved license terms.\n", encoding="utf-8")
 
     pre_commit = root / ".pre-commit-config.yaml"
-    hooks = yaml.safe_load(pre_commit.read_text(encoding="utf-8"))
+    hooks = load_yaml(pre_commit.read_text(encoding="utf-8"))
     hooks["repos"] = [
         repository
         for repository in hooks["repos"]
         if repository.get("repo") != "https://github.com/FP-DevTools/repo-standard-kit"
     ]
-    pre_commit.write_text(yaml.safe_dump(hooks, sort_keys=False), encoding="utf-8")
+    pre_commit.write_text(dump_yaml(hooks), encoding="utf-8")
 
     assert check_repo(root, load_policy(), profile="python-single") == []
     plan = plan_adoption(root, "python-single")
@@ -334,7 +332,7 @@ def test_recognized_older_compliance_step_is_updated_in_place(tmp_path: Path) ->
 
     apply_plan(plan_adoption(root, "python-single"))
 
-    adopted = yaml.safe_load(workflow.read_text(encoding="utf-8"))
+    adopted = load_yaml(workflow.read_text(encoding="utf-8"))
     steps = adopted["jobs"]["compliance"]["steps"]
     compliance_steps = [
         step for step in steps if step.get("name") == "Check repository compliance"

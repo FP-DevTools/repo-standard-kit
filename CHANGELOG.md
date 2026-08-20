@@ -46,6 +46,10 @@ the changes listed under **Adopters must**.
   and new workspace packages still use it by default, while established
   packages may retain another PEP 517 backend without blocking normal
   compliance or `repo-adopt`.
+- Policy and workflow loading now use `ruamel.yaml`, the parser `repo-adopt`
+  already required, so `PyYAML` is no longer a runtime dependency. YAML 1.2
+  core-schema booleans are now native rather than resolver patches, which keeps
+  a workflow's `on:` trigger key a string as before.
 
 ### Adopters must
 
