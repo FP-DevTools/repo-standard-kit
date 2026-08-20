@@ -19,6 +19,10 @@ from conftest import (
     ruff_config_of,
 )
 
+from repo_standard.bootstrap_defaults import (
+    DEFAULT_PYTHON_VERSION,
+    DEFAULT_UV_BUILD_REQUIREMENT,
+)
 from repo_standard.policy import load_compiled_policy
 from repo_standard.repo_init import (
     bootstrap_repo,
@@ -312,9 +316,26 @@ def test_bootstrap_repo_uses_uv_build_backend_for_python_single(
     )
 
     pyproject_text = (output_dir / "pyproject.toml").read_text(encoding="utf-8")
-    assert 'requires = ["uv_build>=0.11.20,<0.12"]' in pyproject_text
+    assert f'requires = ["{DEFAULT_UV_BUILD_REQUIREMENT}"]' in pyproject_text
     assert 'build-backend = "uv_build"' in pyproject_text
     assert 'module-name = "demo_service"' in pyproject_text
+
+
+@pytest.mark.parametrize("profile", STARTER_KIT_PROFILES)
+def test_starter_python_requirement_matches_bootstrap_default(profile: str) -> None:
+    data = tomllib.loads(
+        (starter_kit_dir(profile) / "pyproject.toml").read_text(encoding="utf-8")
+    )
+    assert data["project"]["requires-python"] == f">={DEFAULT_PYTHON_VERSION}"
+
+
+def test_python_single_starter_build_requirement_matches_bootstrap_default() -> None:
+    data = tomllib.loads(
+        (starter_kit_dir("python-single") / "pyproject.toml").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert data["build-system"]["requires"] == [DEFAULT_UV_BUILD_REQUIREMENT]
 
 
 def test_quality_workflows_use_mandatory_ci_gate_set() -> None:
@@ -1027,6 +1048,18 @@ def test_python_version_flows_through_the_declared_placeholder(
     assert "Python `3.13` or newer" in (output_dir / "README.md").read_text(
         encoding="utf-8"
     )
+
+
+def test_bootstrap_serializes_special_project_metadata(tmp_path: Path) -> None:
+    output_dir = _bootstrap(
+        tmp_path,
+        description='A "quoted" service\nwith Unicode: é.',
+        author='Ada "A" Lovelace',
+    )
+
+    data = tomllib.loads((output_dir / "pyproject.toml").read_text(encoding="utf-8"))
+    assert data["project"]["description"] == 'A "quoted" service\nwith Unicode: é.'
+    assert data["project"]["authors"] == [{"name": 'Ada "A" Lovelace'}]
 
 
 def test_author_is_rendered_into_project_metadata(tmp_path: Path) -> None:

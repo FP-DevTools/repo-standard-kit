@@ -17,6 +17,7 @@ from repo_standard.compliance.yaml_support import (
     YamlParseError,
     load_github_yaml,
 )
+from repo_standard.github_references import is_full_commit_sha
 from repo_standard.policy import Policy, Rule, Shape, load_compiled_policy
 
 _IGNORED_DIR_PARTS = {
@@ -34,7 +35,6 @@ _IGNORED_DIR_PARTS = {
 _GITHUB_REMOTE_PATTERN = re.compile(
     r"github\.com[:/](?P<owner_repo>[^/]+/[^/]+?)(?:\.git)?/?$"
 )
-_FULL_SHA = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
 @dataclass(frozen=True)
@@ -1452,10 +1452,7 @@ def _remote_uses(reference: str) -> bool:
 
 
 def _immutable_reference(reference: str) -> bool:
-    return (
-        "@" in reference
-        and _FULL_SHA.fullmatch(reference.rsplit("@", 1)[1]) is not None
-    )
+    return "@" in reference and is_full_commit_sha(reference.rsplit("@", 1)[1])
 
 
 def _github_workflow_pins(context: CheckContext, config: dict[str, Any]) -> list[Issue]:

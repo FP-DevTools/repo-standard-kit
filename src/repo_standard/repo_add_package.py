@@ -5,6 +5,14 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import tomlkit
+
+from repo_standard.bootstrap_defaults import DEFAULT_UV_BUILD_REQUIREMENT
+from repo_standard.project_metadata import (
+    validate_package_name,
+    workspace_requires_python,
+)
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -19,13 +27,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return build_parser().parse_args(argv)
-
-
-def validate_package_name(package_name: str) -> None:
-    if not package_name.isidentifier():
-        raise ValueError(
-            f"--package-name must be a valid Python identifier (got {package_name!r})"
-        )
 
 
 def derive_package_slug(package_name: str) -> str:
@@ -57,6 +58,39 @@ def write_file(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def render_package_pyproject(
+    *,
+    package_name: str,
+    package_slug: str,
+    description: str,
+    requires_python: str,
+) -> str:
+    """Render a package manifest from typed metadata."""
+    document = tomlkit.document()
+    project = tomlkit.table()
+    project["name"] = package_slug
+    project["version"] = "0.1.0"
+    project["description"] = description
+    project["readme"] = "README.md"
+    project["requires-python"] = requires_python
+    project["dependencies"] = []
+    document["project"] = project
+
+    build_system = tomlkit.table()
+    build_system["requires"] = [DEFAULT_UV_BUILD_REQUIREMENT]
+    build_system["build-backend"] = "uv_build"
+    document["build-system"] = build_system
+
+    tool = tomlkit.table()
+    uv = tomlkit.table()
+    build_backend = tomlkit.table()
+    build_backend["module-name"] = package_name
+    uv["build-backend"] = build_backend
+    tool["uv"] = uv
+    document["tool"] = tool
+    return tomlkit.dumps(document)
+
+
 def create_package(
     *,
     repo_root: Path,
@@ -69,22 +103,15 @@ def create_package(
     ensure_workspace_root(repo_root)
     if package_path.exists():
         raise ValueError(f"Package path already exists: {package_path}")
+    requires_python = workspace_requires_python(repo_root)
 
     write_file(
         package_path / "pyproject.toml",
-        (
-            "[project]\n"
-            f'name = "{package_slug}"\n'
-            'version = "0.1.0"\n'
-            f'description = "{description}"\n'
-            'readme = "README.md"\n'
-            'requires-python = ">=3.12"\n'
-            "dependencies = []\n\n"
-            "[build-system]\n"
-            'requires = ["uv_build>=0.11.20,<0.12"]\n'
-            'build-backend = "uv_build"\n\n'
-            "[tool.uv.build-backend]\n"
-            f'module-name = "{package_name}"\n'
+        render_package_pyproject(
+            package_name=package_name,
+            package_slug=package_slug,
+            description=description,
+            requires_python=requires_python,
         ),
     )
     write_file(
