@@ -24,6 +24,24 @@ the changes listed under **Adopters must**.
 
 ## [Unreleased]
 
+### Fixed
+
+- Bootstrap commands now serialize user-controlled TOML metadata structurally,
+  so quoted or multiline descriptions and author names remain valid.
+- `repo-add-package` derives a new workspace package's Python requirement from
+  the workspace root instead of carrying an independent default.
+- Bootstrap defaults, Git commit-SHA validation, and document shapes each have
+  one canonical owner; copied starter metadata is freshness-tested, and
+  normative prose links to generated shape tables rather than restating them.
+- Generated `AGENTS.md` files now project the companion operating documents;
+  the redundant profile Markdown mirrors were removed in favour of the
+  canonical policy catalogue.
+
+### Adopters must
+
+- Nothing. Existing repositories remain aligned; these corrections affect
+  bootstrap behavior and internal standard maintenance.
+
 ## [2.0.0] - 2026-08-20
 
 ### Added

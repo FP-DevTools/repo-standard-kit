@@ -104,8 +104,8 @@ including its `README.md`, templates, and starter kits, implements them.
 - `docs/git-workflow.md`: branching, collaboration, and history rules
 - `docs/repo-layout.md`: canonical directory layout and scope boundaries
 - `docs/bootstrap-workflow.md`: how new repositories are generated
-- `profiles/python-single.md`: single-package Python repositories
-- `profiles/python-workspace.md`: Python monorepos with `packages/`
+- `docs/policy-reference.md#profiles`: the supported profiles and their
+  canonical detection metadata
 
 Where a companion document conflicts with this one, this document governs.
 
@@ -115,29 +115,17 @@ every other indexed document.
 
 ## Required `AGENTS.md` Sections
 
-Every target repository must include:
-
-1. Repository Purpose
-2. Repository Context
-3. Human And Agent Responsibilities
-4. Agent Operating Mode
-5. Single Source Of Truth
-6. Workflow
-7. Quality Gates
-8. Coding Standards
-9. Testing Policy
-10. Documentation Rules
-11. Repository Layout
-12. Change Control Notes
+Every target repository must carry the required sections and order declared by
+the [`agents` shape in the generated policy reference](policy-reference.md#agents).
 
 Committed copies must not contain placeholders or generic filler text.
 
-RSK002 enforces the listed headings at the **required** level, in the order
-above; sections the standard does not name may appear anywhere. RSK003 enforces
-at the **required** level that the `## Quality Gates` section in `AGENTS.md`
-states the exact ordered command chain defined by policy for the resolved
-profile. Commands elsewhere in the document do not count. These checks do not
-attempt subjective scoring of the section prose.
+RSK002 enforces those headings at the **required** level in the declared order;
+sections the standard does not name may appear anywhere. RSK003 enforces at the
+**required** level that the `## Quality Gates` section in `AGENTS.md` states the
+exact ordered command chain defined by policy for the resolved profile. Commands
+elsewhere in the document do not count. These checks do not attempt subjective
+scoring of the section prose.
 
 ## Agent Operating Mode
 
@@ -172,9 +160,8 @@ check reads the dial lines and nothing else.
 
 A *shape* is the canonical section list for one governed file: which sections
 exist, what they are called, which are mandatory, and in what order they
-appear. Shapes are declared in `policy/shapes.yaml` and compiled into
-`docs/policy-reference.md`, which carries the authoritative section tables.
-The list above is the `agents` shape stated in prose.
+appear. Shapes are declared in `policy/shapes.yaml` and compiled into the
+[policy reference's authoritative section tables](policy-reference.md#file-shapes).
 
 Every shape is checked as a **subsequence**. A section the shape does not
 declare is legal anywhere and is ignored. A declared section may be absent
@@ -182,19 +169,9 @@ unless it is marked required. What a shape forbids is *reordering*: the
 declared sections a file does carry must appear in the declared order. Markdown
 shapes govern level-two headings only, matching RSK002's semantics.
 
-- `README.md` (RSK023, **recommended**): the spine runs At A Glance, Overview,
-  Install, First 10 Minutes, Configuration, Usage, Repo Structure, Development,
-  Deployment, Compatibility And Versioning, Maintainers And Support, License.
-  Overview, Install, Usage, Development, and License are required.
-- `CHANGELOG.md` (RSK024, **recommended**): an `[Unreleased]` section is
-  required, and a `Compatibility Policy` section, where present, precedes it.
-  Released-version sections are not enumerated.
-- `pyproject.toml` (RSK025, **recommended**): the declared tables run
-  `project`, `dependency-groups`, `build-system`, `tool.uv.build-backend`,
-  `tool.repo-standard`, `tool.ruff`, `tool.ruff.lint`,
-  `tool.pytest.ini_options`, `tool.ty.src`. Only `project` is required, and
-  tables the shape does not list — `tool.repo-check.ignore`, for instance —
-  stay legal in any position.
+RSK023 (`README.md`), RSK024 (`CHANGELOG.md`), and RSK025 (`pyproject.toml`)
+each refer to their generated shape table. The tables distinguish required from
+optional sections; undeclared sections and tables stay legal in any position.
 
 These three rules are recommended while the generator that produces conforming
 documents is still being built; strict checking keeps them visible in the

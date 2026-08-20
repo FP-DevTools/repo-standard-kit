@@ -259,27 +259,13 @@ def test_every_typed_check_kind_has_exactly_one_runtime_handler() -> None:
     assert set(CHECK_SCHEMAS) == set(CHECK_HANDLERS)
 
 
-def test_rsk003_policy_defines_profile_specific_quality_commands() -> None:
+def test_rsk003_reuses_the_workflow_quality_commands() -> None:
     rule = POLICY.rule("RSK003")
     assert rule.check.kind == "agents_quality_commands"
     assert CHECK_SCHEMAS["agents_quality_commands"] == (
         {"path", "commands_by_profile"},
         set(),
     )
-    assert rule.check.config["commands_by_profile"] == {
-        "python-single": [
-            "uv sync --locked",
-            "uv run pre-commit run --all-files",
-            "uv run pytest",
-            "uv build",
-        ],
-        "python-workspace": [
-            "uv sync --locked",
-            "uv run pre-commit run --all-files",
-            "uv run pytest",
-            "uv build --all-packages",
-        ],
-    }
     assert (
         rule.check.config["commands_by_profile"]
         == POLICY.rule("RSK006").check.config["commands_by_profile"]
@@ -519,17 +505,14 @@ def test_no_hand_maintained_document_restates_the_dial_levels() -> None:
         )
 
 
-def test_rsk026_holds_the_levels_the_standard_calibrates() -> None:
-    """The levels are a deliberate choice, not whatever policy happens to say."""
+def test_rsk026_declares_unique_valid_dials() -> None:
+    """The model owns dial values; the rule declares only their structure."""
     rule = POLICY.rule("RSK026")
     assert rule.level == "required"
-    assert [
-        (dial["label"], dial["level"], dial["scale"])
-        for dial in rule.check.config["dials"]
-    ] == [
-        ("Verbosity", 2, 5),
-        ("Precision, repeatability, determinism", 4, 5),
-    ]
+    dials = rule.check.config["dials"]
+    assert dials
+    assert len({dial["label"] for dial in dials}) == len(dials)
+    assert all(1 <= dial["level"] <= dial["scale"] for dial in dials)
 
 
 @pytest.mark.parametrize(
@@ -1452,25 +1435,12 @@ def test_every_shape_is_bound_to_the_rule_that_enforces_it() -> None:
     assert shaped == {shape.rule for shape in POLICY.shapes}
 
 
-def test_rsk002_is_re_expressed_on_the_shared_shape_record() -> None:
-    """The AGENTS.md contract moved onto shapes without changing its sections."""
+def test_rsk002_uses_the_shared_agents_shape_record() -> None:
+    """The AGENTS.md contract names a shape instead of duplicating its sections."""
     shape = _shape("RSK002")
     assert shape.path == "AGENTS.md"
     assert shape.heading_level == 2
-    assert shape.required == (
-        "Repository Purpose",
-        "Repository Context",
-        "Human And Agent Responsibilities",
-        "Agent Operating Mode",
-        "Single Source Of Truth",
-        "Workflow",
-        "Quality Gates",
-        "Coding Standards",
-        "Testing Policy",
-        "Documentation Rules",
-        "Repository Layout",
-        "Change Control Notes",
-    )
+    assert shape.required == shape.headings
     assert POLICY.rule("RSK002").level == "required"
 
 
@@ -1481,23 +1451,10 @@ def test_new_shape_rules_ship_recommended_for_the_migration_window(
     assert POLICY.rule(rule_id).level == "recommended"
 
 
-def test_readme_shape_declares_the_documented_spine() -> None:
+def test_readme_shape_distinguishes_required_sections() -> None:
     shape = _shape("RSK023")
-    assert shape.headings == (
-        "At A Glance",
-        "Overview",
-        "Install",
-        "First 10 Minutes",
-        "Configuration",
-        "Usage",
-        "Repo Structure",
-        "Development",
-        "Deployment",
-        "Compatibility And Versioning",
-        "Maintainers And Support",
-        "License",
-    )
-    assert shape.required == ("Overview", "Install", "Usage", "Development", "License")
+    assert shape.required
+    assert set(shape.required).issubset(shape.headings)
 
 
 def test_missing_required_section_reports_its_shape_rule(tmp_path: Path) -> None:
@@ -1701,3 +1658,9 @@ def test_generated_policy_reference_carries_every_shape() -> None:
         assert f"### {shape.id}" in reference
         for section in shape.sections:
             assert f"| `{section.id}` | `{section.heading}` |" in reference
+
+
+def test_repo_standard_defers_shape_lists_to_the_generated_reference() -> None:
+    text = (REPO_ROOT / "docs" / "repo-standard.md").read_text(encoding="utf-8")
+    assert "policy-reference.md#agents" in text
+    assert "policy-reference.md#file-shapes" in text

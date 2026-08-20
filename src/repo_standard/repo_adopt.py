@@ -22,7 +22,9 @@ from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 from tomlkit.exceptions import ParseError
 
+from repo_standard.bootstrap_defaults import DEFAULT_PYTHON_VERSION
 from repo_standard.compliance.checks import Finding, check_repo, load_policy
+from repo_standard.github_references import is_full_commit_sha
 from repo_standard.policy import Shape
 from repo_standard.repo_init import (
     PLACEHOLDERS,
@@ -97,7 +99,6 @@ _MANAGED_SURFACES = (
     "docs/diagrams",
 )
 _REMOTE_ACTION = re.compile(r"^[^./\s]+/[^@\s]+@(?P<ref>[^\s]+)$")
-_FULL_SHA = re.compile(r"^[0-9a-fA-F]{40}$")
 _COMMAND_LIST_BLOCK = re.compile(
     r"(?:^[ \t]*(?:\d+[.)]|[-*+])[ \t]+`[^`\r\n]+`[ \t]*\r?\n?)+",
     re.MULTILINE,
@@ -210,7 +211,7 @@ def _project_values(root: Path, document: Any) -> dict[str, str]:
         "package_name": normalized,
         "description": description,
         "repo_type": "library",
-        "python_version": floor.group(1) if floor else "3.12",
+        "python_version": floor.group(1) if floor else DEFAULT_PYTHON_VERSION,
         "author": "",
         # Adoption never chooses licence terms for a repository; it only
         # reports whether the repository has already stated them.
@@ -526,7 +527,7 @@ def _merge_workflow(
             steps.append(copy.deepcopy(expected_step))
         elif expected_uses is not None:
             current_ref = str(match["uses"]).rsplit("@", maxsplit=1)[-1]
-            if not _FULL_SHA.fullmatch(current_ref):
+            if not is_full_commit_sha(current_ref):
                 match["uses"] = expected_uses
         elif job_name == "compliance" and update_run:
             match["run"] = expected_run
@@ -542,7 +543,7 @@ def _merge_workflow(
             ):
                 continue
             match = _REMOTE_ACTION.match(uses)
-            if match is not None and not _FULL_SHA.fullmatch(match.group("ref")):
+            if match is not None and not is_full_commit_sha(match.group("ref")):
                 conflicts.append(
                     f"{path.relative_to(path.parents[2]).as_posix()}: remote action "
                     f"{uses!r} needs a maintainer-selected full commit SHA"

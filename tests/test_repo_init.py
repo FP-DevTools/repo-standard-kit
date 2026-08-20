@@ -19,6 +19,10 @@ from conftest import (
     ruff_config_of,
 )
 
+from repo_standard.bootstrap_defaults import (
+    DEFAULT_PYTHON_VERSION,
+    DEFAULT_UV_BUILD_REQUIREMENT,
+)
 from repo_standard.policy import load_compiled_policy
 from repo_standard.repo_init import (
     bootstrap_repo,
@@ -312,9 +316,26 @@ def test_bootstrap_repo_uses_uv_build_backend_for_python_single(
     )
 
     pyproject_text = (output_dir / "pyproject.toml").read_text(encoding="utf-8")
-    assert 'requires = ["uv_build>=0.11.20,<0.12"]' in pyproject_text
+    assert f'requires = ["{DEFAULT_UV_BUILD_REQUIREMENT}"]' in pyproject_text
     assert 'build-backend = "uv_build"' in pyproject_text
     assert 'module-name = "demo_service"' in pyproject_text
+
+
+@pytest.mark.parametrize("profile", STARTER_KIT_PROFILES)
+def test_starter_python_requirement_matches_bootstrap_default(profile: str) -> None:
+    data = tomllib.loads(
+        (starter_kit_dir(profile) / "pyproject.toml").read_text(encoding="utf-8")
+    )
+    assert data["project"]["requires-python"] == f">={DEFAULT_PYTHON_VERSION}"
+
+
+def test_python_single_starter_build_requirement_matches_bootstrap_default() -> None:
+    data = tomllib.loads(
+        (starter_kit_dir("python-single") / "pyproject.toml").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert data["build-system"]["requires"] == [DEFAULT_UV_BUILD_REQUIREMENT]
 
 
 def test_quality_workflows_use_mandatory_ci_gate_set() -> None:
@@ -821,15 +842,9 @@ def test_gate_chain_is_defined_by_the_normative_document() -> None:
         assert len(commands) == len(set(commands)), "duplicate gate in the spec"
 
 
-def test_profiles_neither_add_nor_relax_gates() -> None:
-    """Both profiles claim to defer to the spec; hold them to it."""
-    for profile in STARTER_KIT_PROFILES:
-        text = (REPO_ROOT / "profiles" / f"{profile}.md").read_text(encoding="utf-8")
-        assert "docs/quality-gates.md" in text
-        restated = [c for c in mandatory_ci_commands() if c in text]
-        assert not restated, (
-            f"profiles/{profile}.md restates gates instead of deferring: {restated}"
-        )
+def test_starter_kit_profiles_are_declared_by_canonical_policy() -> None:
+    """Profile identity lives in policy, not an unconsumed Markdown mirror."""
+    assert STARTER_KIT_PROFILES == POLICY.profile_ids
 
 
 @pytest.mark.parametrize(
@@ -1027,6 +1042,18 @@ def test_python_version_flows_through_the_declared_placeholder(
     assert "Python `3.13` or newer" in (output_dir / "README.md").read_text(
         encoding="utf-8"
     )
+
+
+def test_bootstrap_serializes_special_project_metadata(tmp_path: Path) -> None:
+    output_dir = _bootstrap(
+        tmp_path,
+        description='A "quoted" service\nwith Unicode: é.',
+        author='Ada "A" Lovelace',
+    )
+
+    data = tomllib.loads((output_dir / "pyproject.toml").read_text(encoding="utf-8"))
+    assert data["project"]["description"] == 'A "quoted" service\nwith Unicode: é.'
+    assert data["project"]["authors"] == [{"name": 'Ada "A" Lovelace'}]
 
 
 def test_author_is_rendered_into_project_metadata(tmp_path: Path) -> None:

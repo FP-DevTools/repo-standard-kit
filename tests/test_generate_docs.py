@@ -183,3 +183,26 @@ def test_the_gate_chain_is_injected_from_policy_not_written_by_hand() -> None:
             ]
             restated = [command for command in commands if command in text]
             assert not restated, f"{path.name} restates the chain: {restated}"
+
+
+@pytest.mark.parametrize(
+    ("section_id", "source", "nested_heading"),
+    [
+        (
+            "human-and-agent-responsibilities",
+            "docs/agent-operating-model.md",
+            "### Human Responsibilities",
+        ),
+        ("workflow", "docs/git-workflow.md", "### Default Model"),
+    ],
+)
+def test_agents_sections_are_projected_from_companion_documents(
+    section_id: str, source: str, nested_heading: str
+) -> None:
+    """Companion documents own operating guidance; AGENTS.md only projects it."""
+    assert generate_docs.DERIVED_SECTIONS[("AGENTS", section_id)] == REPO_ROOT / source
+    assert not list((generate_docs.CONTENT_ROOT / "AGENTS").glob(f"{section_id}.*.md"))
+    rendered = generate_docs.render(
+        POLICY, next(t for t in generate_docs.TARGETS if t.document == "AGENTS")
+    )
+    assert nested_heading in rendered

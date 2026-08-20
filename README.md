@@ -47,8 +47,9 @@ define the intent and rules.
 - `python-single`: one package rooted at `src/<package_name>/`
 - `python-workspace`: monorepo with per-package projects under `packages/`
 
-Python is the only supported language today. Other languages are added only
-once a profile is fully documented and maintained.
+Python is the only supported language today. The generated
+[policy profile catalogue](docs/policy-reference.md#profiles) is authoritative;
+other languages are added only once their policy profile is maintained.
 
 ## Install
 
@@ -231,7 +232,7 @@ is enforced by the document named beside it.
 - **Collaborative**: explicit human and agent responsibility boundaries —
   `docs/agent-operating-model.md`
 - **Typed**: strong typing expectations for Python code —
-  `docs/quality-gates.md`, `profiles/python-single.md`
+  `docs/quality-gates.md`, `docs/policy-reference.md#profiles`
 - **Small-batch**: short-lived branches and small PRs for parallel work —
   `docs/git-workflow.md`
 

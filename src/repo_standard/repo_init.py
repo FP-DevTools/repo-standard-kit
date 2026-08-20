@@ -11,7 +11,9 @@ from pathlib import Path
 
 import tomlkit
 
+from repo_standard.bootstrap_defaults import DEFAULT_PYTHON_VERSION
 from repo_standard.policy import load_compiled_policy
+from repo_standard.project_metadata import validate_package_name
 
 _POLICY = load_compiled_policy()
 PLACEHOLDERS: dict[str, str] = dict(_POLICY.rule("RSK011").check.config["placeholders"])
@@ -64,7 +66,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["service", "library", "cli"],
         default="library",
     )
-    parser.add_argument("--python-version", default="3.12")
+    parser.add_argument("--python-version", default=DEFAULT_PYTHON_VERSION)
     parser.add_argument("--author", default="")
     parser.add_argument(
         "--license",
@@ -87,13 +89,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return build_parser().parse_args(argv)
-
-
-def validate_package_name(package_name: str) -> None:
-    if not package_name.isidentifier():
-        raise ValueError(
-            f"--package-name must be a valid Python identifier (got {package_name!r})"
-        )
 
 
 def validate_repo_name(repo_name: str) -> None:
@@ -168,6 +163,8 @@ def render_text_files(output_dir: Path, values: dict[str, str]) -> None:
             continue
         if not path.is_file():
             continue
+        if path == output_dir / "pyproject.toml":
+            continue
         try:
             text = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
@@ -226,31 +223,36 @@ def write_license(output_dir: Path, license_id: str, holder: str) -> None:
 def apply_project_metadata(
     output_dir: Path,
     *,
+    profile: str,
+    repo_name: str,
+    package_name: str | None,
+    description: str,
     python_version: str,
     author: str,
     license_id: str | None,
 ) -> None:
     """Complete `[project]` fields that depend on optional bootstrap flags.
 
-    `requires-python` is set structurally rather than through a placeholder:
-    the starter manifest has to stay a parseable `pyproject.toml` so tools that
-    walk the tree — Ruff resolving configuration, among others — can still read
-    it. The starter documents the same value to humans through
-    `__PYTHON_VERSION__` in its README.
-
-    The starter carries `authors` unconditionally so `__AUTHOR__` renders
-    through the normal placeholder path; an unnamed author leaves nothing worth
-    declaring, so the key is dropped rather than shipped empty.
+    The starter manifest stays parseable while all user-controlled TOML values
+    are assigned through tomlkit rather than substituted as raw text.
     """
     path = output_dir / "pyproject.toml"
     document = tomlkit.parse(path.read_text(encoding="utf-8"))
     project = document["project"]
+    project["name"] = (
+        f"{repo_name}-workspace" if profile == "python-workspace" else repo_name
+    )
+    project["description"] = description
     project["requires-python"] = f">={python_version}"
     if not author:
         del project["authors"]
+    else:
+        project["authors"] = [{"name": author}]
     if license_id is not None:
         project["license"] = LICENSE_EXPRESSIONS[license_id]
         project["license-files"] = ["LICENSE"]
+    if package_name is not None:
+        document["tool"]["uv"]["build-backend"]["module-name"] = package_name
     path.write_text(tomlkit.dumps(document), encoding="utf-8")
 
 
@@ -349,6 +351,10 @@ def bootstrap_repo(
         write_license(output_dir, license_id, author or repo_name)
     apply_project_metadata(
         output_dir,
+        profile=profile,
+        repo_name=repo_name,
+        package_name=package_name,
+        description=description,
         python_version=python_version,
         author=author,
         license_id=license_id,
