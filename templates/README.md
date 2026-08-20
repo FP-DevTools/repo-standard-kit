@@ -107,7 +107,7 @@ This repository declares its machine-enforced standard contract in
 ```toml
 [tool.repo-standard]
 profile = "<python-single or python-workspace>"
-standard = "1"
+standard = "2"
 ```
 
 See `AGENTS.md` for the full repo-level contract (human/agent

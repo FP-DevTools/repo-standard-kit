@@ -140,7 +140,7 @@ uv tool install --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.g
 Pin a standards version by adding a Git ref:
 
 ```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v1.2.0" repo-init --profile python-single --repo-name widget-service
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v2.0.0" repo-init --profile python-single --repo-name widget-service
 ```
 
 The generated repository derives its `AGENTS.md`, CI workflow, `pyproject.toml`,
@@ -222,8 +222,19 @@ Optional:
 - `--repo-type`
 - `--python-version`
 - `--author`
+- `--license`
 - `--output-dir`
 - `--no-install`
+
+`--python-version` sets `requires-python`, and `--author` becomes the
+`authors` entry in `pyproject.toml`; an unnamed author leaves the key out
+rather than shipping it empty.
+
+`--license` accepts `proprietary`, `mit`, or `apache-2.0`. It writes the full
+licence text to `LICENSE` and declares `license` and `license-files` in
+`pyproject.toml`. Omit it and no `LICENSE` is written: the README's `License`
+section then states that terms have not been selected yet and cites RSK018,
+which stays a visible recommendation until they are.
 
 ## Expected Output
 

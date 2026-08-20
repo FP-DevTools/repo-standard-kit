@@ -23,7 +23,13 @@ from ruamel.yaml.error import YAMLError
 from tomlkit.exceptions import ParseError
 
 from repo_standard.compliance.checks import Finding, check_repo, load_policy
-from repo_standard.repo_init import PLACEHOLDERS, resolve_starter_dir
+from repo_standard.repo_init import (
+    PLACEHOLDERS,
+    UNLICENSED_NOTICE,
+    resolve_starter_dir,
+)
+
+ADOPTED_LICENSE_NOTICE = "See [`LICENSE`](LICENSE) for the terms that apply."
 
 
 class AdoptionError(RuntimeError):
@@ -172,13 +178,22 @@ def _project_values(root: Path, document: Any) -> dict[str, str]:
     name = str(project.get("name") or root.name)
     description = str(project.get("description") or "Describe this repository.")
     normalized = re.sub(r"\W", "_", name.replace("-", "_")).lower()
+    requires = str(project.get("requires-python") or "")
+    floor = re.search(r">=\s*(\d+\.\d+)", requires)
     return {
         "repo_name": name,
         "package_name": normalized,
         "description": description,
         "repo_type": "library",
-        "python_version": "3.12",
+        "python_version": floor.group(1) if floor else "3.12",
         "author": "",
+        # Adoption never chooses licence terms for a repository; it only
+        # reports whether the repository has already stated them.
+        "license_notice": (
+            ADOPTED_LICENSE_NOTICE
+            if (root / "LICENSE").is_file()
+            else UNLICENSED_NOTICE
+        ),
     }
 
 
@@ -527,7 +542,8 @@ def _merge_agents(path: Path, profile: str, values: dict[str, str]) -> str:
         return template
     except UnicodeDecodeError as error:
         raise AdoptionError(f"could not parse {path} as UTF-8") from error
-    headings = load_policy().rule("RSK002").check.config["headings"]
+    policy = load_policy()
+    headings = policy.shape(policy.rule("RSK002").check.config["shape"]).required
     for heading in headings:
         if _section(text, heading) is not None:
             continue

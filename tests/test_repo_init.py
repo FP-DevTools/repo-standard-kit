@@ -71,6 +71,7 @@ def test_bootstrap_repo_renders_python_single_starter(tmp_path: Path) -> None:
         repo_type="service",
         python_version="3.12",
         author="",
+        license_id=None,
         output_dir=output_dir,
         no_install=True,
     )
@@ -97,7 +98,7 @@ def test_bootstrap_repo_renders_python_single_starter(tmp_path: Path) -> None:
     assert (output_dir / ".github" / "dependabot.yml").exists()
     assert pyproject_text.count("[tool.repo-standard]") == 1
     assert 'profile = "python-single"' in pyproject_text
-    assert 'standard = "1"' in pyproject_text
+    assert f'standard = "{POLICY.standard_major}"' in pyproject_text
     for command in mandatory_ci_commands("python-single"):
         assert command in agents_text
         assert command in workflow_text
@@ -119,6 +120,7 @@ def test_bootstrap_repo_infers_package_name_for_python_single(tmp_path: Path) ->
         repo_type="service",
         python_version="3.12",
         author="",
+        license_id=None,
         output_dir=output_dir,
         no_install=True,
     )
@@ -137,6 +139,7 @@ def test_bootstrap_repo_renders_python_workspace_starter(tmp_path: Path) -> None
         repo_type="service",
         python_version="3.12",
         author="",
+        license_id=None,
         output_dir=output_dir,
         no_install=True,
     )
@@ -159,7 +162,7 @@ def test_bootstrap_repo_renders_python_workspace_starter(tmp_path: Path) -> None
     assert (output_dir / ".github" / "dependabot.yml").exists()
     assert pyproject_data["tool"]["repo-standard"] == {
         "profile": "python-workspace",
-        "standard": "1",
+        "standard": POLICY.standard_major,
     }
     for command in mandatory_ci_commands("python-workspace"):
         assert command in agents_text
@@ -303,6 +306,7 @@ def test_bootstrap_repo_uses_uv_build_backend_for_python_single(
         repo_type="service",
         python_version="3.12",
         author="",
+        license_id=None,
         output_dir=output_dir,
         no_install=True,
     )
@@ -365,8 +369,11 @@ def test_compliance_workflows_emit_an_independent_required_status() -> None:
     assert "  workflow_call:\n" in root_workflow
     assert "uv run --locked --no-dev repo-check ." in root_workflow
     assert "uvx \\" in root_workflow
+    version = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
+        "project"
+    ]["version"]
     for workflow_path in workflow_paths[1:]:
-        assert "repo-standard-kit.git@v1.2.0" in workflow_path.read_text(
+        assert f"repo-standard-kit.git@v{version}" in workflow_path.read_text(
             encoding="utf-8"
         )
 
@@ -792,6 +799,7 @@ def test_generated_agents_files_carry_every_required_section(
         repo_type="service",
         python_version="3.12",
         author="",
+        license_id=None,
         output_dir=output_dir,
         no_install=True,
     )
@@ -974,3 +982,102 @@ def test_ruff_config_matches_the_documented_baseline(pyproject_path: Path) -> No
         f"{pyproject_path} drops recommended rule families: "
         f"{sorted(missing_recommended)}"
     )
+
+
+# --- optional bootstrap metadata: python version, author, licence ---------
+
+
+def _bootstrap(tmp_path: Path, **overrides: object) -> Path:
+    output_dir = tmp_path / "generated"
+    arguments: dict[str, object] = {
+        "profile": "python-single",
+        "repo_name": "generated",
+        "package_name": None,
+        "description": "Generated repo",
+        "repo_type": "service",
+        "python_version": "3.12",
+        "author": "",
+        "license_id": None,
+        "output_dir": output_dir,
+        "no_install": True,
+    }
+    arguments.update(overrides)
+    bootstrap_repo(**arguments)  # type: ignore[arg-type]
+    return output_dir
+
+
+@pytest.mark.parametrize("profile", STARTER_KIT_PROFILES)
+def test_python_version_flows_through_the_declared_placeholder(
+    profile: str, tmp_path: Path
+) -> None:
+    """--python-version must drive both surfaces that state the requirement.
+
+    `requires-python` is set structurally so the starter manifest stays a
+    parseable pyproject.toml, and the README states the same value through the
+    declared RSK011 token, which no shipped file used to contain.
+    """
+    starter_readme = (starter_kit_dir(profile) / "README.md").read_text(
+        encoding="utf-8"
+    )
+    assert "__PYTHON_VERSION__" in starter_readme
+
+    output_dir = _bootstrap(tmp_path, profile=profile, python_version="3.13")
+    data = tomllib.loads((output_dir / "pyproject.toml").read_text(encoding="utf-8"))
+    assert data["project"]["requires-python"] == ">=3.13"
+    assert "Python `3.13` or newer" in (output_dir / "README.md").read_text(
+        encoding="utf-8"
+    )
+
+
+def test_author_is_rendered_into_project_metadata(tmp_path: Path) -> None:
+    output_dir = _bootstrap(tmp_path, author="Ada Lovelace")
+    data = tomllib.loads((output_dir / "pyproject.toml").read_text(encoding="utf-8"))
+    assert data["project"]["authors"] == [{"name": "Ada Lovelace"}]
+
+
+def test_unnamed_author_leaves_no_empty_metadata(tmp_path: Path) -> None:
+    output_dir = _bootstrap(tmp_path, author="")
+    data = tomllib.loads((output_dir / "pyproject.toml").read_text(encoding="utf-8"))
+    assert "authors" not in data["project"]
+
+
+@pytest.mark.parametrize(
+    ("license_id", "expression", "marker"),
+    [
+        ("proprietary", "LicenseRef-Proprietary", "All rights reserved"),
+        ("mit", "MIT", "MIT License"),
+        ("apache-2.0", "Apache-2.0", "Apache License"),
+    ],
+)
+def test_selected_license_is_written_and_declared(
+    tmp_path: Path, license_id: str, expression: str, marker: str
+) -> None:
+    output_dir = _bootstrap(tmp_path, license_id=license_id, author="Ada Lovelace")
+
+    license_text = (output_dir / "LICENSE").read_text(encoding="utf-8")
+    assert marker in license_text
+    assert "__COPYRIGHT_HOLDER__" not in license_text
+    assert "__COPYRIGHT_YEAR__" not in license_text
+
+    data = tomllib.loads((output_dir / "pyproject.toml").read_text(encoding="utf-8"))
+    assert data["project"]["license"] == expression
+    assert data["project"]["license-files"] == ["LICENSE"]
+    assert "See [`LICENSE`](LICENSE)" in (output_dir / "README.md").read_text(
+        encoding="utf-8"
+    )
+
+
+def test_omitted_license_states_terms_are_unselected_and_cites_rsk018(
+    tmp_path: Path,
+) -> None:
+    """No placeholder token is left behind, so RSK011 stays satisfied."""
+    output_dir = _bootstrap(tmp_path, license_id=None)
+
+    assert not (output_dir / "LICENSE").exists()
+    data = tomllib.loads((output_dir / "pyproject.toml").read_text(encoding="utf-8"))
+    assert "license" not in data["project"]
+
+    section = (output_dir / "README.md").read_text(encoding="utf-8").split("## License")
+    assert len(section) == 2
+    assert "RSK018" in section[1]
+    assert "__" not in section[1].split("[repo-standard-kit]:")[0]

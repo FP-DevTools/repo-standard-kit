@@ -23,7 +23,12 @@ from repo_standard.compliance.checks import (
     load_policy,
     resolve_profile,
 )
-from repo_standard.policy import PolicyError, load_compiled_policy, load_source_policy
+from repo_standard.policy import (
+    PolicyError,
+    Shape,
+    load_compiled_policy,
+    load_source_policy,
+)
 from repo_standard.policy.compiler import render_compiled, render_reference
 from repo_standard.policy.models import CHECK_SCHEMAS
 from repo_standard.repo_init import bootstrap_repo
@@ -58,10 +63,22 @@ def _workflow_text(profile: str = "python-single") -> str:
     )
 
 
+def _shape(rule_id: str) -> Shape:
+    return POLICY.shape(POLICY.rule(rule_id).check.config["shape"])
+
+
+def _markdown_shaped(title: str, body: str = "Detail.") -> str:
+    """Render a document carrying exactly the required sections of a shape."""
+    sections = "\n\n".join(
+        f"## {heading}\n\n{body}" for heading in _shape(title).required
+    )
+    return sections
+
+
 def _minimal_repo(tmp_path: Path, profile: str = "python-single") -> Path:
     root = tmp_path / "compliant-repo"
     root.mkdir()
-    headings = POLICY.rule("RSK002").check.config["headings"]
+    headings = _shape("RSK002").required
     gate_chain = "\n".join(
         f"{index}. `{command}`"
         for index, command in enumerate(
@@ -77,7 +94,8 @@ def _minimal_repo(tmp_path: Path, profile: str = "python-single") -> Path:
         encoding="utf-8",
     )
     (root / "README.md").write_text(
-        "# Repository\n\nSee repo-standard-kit.\n", encoding="utf-8"
+        f"# Repository\n\nSee repo-standard-kit.\n\n{_markdown_shaped('RSK023')}\n",
+        encoding="utf-8",
     )
     workflow = root / ".github" / "workflows"
     workflow.mkdir(parents=True)
@@ -102,18 +120,20 @@ def _minimal_repo(tmp_path: Path, profile: str = "python-single") -> Path:
         'name = "compliant-repo"\n'
         'version = "0.1.0"\n\n'
         f"{build}"
+        "[tool.repo-standard]\n"
+        f'profile = "{profile}"\n'
+        f'standard = "{POLICY.standard_major}"\n\n'
         "[tool.ruff]\n"
         f"line-length = {POLICY.rule('RSK015').check.config['value']}\n\n"
         "[tool.ruff.lint]\n"
-        f"select = {json.dumps(select)}\n\n"
-        "[tool.repo-standard]\n"
-        f'profile = "{profile}"\n'
-        f'standard = "{POLICY.standard_major}"\n',
+        f"select = {json.dumps(select)}\n",
         encoding="utf-8",
     )
     (root / "uv.lock").write_text("", encoding="utf-8")
     (root / "docs" / "adr").mkdir(parents=True)
-    (root / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+    (root / "CHANGELOG.md").write_text(
+        f"# Changelog\n\n{_markdown_shaped('RSK024')}\n", encoding="utf-8"
+    )
     (root / "LICENSE").write_text("Proprietary.\n", encoding="utf-8")
     return root
 
@@ -737,9 +757,10 @@ def test_standard_version_mismatch_reports_rsk019_but_other_checks_run(
 ) -> None:
     root = _minimal_repo(tmp_path)
     path = root / "pyproject.toml"
+    current = f'standard = "{POLICY.standard_major}"'
+    other = f'standard = "{int(POLICY.standard_major) + 1}"'
     path.write_text(
-        path.read_text(encoding="utf-8").replace('standard = "1"', 'standard = "2"'),
-        encoding="utf-8",
+        path.read_text(encoding="utf-8").replace(current, other), encoding="utf-8"
     )
     (root / "README.md").unlink()
     ids = _rule_ids(check_repo(root, POLICY))
@@ -1283,6 +1304,7 @@ def test_generated_repos_pass_repo_check(profile: str, tmp_path: Path) -> None:
         repo_type="service",
         python_version="3.12",
         author="",
+        license_id=None,
         output_dir=output,
         no_install=True,
     )
@@ -1316,3 +1338,264 @@ def test_pre_commit_manifest_declares_repo_check() -> None:
     assert hook["entry"] == "repo-check"
     assert hook["pass_filenames"] is False
     assert hook["always_run"] is True
+
+
+# --- shapes: one canonical section list per governed file -----------------
+
+
+def test_every_shape_is_bound_to_the_rule_that_enforces_it() -> None:
+    """A shape and its rule must name each other, in both directions."""
+    for shape in POLICY.shapes:
+        rule = POLICY.rule(shape.rule)
+        assert rule.check.kind == shape.kind
+        assert rule.check.config["shape"] == shape.id
+    shaped = {rule.id for rule in POLICY.rules if "shape" in rule.check.config}
+    assert shaped == {shape.rule for shape in POLICY.shapes}
+
+
+def test_rsk002_is_re_expressed_on_the_shared_shape_record() -> None:
+    """The AGENTS.md contract moved onto shapes without changing its sections."""
+    shape = _shape("RSK002")
+    assert shape.path == "AGENTS.md"
+    assert shape.heading_level == 2
+    assert shape.required == (
+        "Repository Purpose",
+        "Repository Context",
+        "Human And Agent Responsibilities",
+        "Workflow",
+        "Quality Gates",
+        "Coding Standards",
+        "Testing Policy",
+        "Documentation Rules",
+        "Repository Layout",
+        "Change Control Notes",
+    )
+    assert POLICY.rule("RSK002").level == "required"
+
+
+@pytest.mark.parametrize("rule_id", ["RSK023", "RSK024", "RSK025"])
+def test_new_shape_rules_ship_recommended_for_the_migration_window(
+    rule_id: str,
+) -> None:
+    assert POLICY.rule(rule_id).level == "recommended"
+
+
+def test_readme_shape_declares_the_documented_spine() -> None:
+    shape = _shape("RSK023")
+    assert shape.headings == (
+        "At A Glance",
+        "Overview",
+        "Install",
+        "Configuration",
+        "Usage",
+        "Repo Structure",
+        "Development",
+        "Deployment",
+        "Compatibility And Versioning",
+        "Maintainers And Support",
+        "License",
+    )
+    assert shape.required == ("Overview", "Install", "Usage", "Development", "License")
+
+
+def test_missing_required_section_reports_its_shape_rule(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    path = root / "README.md"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("## Usage\n\nDetail.\n\n", ""),
+        encoding="utf-8",
+    )
+    [finding] = [f for f in check_repo(root, POLICY) if f.rule_id == "RSK023"]
+    assert finding.message == "Missing required sections: Usage."
+
+
+def test_reordered_sections_are_reported_even_when_all_are_present(
+    tmp_path: Path,
+) -> None:
+    """Presence was already checked; order is what the shape adds."""
+    root = _minimal_repo(tmp_path)
+    path = root / "AGENTS.md"
+    text = path.read_text(encoding="utf-8")
+    layout = "## Repository Layout\n\nDetail.\n\n"
+    text = text.replace(layout, "").replace(
+        "## Documentation Rules", f"{layout}## Documentation Rules"
+    )
+    path.write_text(text, encoding="utf-8")
+
+    [finding] = [f for f in check_repo(root, POLICY) if f.rule_id == "RSK002"]
+    assert finding.message == "Declared sections are out of canonical order."
+    assert finding.actual.index("Repository Layout") < finding.actual.index(
+        "Documentation Rules"
+    )
+
+
+def test_unlisted_sections_are_legal_anywhere(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    path = root / "README.md"
+    text = path.read_text(encoding="utf-8")
+    text = text.replace("## Usage", "## Design Notes\n\nDetail.\n\n## Usage")
+    text += "\n## Acknowledgements\n\nDetail.\n"
+    path.write_text(text, encoding="utf-8")
+    assert "RSK023" not in _rule_ids(check_repo(root, POLICY))
+
+
+def test_optional_sections_may_be_absent_but_not_reordered(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    path = root / "README.md"
+    text = path.read_text(encoding="utf-8")
+    assert "## At A Glance" not in text
+    assert "RSK023" not in _rule_ids(check_repo(root, POLICY))
+
+    path.write_text(
+        text.replace("## Development", "## At A Glance\n\nDetail.\n\n## Development"),
+        encoding="utf-8",
+    )
+    [finding] = [f for f in check_repo(root, POLICY) if f.rule_id == "RSK023"]
+    assert finding.message == "Declared sections are out of canonical order."
+
+
+def test_release_sections_do_not_disturb_the_changelog_shape(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    (root / "CHANGELOG.md").write_text(
+        "# Changelog\n\n## Compatibility Policy\n\nDetail.\n\n## [Unreleased]\n\n"
+        "## [1.1.0] - 2026-01-02\n\n### Added\n\n- Detail.\n\n"
+        "## [1.0.0] - 2026-01-01\n",
+        encoding="utf-8",
+    )
+    assert "RSK024" not in _rule_ids(check_repo(root, POLICY))
+
+
+def test_changelog_without_an_unreleased_section_reports_rsk024(
+    tmp_path: Path,
+) -> None:
+    root = _minimal_repo(tmp_path)
+    (root / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+    [finding] = [f for f in check_repo(root, POLICY) if f.rule_id == "RSK024"]
+    assert finding.message == "Missing required sections: [Unreleased]."
+
+
+def test_deeper_headings_do_not_satisfy_a_markdown_shape(tmp_path: Path) -> None:
+    """Markdown shapes govern level two only, matching RSK002's semantics."""
+    root = _minimal_repo(tmp_path)
+    path = root / "README.md"
+    text = path.read_text(encoding="utf-8")
+    path.write_text(
+        text.replace("## Install", "### At A Glance\n\nDetail.\n\n## Install"),
+        encoding="utf-8",
+    )
+    assert "RSK023" not in _rule_ids(check_repo(root, POLICY))
+
+
+def test_out_of_order_pyproject_tables_report_rsk025(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    path = root / "pyproject.toml"
+    text = path.read_text(encoding="utf-8")
+    metadata = "[tool.repo-standard]\nprofile = "
+    head, _, tail = text.partition(metadata)
+    block, _, rest = tail.partition("\n\n")
+    path.write_text(f"{head}{rest}\n{metadata}{block}\n", encoding="utf-8")
+
+    [finding] = [f for f in check_repo(root, POLICY) if f.rule_id == "RSK025"]
+    assert finding.message == "Declared sections are out of canonical order."
+    assert finding.actual.index("tool.ruff") < finding.actual.index(
+        "tool.repo-standard"
+    )
+
+
+def test_unlisted_pyproject_tables_stay_legal_in_any_position(
+    tmp_path: Path,
+) -> None:
+    root = _minimal_repo(tmp_path)
+    path = root / "pyproject.toml"
+    with path.open("a", encoding="utf-8") as stream:
+        stream.write('\n[tool.repo-check.ignore]\nRSK012 = "Documented reason."\n')
+    assert "RSK025" not in _rule_ids(check_repo(root, POLICY))
+
+
+def test_table_headers_inside_multiline_strings_are_not_tables(
+    tmp_path: Path,
+) -> None:
+    root = _minimal_repo(tmp_path)
+    path = root / "pyproject.toml"
+    with path.open("a", encoding="utf-8") as stream:
+        stream.write('\n[tool.example]\nnote = """\n[project]\n"""\n')
+    assert "RSK025" not in _rule_ids(check_repo(root, POLICY))
+
+
+def test_malformed_pyproject_reports_a_parse_error_not_a_shape_error(
+    tmp_path: Path,
+) -> None:
+    root = _minimal_repo(tmp_path)
+    (root / "pyproject.toml").write_text("[project\n", encoding="utf-8")
+    [finding] = [f for f in check_repo(root, POLICY) if f.rule_id == "RSK025"]
+    assert "Could not parse TOML" in finding.message
+
+
+def _retype_agents_shape_as_toml(data: dict[str, object]) -> None:
+    """Leave RSK002 dispatching to markdown_shape while its shape says TOML."""
+    shapes = data["shapes"]
+    assert isinstance(shapes, list)
+    shapes[0].pop("heading_level")
+    shapes[0]["kind"] = "toml_table_order"
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        (
+            lambda data: data["shapes"][0].update({"rule": "RSK999"}),
+            "unknown rule",
+        ),
+        (_retype_agents_shape_as_toml, "not a markdown_shape shape"),
+        (
+            lambda data: data["shapes"][0]["sections"].append(
+                dict(data["shapes"][0]["sections"][0])
+            ),
+            "duplicate section IDs",
+        ),
+        (
+            lambda data: data["shapes"][0]["sections"][0].update({"level": "advisory"}),
+            "unknown section level",
+        ),
+        (
+            lambda data: data["shapes"][1].update({"path": "AGENTS.md"}),
+            "two shapes govern the same path",
+        ),
+    ],
+)
+def test_invalid_shape_policy_is_rejected(
+    tmp_path: Path,
+    mutation: Callable[[dict[str, object]], None],
+    message: str,
+) -> None:
+    root = _policy_checkout(tmp_path)
+    path = root / "policy" / "shapes.yaml"
+    data = load_yaml(path.read_text(encoding="utf-8"))
+    assert isinstance(data, dict)
+    mutation(data)
+    path.write_text(dump_yaml(data), encoding="utf-8")
+    with pytest.raises(PolicyError, match=message):
+        load_source_policy(root)
+
+
+def test_a_rule_naming_an_unknown_shape_is_rejected(tmp_path: Path) -> None:
+    root = _policy_checkout(tmp_path)
+
+    def mutation(data: dict[str, object]) -> None:
+        rules = data["rules"]
+        assert isinstance(rules, list)
+        rule = next(item for item in rules if item["id"] == "RSK023")
+        rule["check"]["config"]["shape"] = "missing"
+
+    _mutate_base(root, mutation)
+    with pytest.raises(PolicyError, match="unknown shape"):
+        load_source_policy(root)
+
+
+def test_generated_policy_reference_carries_every_shape() -> None:
+    reference = (REPO_ROOT / "docs" / "policy-reference.md").read_text(encoding="utf-8")
+    assert "## File Shapes" in reference
+    for shape in POLICY.shapes:
+        assert f"### {shape.id}" in reference
+        for section in shape.sections:
+            assert f"| `{section.id}` | `{section.heading}` |" in reference

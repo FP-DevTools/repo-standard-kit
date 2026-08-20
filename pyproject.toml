@@ -1,6 +1,6 @@
 [project]
 name = "repo-standard-kit"
-version = "1.2.0"
+version = "2.0.0"
 description = "Portable development standards, starter kits, and bootstrap tooling for software repositories."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -52,6 +52,10 @@ source-exclude = [
   "**/*.pyc",
 ]
 
+[tool.repo-standard]
+profile = "python-single"
+standard = "2"
+
 [tool.ruff]
 line-length = 88
 
@@ -64,10 +68,6 @@ testpaths = ["tests"]
 [tool.repo-check.ignore]
 RSK005 = "repo-standard-kit is the standard's own home, not an adopting repository; asking it to link to itself is meaningless."
 RSK011 = "This repository defines, tests, and ships these placeholder tokens for repo-init's templating; they are not leftovers from an unfinished bootstrap."
-
-[tool.repo-standard]
-profile = "python-single"
-standard = "1"
 
 [tool.ty.src]
 include = ["src", "tests"]

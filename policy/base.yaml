@@ -1,11 +1,13 @@
 schema_version: 1
-standard_version: 1.2.0
-standard_major: "1"
+standard_version: 2.0.0
+standard_major: "2"
 retired_rule_ids:
   - RSK013
 profile_files:
   - profiles/python-single.yaml
   - profiles/python-workspace.yaml
+shape_files:
+  - shapes.yaml
 rules:
   - id: RSK001
     title: AGENTS.md exists
@@ -24,7 +26,7 @@ rules:
     remediation: Add a root AGENTS.md tailored to the repository.
 
   - id: RSK002
-    title: Required AGENTS.md sections are present
+    title: Required AGENTS.md sections are present and ordered
     level: required
     profiles: [python-single, python-workspace]
     source:
@@ -32,22 +34,15 @@ rules:
       section: Required `AGENTS.md` Sections
     enforcement: structural
     check:
-      kind: markdown_headings
+      kind: markdown_shape
       config:
-        path: AGENTS.md
-        headings:
-          - Repository Purpose
-          - Repository Context
-          - Human And Agent Responsibilities
-          - Workflow
-          - Quality Gates
-          - Coding Standards
-          - Testing Policy
-          - Documentation Rules
-          - Repository Layout
-          - Change Control Notes
-    rationale: Stable headings make repository operating boundaries discoverable.
-    remediation: Add every required level-two heading to AGENTS.md.
+        shape: agents
+    rationale: >-
+      Stable, consistently ordered headings make repository operating
+      boundaries discoverable.
+    remediation: >-
+      Add every required level-two heading to AGENTS.md in the order the agents
+      shape declares.
 
   - id: RSK003
     title: AGENTS.md states the exact quality-gate chain
@@ -260,6 +255,7 @@ rules:
           __REPO_TYPE__: repo_type
           __PYTHON_VERSION__: python_version
           __AUTHOR__: author
+          __LICENSE_NOTICE__: license_notice
     rationale: Known starter placeholders indicate incomplete bootstrap output.
     remediation: Replace every known starter placeholder with repository-specific text.
 
@@ -383,9 +379,9 @@ rules:
       kind: repo_metadata
       config:
         path: pyproject.toml
-        standard_major: "1"
+        standard_major: "2"
     rationale: Explicit metadata makes profile resolution stable as layouts evolve.
-    remediation: Add tool.repo-standard with a valid profile and standard = "1".
+    remediation: Add tool.repo-standard with a valid profile and standard = "2".
 
   - id: RSK020
     title: Quality workflow uses least-privilege permissions
@@ -438,3 +434,60 @@ rules:
         minimum_reviews: 1
     rationale: An independent approval improves change review when another maintainer is available.
     remediation: Require at least one approving review when repository staffing permits.
+
+  - id: RSK023
+    title: README.md follows the declared section shape
+    level: recommended
+    profiles: [python-single, python-workspace]
+    source:
+      document: docs/repo-standard.md
+      section: File Shapes
+    enforcement: structural
+    check:
+      kind: markdown_shape
+      config:
+        shape: readme
+    rationale: >-
+      A shared README spine lets a reader find purpose, install, use, and
+      licence terms in the same place in every adopting repository.
+    remediation: >-
+      Add the required README sections and order every declared section as the
+      readme shape declares; unlisted sections remain free.
+
+  - id: RSK024
+    title: CHANGELOG.md follows the declared section shape
+    level: recommended
+    profiles: [python-single, python-workspace]
+    source:
+      document: docs/repo-standard.md
+      section: File Shapes
+    enforcement: structural
+    check:
+      kind: markdown_shape
+      config:
+        shape: changelog
+    rationale: >-
+      An always-present Unreleased section gives contributors one obvious place
+      to record a change before it is released.
+    remediation: >-
+      Add an Unreleased section, and keep any Compatibility Policy section
+      ahead of it.
+
+  - id: RSK025
+    title: pyproject.toml declares tables in the canonical order
+    level: recommended
+    profiles: [python-single, python-workspace]
+    source:
+      document: docs/repo-standard.md
+      section: File Shapes
+    enforcement: structural
+    check:
+      kind: toml_table_order
+      config:
+        shape: pyproject
+    rationale: >-
+      A predictable table order keeps related configuration together and stops
+      generated and hand-edited manifests from diverging.
+    remediation: >-
+      Order the declared pyproject tables as the pyproject shape declares;
+      tables the shape does not list may appear anywhere.

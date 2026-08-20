@@ -6,7 +6,10 @@ import argparse
 import shutil
 import subprocess
 import sys
+from datetime import date
 from pathlib import Path
+
+import tomlkit
 
 from repo_standard.policy import load_compiled_policy
 
@@ -20,6 +23,32 @@ IGNORED_STARTER_ENTRIES = {
     ".ruff_cache",
     ".ty_cache",
 }
+
+# Each selectable licence maps to its shipped text and its SPDX expression.
+LICENSE_EXPRESSIONS: dict[str, str] = {
+    "proprietary": "LicenseRef-Proprietary",
+    "mit": "MIT",
+    "apache-2.0": "Apache-2.0",
+}
+
+LICENSE_NOTICES: dict[str, str] = {
+    "proprietary": (
+        "Proprietary. All rights reserved. See [`LICENSE`](LICENSE) for the "
+        "terms that apply."
+    ),
+    "mit": "Released under the MIT License. See [`LICENSE`](LICENSE).",
+    "apache-2.0": ("Released under the Apache License 2.0. See [`LICENSE`](LICENSE)."),
+}
+
+UNLICENSED_NOTICE = (
+    "Licence terms have not been selected for this repository yet, so no "
+    "`LICENSE` file is present. RSK018 recommends adding one: rerun `repo-init` "
+    "with `--license`, or add the terms your organisation has approved before "
+    "sharing this repository."
+)
+
+_COPYRIGHT_YEAR = "__COPYRIGHT_YEAR__"
+_COPYRIGHT_HOLDER = "__COPYRIGHT_HOLDER__"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -37,6 +66,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--python-version", default="3.12")
     parser.add_argument("--author", default="")
+    parser.add_argument(
+        "--license",
+        choices=sorted(LICENSE_EXPRESSIONS),
+        default=None,
+        help=(
+            "Licence to write as LICENSE and declare in pyproject.toml. "
+            "Omitted, no LICENSE is written and README states that terms are "
+            "not yet selected."
+        ),
+    )
     parser.add_argument(
         "--output-dir",
         default=None,
@@ -164,16 +203,55 @@ def rename_package_dir(output_dir: Path, package_name: str) -> None:
         source_dir.rename(output_dir / "src" / package_name)
 
 
-def update_python_version(output_dir: Path, python_version: str) -> None:
-    pyproject_path = output_dir / "pyproject.toml"
-    if not pyproject_path.exists():
-        return
-    text = pyproject_path.read_text(encoding="utf-8")
-    text = text.replace(
-        'requires-python = ">=3.12"',
-        f'requires-python = ">={python_version}"',
+def resolve_license_dir() -> Path:
+    return Path(__file__).resolve().parent / "licenses"
+
+
+def license_notice(license_id: str | None) -> str:
+    """Return the README License body for the selected licence, if any."""
+    return UNLICENSED_NOTICE if license_id is None else LICENSE_NOTICES[license_id]
+
+
+def render_license(license_id: str, holder: str, year: int) -> str:
+    text = (resolve_license_dir() / f"{license_id}.txt").read_text(encoding="utf-8")
+    return text.replace(_COPYRIGHT_YEAR, str(year)).replace(_COPYRIGHT_HOLDER, holder)
+
+
+def write_license(output_dir: Path, license_id: str, holder: str) -> None:
+    (output_dir / "LICENSE").write_text(
+        render_license(license_id, holder, date.today().year), encoding="utf-8"
     )
-    pyproject_path.write_text(text, encoding="utf-8")
+
+
+def apply_project_metadata(
+    output_dir: Path,
+    *,
+    python_version: str,
+    author: str,
+    license_id: str | None,
+) -> None:
+    """Complete `[project]` fields that depend on optional bootstrap flags.
+
+    `requires-python` is set structurally rather than through a placeholder:
+    the starter manifest has to stay a parseable `pyproject.toml` so tools that
+    walk the tree — Ruff resolving configuration, among others — can still read
+    it. The starter documents the same value to humans through
+    `__PYTHON_VERSION__` in its README.
+
+    The starter carries `authors` unconditionally so `__AUTHOR__` renders
+    through the normal placeholder path; an unnamed author leaves nothing worth
+    declaring, so the key is dropped rather than shipped empty.
+    """
+    path = output_dir / "pyproject.toml"
+    document = tomlkit.parse(path.read_text(encoding="utf-8"))
+    project = document["project"]
+    project["requires-python"] = f">={python_version}"
+    if not author:
+        del project["authors"]
+    if license_id is not None:
+        project["license"] = LICENSE_EXPRESSIONS[license_id]
+        project["license-files"] = ["LICENSE"]
+    path.write_text(tomlkit.dumps(document), encoding="utf-8")
 
 
 def has_git_repository(output_dir: Path) -> bool:
@@ -241,6 +319,7 @@ def bootstrap_repo(
     repo_type: str,
     python_version: str,
     author: str,
+    license_id: str | None,
     output_dir: Path,
     no_install: bool,
 ) -> Path:
@@ -261,11 +340,19 @@ def bootstrap_repo(
         "repo_type": repo_type,
         "python_version": python_version,
         "author": author,
+        "license_notice": license_notice(license_id),
     }
     render_text_files(output_dir, values)
     if package_name is not None:
         rename_package_dir(output_dir, package_name)
-    update_python_version(output_dir, python_version)
+    if license_id is not None:
+        write_license(output_dir, license_id, author or repo_name)
+    apply_project_metadata(
+        output_dir,
+        python_version=python_version,
+        author=author,
+        license_id=license_id,
+    )
     ensure_no_unresolved_placeholders(output_dir)
 
     if not no_install:
@@ -289,6 +376,7 @@ def main(argv: list[str] | None = None) -> int:
         repo_type=args.repo_type,
         python_version=args.python_version,
         author=args.author,
+        license_id=args.license,
         output_dir=output_dir,
         no_install=args.no_install,
     )

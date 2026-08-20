@@ -21,9 +21,10 @@ def render_reference(policy: Policy) -> str:
         f"Standard version: `{policy.standard_version}`",
         f"Standard major: `{policy.standard_major}`",
         "",
-        "This normative catalogue is generated from `policy/base.yaml` and",
-        "`policy/profiles/`. The linked prose explains the policy; executable",
-        "values and rule applicability come only from the versioned YAML model.",
+        "This normative catalogue is generated from `policy/base.yaml`,",
+        "`policy/profiles/`, and `policy/shapes.yaml`. The linked prose explains",
+        "the policy; executable values and rule applicability come only from the",
+        "versioned YAML model.",
         "",
         "## Profiles",
         "",
@@ -47,6 +48,36 @@ def render_reference(policy: Policy) -> str:
                 "",
             ]
         )
+    lines.extend(
+        [
+            "## File Shapes",
+            "",
+            "Each shape is the single canonical section list for one governed",
+            "file. Checks reject a document that departs from it, and generated",
+            "documents are produced by walking it in the order below.",
+            "",
+        ]
+    )
+    for shape in policy.shapes:
+        lines.extend(
+            [
+                f"### {shape.id}",
+                "",
+                f"- Path: `{shape.path}`",
+                f"- Kind: `{shape.kind}`",
+                f"- Enforced by: `{shape.rule}`",
+                f"- Undeclared sections: "
+                f"{'allowed' if shape.allow_unlisted else 'rejected'}",
+            ]
+        )
+        if shape.heading_level is not None:
+            lines.append(f"- Heading level: `{shape.heading_level}`")
+        lines.extend(["", "| Section | Name | Level |", "| --- | --- | --- |"])
+        lines.extend(
+            f"| `{section.id}` | `{section.heading}` | `{section.level}` |"
+            for section in shape.sections
+        )
+        lines.append("")
     lines.extend(["## Rules", ""])
     for rule in policy.rules:
         lines.extend(

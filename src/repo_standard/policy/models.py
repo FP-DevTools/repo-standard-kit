@@ -20,13 +20,19 @@ LEVELS = {"required", "recommended"}
 ENFORCEMENT_MODES = {"structural", "platform"}
 MARKER_KINDS = {"file", "directory"}
 GITHUB_PERMISSION_VALUES = {"none", "read", "write"}
+SECTION_LEVELS = {"required", "optional"}
+# Shape kinds double as the check kinds that consume them, so a rule that
+# names a shape always dispatches to the handler built for that shape's kind.
+SHAPE_KINDS = {"markdown_shape", "toml_table_order"}
+MARKDOWN_SHAPE_KINDS = {"markdown_shape"}
 
 # Each check kind owns its accepted configuration keys. Required keys are the
 # first set; optional keys are the second. Value-level validation follows in
 # `_validate_check_config` where the shape is more useful than a generic schema.
 CHECK_SCHEMAS: dict[str, tuple[set[str], set[str]]] = {
     "path_exists": ({"path", "path_type"}, set()),
-    "markdown_headings": ({"path", "headings"}, set()),
+    "markdown_shape": ({"shape"}, set()),
+    "toml_table_order": ({"shape"}, set()),
     "text_contains_all": ({"path", "values"}, set()),
     "agents_quality_commands": ({"path", "commands_by_profile"}, set()),
     "text_pattern_each": ({"paths", "pattern"}, set()),
@@ -185,6 +191,123 @@ class Profile:
 
 
 @dataclass(frozen=True)
+class ShapeSection:
+    """One ordered, addressable part of a governed document."""
+
+    id: str
+    heading: str
+    level: str
+
+    @classmethod
+    def from_data(cls, value: Any, location: str) -> ShapeSection:
+        data = _mapping(value, location)
+        _keys(data, location, required={"id", "heading", "level"})
+        level = _string(data["level"], f"{location}.level")
+        if level not in SECTION_LEVELS:
+            _fail(f"{location}.level", f"unknown section level {level!r}")
+        return cls(
+            id=_string(data["id"], f"{location}.id"),
+            heading=_string(data["heading"], f"{location}.heading"),
+            level=level,
+        )
+
+
+@dataclass(frozen=True)
+class Shape:
+    """The canonical section list and order for one governed document.
+
+    A shape is the single source for both directions of the contract: the
+    check that rejects a document departing from it, and the generator that
+    emits documents by walking `sections` in declaration order.
+    """
+
+    id: str
+    path: str
+    kind: str
+    rule: str
+    allow_unlisted: bool
+    sections: tuple[ShapeSection, ...]
+    heading_level: int | None = None
+
+    @property
+    def headings(self) -> tuple[str, ...]:
+        return tuple(section.heading for section in self.sections)
+
+    @property
+    def required(self) -> tuple[str, ...]:
+        """Headings a conforming document must carry, in canonical order."""
+        return tuple(
+            section.heading for section in self.sections if section.level == "required"
+        )
+
+    @property
+    def optional_ordered(self) -> tuple[str, ...]:
+        """Headings a document may omit but must not reorder when present."""
+        return tuple(
+            section.heading for section in self.sections if section.level == "optional"
+        )
+
+    def section(self, section_id: str) -> ShapeSection:
+        try:
+            return next(
+                section for section in self.sections if section.id == section_id
+            )
+        except StopIteration as error:
+            raise PolicyError(
+                f"unknown section {section_id!r} in shape {self.id!r}"
+            ) from error
+
+    @classmethod
+    def from_data(cls, value: Any, location: str) -> Shape:
+        data = _mapping(value, location)
+        _keys(
+            data,
+            location,
+            required={"id", "path", "kind", "rule", "allow_unlisted", "sections"},
+            optional={"heading_level"},
+        )
+        kind = _string(data["kind"], f"{location}.kind")
+        if kind not in SHAPE_KINDS:
+            _fail(f"{location}.kind", f"unknown shape kind {kind!r}")
+        sections_value = data["sections"]
+        if not isinstance(sections_value, list) or not sections_value:
+            _fail(f"{location}.sections", "expected a non-empty list")
+        sections = tuple(
+            ShapeSection.from_data(item, f"{location}.sections[{index}]")
+            for index, item in enumerate(sections_value)
+        )
+        section_ids = [section.id for section in sections]
+        if len(section_ids) != len(set(section_ids)):
+            _fail(f"{location}.sections", "duplicate section IDs")
+        headings = [section.heading for section in sections]
+        if len(headings) != len(set(headings)):
+            _fail(f"{location}.sections", "duplicate section headings")
+        # Compiled policy round-trips the dataclass, so an inapplicable
+        # heading_level arrives as an explicit null rather than as an absent key.
+        declared_level = data.get("heading_level")
+        heading_level: int | None = None
+        if kind in MARKDOWN_SHAPE_KINDS:
+            if declared_level is None:
+                _fail(location, "missing keys: heading_level")
+            heading_level = _integer(declared_level, f"{location}.heading_level")
+            if heading_level < 1 or heading_level > 6:
+                _fail(f"{location}.heading_level", "expected a level between 1 and 6")
+        elif declared_level is not None:
+            _fail(f"{location}.heading_level", f"unsupported for shape kind {kind!r}")
+        return cls(
+            id=_string(data["id"], f"{location}.id"),
+            path=_string(data["path"], f"{location}.path"),
+            kind=kind,
+            rule=_string(data["rule"], f"{location}.rule"),
+            allow_unlisted=_boolean(
+                data["allow_unlisted"], f"{location}.allow_unlisted"
+            ),
+            sections=sections,
+            heading_level=heading_level,
+        )
+
+
+@dataclass(frozen=True)
 class Source:
     document: str
     section: str
@@ -229,11 +352,11 @@ def _validate_check_config(kind: str, config: dict[str, Any], location: str) -> 
         "job",
         "trigger",
         "standard_major",
+        "shape",
     ):
         if key in config:
             _string(config[key], f"{location}.{key}")
     for key in (
-        "headings",
         "values",
         "paths",
         "required_select",
@@ -374,6 +497,7 @@ class Policy:
     standard_major: str
     retired_rule_ids: tuple[str, ...]
     profiles: tuple[Profile, ...]
+    shapes: tuple[Shape, ...]
     rules: tuple[Rule, ...]
 
     @property
@@ -381,8 +505,18 @@ class Policy:
         return tuple(profile.id for profile in self.profiles)
 
     @property
+    def shape_ids(self) -> tuple[str, ...]:
+        return tuple(shape.id for shape in self.shapes)
+
+    @property
     def rule_ids(self) -> tuple[str, ...]:
         return tuple(rule.id for rule in self.rules)
+
+    def shape(self, shape_id: str) -> Shape:
+        try:
+            return next(shape for shape in self.shapes if shape.id == shape_id)
+        except StopIteration as error:
+            raise PolicyError(f"unknown shape {shape_id!r}") from error
 
     def profile(self, profile_id: str) -> Profile:
         try:
@@ -413,6 +547,7 @@ class Policy:
                 "standard_major",
                 "retired_rule_ids",
                 "profiles",
+                "shapes",
                 "rules",
             },
         )
@@ -423,14 +558,21 @@ class Policy:
                 f"unsupported schema version {schema_version}",
             )
         profiles_value = data["profiles"]
+        shapes_value = data["shapes"]
         rules_value = data["rules"]
         if not isinstance(profiles_value, list) or not profiles_value:
             _fail(f"{location}.profiles", "expected a non-empty list")
+        if not isinstance(shapes_value, list) or not shapes_value:
+            _fail(f"{location}.shapes", "expected a non-empty list")
         if not isinstance(rules_value, list) or not rules_value:
             _fail(f"{location}.rules", "expected a non-empty list")
         profiles = tuple(
             Profile.from_data(item, f"{location}.profiles[{index}]")
             for index, item in enumerate(profiles_value)
+        )
+        shapes = tuple(
+            Shape.from_data(item, f"{location}.shapes[{index}]")
+            for index, item in enumerate(shapes_value)
         )
         rules = tuple(
             Rule.from_data(item, f"{location}.rules[{index}]")
@@ -449,6 +591,7 @@ class Policy:
             ),
             retired_rule_ids=retired,
             profiles=profiles,
+            shapes=shapes,
             rules=rules,
         )
         policy._validate_relations(location)
@@ -468,6 +611,13 @@ class Policy:
         priorities = [profile.detection.priority for profile in self.profiles]
         if len(priorities) != len(set(priorities)):
             _fail(f"{location}.profiles", "detection priorities must be unique")
+
+        shape_ids = self.shape_ids
+        if len(shape_ids) != len(set(shape_ids)):
+            _fail(f"{location}.shapes", "duplicate shape IDs")
+        shape_paths = [shape.path for shape in self.shapes]
+        if len(shape_paths) != len(set(shape_paths)):
+            _fail(f"{location}.shapes", "two shapes govern the same path")
 
         rule_ids = self.rule_ids
         if len(rule_ids) != len(set(rule_ids)):
@@ -519,6 +669,27 @@ class Policy:
                         f"{location}.rules.{rule.id}.check.config.allow_missing_profiles",
                         f"unknown profiles: {sorted(unknown_allowed)}",
                     )
+            shape_id = rule.check.config.get("shape")
+            if isinstance(shape_id, str):
+                if shape_id not in set(shape_ids):
+                    _fail(
+                        f"{location}.rules.{rule.id}.check.config.shape",
+                        f"unknown shape {shape_id!r}",
+                    )
+                elif self.shape(shape_id).kind != rule.check.kind:
+                    _fail(
+                        f"{location}.rules.{rule.id}.check.config.shape",
+                        f"shape {shape_id!r} is not a {rule.check.kind} shape",
+                    )
+
+        # A shape and its rule must name each other, so neither the check nor
+        # the generator can be pointed at a document the other does not govern.
+        for shape in self.shapes:
+            shape_location = f"{location}.shapes.{shape.id}.rule"
+            if shape.rule not in set(rule_ids):
+                _fail(shape_location, f"unknown rule {shape.rule!r}")
+            if self.rule(shape.rule).check.config.get("shape") != shape.id:
+                _fail(shape_location, f"rule {shape.rule} does not enforce this shape")
 
 
 def _safe_yaml(path: Path) -> Any:
@@ -584,6 +755,7 @@ def load_source_policy(repo_root: Path) -> Policy:
             "standard_major",
             "retired_rule_ids",
             "profile_files",
+            "shape_files",
             "rules",
         },
     )
@@ -593,6 +765,19 @@ def load_source_policy(repo_root: Path) -> Policy:
         profile_path = repo_root / "policy" / relative
         profiles.append(_safe_yaml(profile_path))
     data["profiles"] = profiles
+    shape_files = _strings(data.pop("shape_files"), f"{base_path}.shape_files")
+    shapes: list[Any] = []
+    for relative in shape_files:
+        shape_path = repo_root / "policy" / relative
+        shape_data = _mapping(_safe_yaml(shape_path), str(shape_path))
+        _keys(shape_data, str(shape_path), required={"schema_version", "shapes"})
+        if _integer(shape_data["schema_version"], f"{shape_path}.schema_version") != 1:
+            _fail(f"{shape_path}.schema_version", "unsupported shape schema version")
+        shape_list = shape_data["shapes"]
+        if not isinstance(shape_list, list) or not shape_list:
+            _fail(f"{shape_path}.shapes", "expected a non-empty list")
+        shapes.extend(shape_list)
+    data["shapes"] = shapes
     policy = Policy.from_data(data, str(base_path))
     pyproject = tomllib.loads(
         (repo_root / "pyproject.toml").read_text(encoding="utf-8")
