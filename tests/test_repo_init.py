@@ -245,6 +245,10 @@ def test_built_wheel_contains_clean_packaged_starter_kits(tmp_path: Path) -> Non
     wheel_path = next(tmp_path.glob("repo_standard_kit-*.whl"))
     with zipfile.ZipFile(wheel_path) as wheel:
         names = set(wheel.namelist())
+        entry_points_path = next(
+            name for name in names if name.endswith(".dist-info/entry_points.txt")
+        )
+        entry_points = wheel.read(entry_points_path).decode("utf-8")
 
     assert "repo_standard/starter_kits/python-single/AGENTS.md" in names
     assert "repo_standard/starter_kits/python-workspace/AGENTS.md" in names
@@ -257,7 +261,7 @@ def test_built_wheel_contains_clean_packaged_starter_kits(tmp_path: Path) -> Non
         in names
     )
     assert "repo_standard/policy/compiled.json" in names
-    assert any(name.endswith(".dist-info/entry_points.txt") for name in names)
+    assert "repo-adopt = repo_standard.repo_adopt:main" in entry_points
     assert not any(
         any(part in IGNORED_ARTIFACT_PARTS for part in name.split("/"))
         or name.endswith(".pyc")

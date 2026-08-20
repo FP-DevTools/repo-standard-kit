@@ -24,6 +24,23 @@ the changes listed under **Adopters must**.
 
 ## [Unreleased]
 
+### Added
+
+- A packaged `repo-adopt` command for conflict-aware adoption in existing
+  `python-single` and `python-workspace` repositories. It provides a fully
+  read-only dry run, clean-worktree preflight, policy-owned profile detection,
+  structural TOML/YAML reconciliation, post-adoption `repo-check` reporting,
+  optional lock/install escape hatches, and full-gate execution.
+- Regression coverage for zero-required-finding adoption of both profiles,
+  preservation of project-owned workflow/hook/prose content, idempotency,
+  dirty-worktree refusal, parse failures, dry runs, conflicts, and interrupted
+  commands.
+
+### Adopters must
+
+- Nothing. `repo-adopt` is an optional capability for repositories that want
+  automated incremental adoption; already aligned repositories remain aligned.
+
 ## [1.1.0] - 2026-08-20
 
 ### Fixed

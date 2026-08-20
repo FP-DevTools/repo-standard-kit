@@ -1,6 +1,91 @@
 # Bootstrap Workflow
 
-## Goal
+This document covers both creation with `repo-init` and conflict-aware
+adoption with `repo-adopt`. The commands intentionally have different safety
+contracts: initialization owns an empty target, while adoption must preserve an
+existing project's behavior.
+
+## Adopt An Existing Repository
+
+Run a read-only preview from the existing repository root:
+
+```bash
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" \
+  repo-adopt . --profile python-single --dry-run
+```
+
+Use `python-workspace` for a workspace root. When `--profile` is omitted,
+`repo-adopt` first uses valid `[tool.repo-standard]` metadata and then the
+canonical policy detection markers. It stops and requests an explicit profile
+if metadata is invalid or multiple profiles match; it never guesses through an
+ambiguity.
+
+After reviewing the preview, apply the reconciliation from a clean checkout:
+
+```bash
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" \
+  repo-adopt . --profile python-single
+```
+
+Apply mode requires the target itself to be a Git repository root and refuses
+a dirty worktree. The command plans and parses every affected file before it
+writes anything. It then leaves all changes unstaged and uncommitted for normal
+review. Repeated execution against the same profile and kit version is
+idempotent.
+
+### Adoption Ownership Model
+
+`repo-adopt` classifies content by ownership rather than copying a starter over
+the checkout:
+
+- Standard-owned assets such as the compliance workflow, GitHub Actions
+  Dependabot entry, Markdown configuration, changelog skeleton, and
+  documentation directories are added when missing.
+- `pyproject.toml`, `.pre-commit-config.yaml`, and the quality workflow are
+  structurally merged. Existing project dependencies, build settings,
+  services, custom hooks, and additional steps remain in place.
+- Mutable refs on known standard workflow actions are replaced by the immutable
+  pins shipped by the selected kit; existing full-SHA pins remain intact. The
+  isolated `repo-check` hook moves to the selected kit version. Unknown remote
+  Actions without immutable pins are reported for a maintainer-selected SHA.
+- `README.md` and `AGENTS.md` remain project-owned. The adopter appends the
+  standard reference and missing required sections, and reconciles the exact
+  policy-owned Quality Gates command list without replacing other prose.
+- A non-`uv_build` package backend, unsupported standard metadata, malformed
+  configuration, or another merge that changes project intent is not guessed
+  through. The command reports an actionable conflict or stops before writes.
+- License terms are never selected automatically. A missing `LICENSE` remains
+  a recommended `repo-check` finding for the maintainer.
+
+`repo-standard-kit` is not added to project dependencies. The compliance
+workflow and optional pre-commit hook continue to run the released tool in an
+isolated environment.
+
+### Adoption Execution And Options
+
+When dependency metadata changes, normal apply mode runs `uv lock` followed by
+`uv sync`. Use `--no-lock` to leave lockfile refresh to the maintainer and
+`--no-install` to skip environment synchronization. These flags are independent
+because a constrained environment may permit one operation but not the other.
+
+Pass `--run-gates` to execute the complete ordered quality-gate chain for the
+selected profile. After reconciliation, `repo-adopt` runs the same structural
+library check as `repo-check .` and summarizes:
+
+- files added, updated, and unchanged;
+- conflicts and manual actions;
+- remaining required and recommended findings.
+
+If lock, install, or gate execution fails or is interrupted, the command names
+the exact failed command and leaves the generated source edits reviewable. A
+parse error never partially rewrites the affected file. `--dry-run` performs no
+filesystem, Git, dependency, or platform writes.
+
+`repo-adopt` does not stage, commit, push, open a pull request, or mutate GitHub
+branch protection and rulesets. Platform enforcement remains the separate,
+authenticated operation documented in [quality-gates.md](quality-gates.md).
+
+## Create A New Repository
 
 Create new repositories that begin aligned with the standard by default instead
 of relying on manual copy-paste and post-hoc cleanup.

@@ -8,6 +8,8 @@ license = "LicenseRef-Proprietary"
 license-files = ["LICENSE"]
 dependencies = [
   "PyYAML>=6.0.3",
+  "ruamel.yaml>=0.18.10",
+  "tomlkit>=0.13.3",
 ]
 classifiers = [
   "Private :: Do Not Upload",
@@ -15,6 +17,7 @@ classifiers = [
 
 [project.scripts]
 repo-add-package = "repo_standard.repo_add_package:main"
+repo-adopt = "repo_standard.repo_adopt:main"
 repo-check = "repo_standard.compliance.cli:main"
 repo-init = "repo_standard.repo_init:main"
 

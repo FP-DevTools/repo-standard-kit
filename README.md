@@ -24,6 +24,7 @@ This repository provides:
 - a standard Python repository layout
 - starter-kit assets for new repositories
 - a thin bootstrap tool for generating a new repository from the starter kit
+- a conflict-aware adoption tool for reconciling an existing repository
 - a `repo-check` CLI and library that verify a repository's structural
   alignment with the standard
 - versioned canonical YAML policy plus deterministic runtime and documentation
@@ -101,6 +102,34 @@ See [docs/bootstrap-workflow.md](docs/bootstrap-workflow.md) for the full
 option reference, the workspace `repo-add-package` flow, and the expected
 generated output.
 
+## Adopt The Standard In An Existing Repository
+
+From a clean existing Git repository, preview the reconciliation first:
+
+```bash
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" \
+  repo-adopt . --profile python-single --dry-run
+```
+
+Then apply it:
+
+```bash
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" \
+  repo-adopt . --profile python-single
+```
+
+`repo-adopt` adds missing standard-owned assets and structurally reconciles
+TOML, pre-commit, and workflow configuration while retaining unrelated project
+settings and steps. It updates human-owned `README.md` and `AGENTS.md` only in
+mechanically safe standard sections, reports conflicts for maintainer action,
+runs `repo-check`, and leaves every change unstaged and uncommitted.
+
+Use `--no-lock` or `--no-install` in constrained environments, and
+`--run-gates` when the full profile gate chain should run immediately. The
+command never changes GitHub branch protection or rulesets. See
+[docs/bootstrap-workflow.md](docs/bootstrap-workflow.md) for the ownership and
+safety contract.
+
 ## Check A Repository's Alignment
 
 Run `repo-check` against any repository the same way, with `uvx` or after
@@ -129,9 +158,8 @@ Use this repository in one of two ways:
 
 - New repository: bootstrap with `repo-init`, which renders the
   `python-single` or `python-workspace` starter kit
-- Existing repository: adapt the repo to match the standard and populate
-  `AGENTS.md` and `README.md` using `templates/AGENTS.md` and
-  `templates/README.md`
+- Existing repository: reconcile it with `repo-adopt`, review the unstaged
+  result, and resolve any explicit manual findings
 
 ## Design Principles
 
