@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -354,3 +355,54 @@ def test_interrupted_command_reports_the_exact_command(
         _run(["uv", "lock"], tmp_path)
 
     assert error.value.command == ["uv", "lock"]
+
+
+def test_run_sets_native_tls_for_child_process(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def capture(command: list[str], **kwargs: object) -> None:
+        captured["command"] = command
+        captured.update(kwargs)
+
+    monkeypatch.delenv("UV_NATIVE_TLS", raising=False)
+    monkeypatch.setattr(subprocess, "run", capture)
+
+    _run(["uv", "lock"], tmp_path, native_tls=True)
+
+    assert captured["command"] == ["uv", "lock"]
+    assert captured["cwd"] == tmp_path
+    assert captured["env"]["UV_NATIVE_TLS"] == "true"
+
+
+def test_native_tls_is_forwarded_to_dependency_commands(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "existing"
+    _write_minimal_repo(root, "python-single")
+    subprocess.run(["git", "init"], cwd=root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"], cwd=root, check=True
+    )
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=root, check=True)
+    subprocess.run(
+        ["git", "add", "pyproject.toml", "uv.lock", "README.md", "AGENTS.md"],
+        cwd=root,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "initial"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+    )
+    commands: list[tuple[list[str], bool]] = []
+
+    def capture(command: list[str], root: Path, *, native_tls: bool = False) -> None:
+        commands.append((command, native_tls))
+
+    monkeypatch.setattr("repo_standard.repo_adopt._run", capture)
+
+    assert main([str(root), "--profile", "python-single", "--native-tls"]) == 0
+    assert commands == [(["uv", "lock"], True), (["uv", "sync"], True)]

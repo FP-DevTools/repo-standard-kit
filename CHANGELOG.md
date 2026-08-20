@@ -37,6 +37,8 @@ the changes listed under **Adopters must**.
   preservation of project-owned workflow/hook/prose content, idempotency,
   dirty-worktree refusal, parse failures, dry runs, conflicts, and interrupted
   commands.
+- A `repo-adopt --native-tls` option that propagates the platform certificate
+  store setting to child lock, sync, and quality-gate commands.
 
 ### Changed
 

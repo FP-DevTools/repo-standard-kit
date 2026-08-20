@@ -6,6 +6,7 @@ import argparse
 import copy
 import importlib.metadata
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -96,6 +97,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-lock", action="store_true")
     parser.add_argument("--no-install", action="store_true")
+    parser.add_argument(
+        "--native-tls",
+        action="store_true",
+        help="Use the platform certificate store for child uv commands.",
+    )
     parser.add_argument(
         "--run-gates",
         action="store_true",
@@ -712,9 +718,12 @@ def _ensure_clean_git_root(root: Path) -> None:
         )
 
 
-def _run(command: list[str], root: Path) -> None:
+def _run(command: list[str], root: Path, *, native_tls: bool = False) -> None:
+    environment = os.environ.copy()
+    if native_tls:
+        environment["UV_NATIVE_TLS"] = "true"
     try:
-        subprocess.run(command, cwd=root, check=True)
+        subprocess.run(command, cwd=root, check=True, env=environment)
     except FileNotFoundError as error:
         raise CommandError(command, "executable not found") from error
     except subprocess.CalledProcessError as error:
@@ -769,12 +778,12 @@ def main(argv: list[str] | None = None) -> int:
             return 1 if plan.conflicts else 0
         apply_plan(plan)
         if plan.dependency_metadata_changed and not args.no_lock:
-            _run(["uv", "lock"], root)
+            _run(["uv", "lock"], root, native_tls=args.native_tls)
         if plan.dependency_metadata_changed and not args.no_install:
             sync_command = ["uv", "sync"]
             if args.no_lock:
                 sync_command.append("--frozen")
-            _run(sync_command, root)
+            _run(sync_command, root, native_tls=args.native_tls)
         if args.run_gates:
             commands = (
                 load_policy()
@@ -782,7 +791,7 @@ def main(argv: list[str] | None = None) -> int:
                 .check.config["commands_by_profile"][plan.profile]
             )
             for command in commands:
-                _run(shlex.split(command), root)
+                _run(shlex.split(command), root, native_tls=args.native_tls)
         findings = _remaining_findings(plan)
         _print_summary(plan, findings)
         return (

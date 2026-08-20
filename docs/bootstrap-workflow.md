@@ -72,6 +72,9 @@ When dependency metadata changes, normal apply mode runs `uv lock` followed by
 `uv sync`. Use `--no-lock` to leave lockfile refresh to the maintainer and
 `--no-install` to skip environment synchronization. These flags are independent
 because a constrained environment may permit one operation but not the other.
+Use `--native-tls` when uv must load certificates from the platform's native
+store. The option propagates `UV_NATIVE_TLS=true` to lock, sync, and optional
+quality-gate subprocesses.
 
 Pass `--run-gates` to execute the complete ordered quality-gate chain for the
 selected profile. After reconciliation, `repo-adopt` runs the same structural

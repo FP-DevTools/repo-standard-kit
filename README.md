@@ -124,7 +124,8 @@ settings and steps. It updates human-owned `README.md` and `AGENTS.md` only in
 mechanically safe standard sections, reports conflicts for maintainer action,
 runs `repo-check`, and leaves every change unstaged and uncommitted.
 
-Use `--no-lock` or `--no-install` in constrained environments, and
+Use `--no-lock` or `--no-install` in constrained environments,
+`--native-tls` when child uv commands need the platform certificate store, and
 `--run-gates` when the full profile gate chain should run immediately. The
 command never changes GitHub branch protection or rulesets. See
 [docs/bootstrap-workflow.md](docs/bootstrap-workflow.md) for the ownership and
