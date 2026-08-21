@@ -32,6 +32,13 @@ SECTION_LEVELS = {"required", "optional"}
 # names a shape always dispatches to the handler built for that shape's kind.
 SHAPE_KINDS = {"markdown_shape", "toml_table_order"}
 MARKDOWN_SHAPE_KINDS = {"markdown_shape"}
+# A rationale says why a rule exists in one or two sentences, because every word
+# of it is reproduced into a catalogue that is scanned rather than read. Two
+# lines at the 88-column prose width this standard recommends is about 176
+# characters; the ceiling rounds that up. Limitation analysis and design
+# argument belong in the normative document the rule already cites as its
+# source, and drift back into an essay fails here rather than at review.
+RATIONALE_MAX_LENGTH = 200
 
 # Each check kind owns its accepted configuration keys. Required keys are the
 # first set; optional keys are the second. Value-level validation follows in
@@ -91,9 +98,17 @@ def _mapping(value: Any, location: str) -> dict[str, Any]:
     return value
 
 
-def _string(value: Any, location: str, *, non_empty: bool = True) -> str:
+def _string(
+    value: Any,
+    location: str,
+    *,
+    non_empty: bool = True,
+    max_length: int | None = None,
+) -> str:
     if not isinstance(value, str) or (non_empty and not value.strip()):
         _fail(location, "expected a non-empty string")
+    if max_length is not None and len(value) > max_length:
+        _fail(location, f"expected at most {max_length} characters, got {len(value)}")
     return value
 
 
@@ -522,7 +537,11 @@ class Rule:
             source=Source.from_data(data["source"], f"{location}.source"),
             enforcement=enforcement,
             check=Check.from_data(data["check"], f"{location}.check"),
-            rationale=_string(data["rationale"], f"{location}.rationale"),
+            rationale=_string(
+                data["rationale"],
+                f"{location}.rationale",
+                max_length=RATIONALE_MAX_LENGTH,
+            ),
             remediation=_string(data["remediation"], f"{location}.remediation"),
         )
 

@@ -99,10 +99,10 @@ the changes listed under **Adopters must**.
   Policy owns the token, and the match is containment rather than an exact
   command, because an adopter runs a released checker with `uvx` while this
   repository runs its own working tree with `uv run` — both correct. The claim
-  is correspondingly modest and its rationale says so: a contrived command
-  naming the token passes. Reusing RSK006's guard machinery, an invocation
-  reachable only under a condition policy does not declare does not count, and
-  neither profile declares one.
+  is correspondingly modest and section 5 of `docs/quality-gates.md` says so: a
+  contrived command naming the token passes. Reusing RSK006's guard machinery,
+  an invocation reachable only under a condition policy does not declare does
+  not count, and neither profile declares one.
 - **The `advisory` policy level**, below `recommended`: always reported, never
   blocking, not even under `--strict`. It exists for a rule that names a
   preferred value for a decision the normative prose leaves to the repository.
@@ -195,6 +195,14 @@ the changes listed under **Adopters must**.
 - Branch protection is queried once per run and cached on the check context,
   rather than once per rule, so two rules can no longer disagree because one
   round-trip flaked.
+- **A rule's `rationale` is now capped at 200 characters** by the policy
+  schema, so a policy author who writes an essay into `policy/base.yaml` gets a
+  `PolicyError` instead of a review comment. Every word of the field is
+  reproduced into `docs/policy-reference.md`, a catalogue meant to be scanned;
+  RSK026 through RSK030 are trimmed back to the one-or-two-sentence register
+  the other twenty-four rules already keep, and the limitation analysis RSK030
+  carried was already stated in section 5 of `docs/quality-gates.md`, which is
+  where it stays.
 
 ### Removed
 

@@ -414,7 +414,7 @@ Remediation: Order the declared pyproject tables as the pyproject shape declares
 - Enforcement: `structural`
 - Check kind: `agents_operating_dials`
 
-Rationale: Agent behaviour left to model defaults varies between runs and between repositories. Stating the calibration where agents already read their operating boundaries is what makes the work consistent across every repository adopting the standard.
+Rationale: Agent behaviour left to model defaults varies between runs and between repositories, which is the opposite of what a standard is for.
 
 Remediation: State each dial in the Agent Operating Mode section of AGENTS.md, in the declared order and at the declared level.
 
@@ -431,7 +431,7 @@ Remediation: State each dial in the Agent Operating Mode section of AGENTS.md, i
 - Enforcement: `structural`
 - Check kind: `path_exists`
 
-Rationale: The compliance job is what stops the rest of the standard from drifting, so its absence has to be a finding of its own. Existence is all this rule claims; RSK030 separately requires the job to invoke the checker.
+Rationale: The job that keeps the rest of the standard from drifting cannot itself go missing unnoticed. Existence is all this rule claims.
 
 Remediation: Add .github/workflows/compliance.yml with a compliance job that checks the repository against repo-standard-kit on pull requests.
 
@@ -443,7 +443,7 @@ Remediation: Add .github/workflows/compliance.yml with a compliance job that che
 - Enforcement: `structural`
 - Check kind: `github_workflow_permissions`
 
-Rationale: The compliance job reads the repository and reports on it. A write scope on the token that runs a checker fetched from outside the repository would let that fetched code change what it is auditing.
+Rationale: The compliance job only reads the repository and reports on it, so a write scope would let the checker it fetches from outside change what it is auditing.
 
 Remediation: Set the compliance job's effective permissions to exactly `contents: read`.
 
@@ -455,7 +455,7 @@ Remediation: Set the compliance job's effective permissions to exactly `contents
 - Enforcement: `structural`
 - Check kind: `github_workflow_pins`
 
-Rationale: The compliance workflow already executes code fetched from outside the repository, so a mutable action reference beside it is the widest unpinned surface the standard ships.
+Rationale: The compliance workflow executes code fetched from outside the repository, so an unpinned action beside it is the widest mutable surface the standard ships.
 
 Remediation: Pin every remote action and reusable workflow in the compliance workflow to a 40-character SHA.
 
@@ -467,7 +467,7 @@ Remediation: Pin every remote action and reusable workflow in the compliance wor
 - Enforcement: `structural`
 - Check kind: `github_workflow_invocation`
 
-Rationale: RSK027, RSK028 and RSK029 leave a compliance workflow that exists, grants only contents: read, and pins every action free to execute nothing. This rule requires the job to run the checker on pull requests: a workflow that never triggers on one satisfies the other three while leaving the SHALL in section 5 unmet, so the trigger belongs to this claim rather than to a rule of its own. It matches by containment rather than by exact command because the same correct invocation is spelled differently in different repositories, so the guarantee is correspondingly weak: it proves that an executed command's argument list carries the token policy names, not that the command is a genuine compliance run, and a contrived command mentioning the token satisfies it. What it does exclude is a token appearing only in a comment, which the shell lexer discards, and an invocation reachable only under a condition policy does not declare for the profile.
+Rationale: An existing, least-privileged, fully pinned compliance workflow can still execute nothing. This rule requires the compliance job to run the checker on pull requests.
 
 Remediation: Trigger the compliance workflow on pull_request, and run repo-check from a step of its compliance job, unguarded or under a condition policy declares for the profile.
 
