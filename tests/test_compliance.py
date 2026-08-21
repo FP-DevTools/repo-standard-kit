@@ -1388,6 +1388,7 @@ def test_generated_repos_pass_repo_check(profile: str, tmp_path: Path) -> None:
         author="",
         license_id=None,
         output_dir=output,
+        no_lock=True,
         no_install=True,
     )
     (output / "uv.lock").write_text("", encoding="utf-8")

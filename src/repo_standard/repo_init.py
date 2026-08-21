@@ -83,6 +83,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Target directory. Defaults to the current working directory.",
     )
+    parser.add_argument("--no-lock", action="store_true")
     parser.add_argument("--no-install", action="store_true")
     return parser
 
@@ -290,6 +291,32 @@ def ensure_git_repository(output_dir: Path) -> None:
     )
 
 
+def run_lock(output_dir: Path) -> None:
+    try:
+        subprocess.run(["uv", "lock"], cwd=output_dir, check=True)
+    except FileNotFoundError:
+        print(
+            "Skipped uv lock because the executable was not found.",
+            file=sys.stderr,
+        )
+    except subprocess.CalledProcessError as error:
+        print(
+            f"uv lock failed with exit status {error.returncode}.",
+            file=sys.stderr,
+        )
+
+
+def warn_when_lock_file_missing(output_dir: Path) -> None:
+    """Name RSK009 when bootstrap produced no lock file, for whatever reason."""
+    if (output_dir / "uv.lock").is_file():
+        return
+    print(
+        "No uv.lock was produced, so repo-check reports required finding RSK009. "
+        "Run `uv lock` in the new repository before committing.",
+        file=sys.stderr,
+    )
+
+
 def run_optional_installs(output_dir: Path) -> None:
     try:
         subprocess.run(["uv", "sync"], cwd=output_dir, check=True)
@@ -323,6 +350,7 @@ def bootstrap_repo(
     author: str,
     license_id: str | None,
     output_dir: Path,
+    no_lock: bool,
     no_install: bool,
 ) -> Path:
     if profile == "python-single":
@@ -361,8 +389,11 @@ def bootstrap_repo(
     )
     ensure_no_unresolved_placeholders(output_dir)
 
+    if not no_lock:
+        run_lock(output_dir)
     if not no_install:
         run_optional_installs(output_dir)
+    warn_when_lock_file_missing(output_dir)
 
     return output_dir
 
@@ -384,6 +415,7 @@ def main(argv: list[str] | None = None) -> int:
         author=args.author,
         license_id=args.license,
         output_dir=output_dir,
+        no_lock=args.no_lock,
         no_install=args.no_install,
     )
     print(f"Bootstrapped {repo_name} into {output_dir}")

@@ -77,6 +77,7 @@ def test_bootstrap_repo_renders_python_single_starter(tmp_path: Path) -> None:
         author="",
         license_id=None,
         output_dir=output_dir,
+        no_lock=True,
         no_install=True,
     )
 
@@ -126,6 +127,7 @@ def test_bootstrap_repo_infers_package_name_for_python_single(tmp_path: Path) ->
         author="",
         license_id=None,
         output_dir=output_dir,
+        no_lock=True,
         no_install=True,
     )
 
@@ -145,6 +147,7 @@ def test_bootstrap_repo_renders_python_workspace_starter(tmp_path: Path) -> None
         author="",
         license_id=None,
         output_dir=output_dir,
+        no_lock=True,
         no_install=True,
     )
 
@@ -312,6 +315,7 @@ def test_bootstrap_repo_uses_uv_build_backend_for_python_single(
         author="",
         license_id=None,
         output_dir=output_dir,
+        no_lock=True,
         no_install=True,
     )
 
@@ -664,6 +668,7 @@ def test_main_bootstraps_into_current_working_directory(
         [
             "--profile",
             "python-single",
+            "--no-lock",
             "--no-install",
         ]
     )
@@ -685,6 +690,7 @@ def test_main_infers_repo_name_from_output_dir(tmp_path: Path) -> None:
             "python-single",
             "--output-dir",
             str(output_dir),
+            "--no-lock",
             "--no-install",
         ]
     )
@@ -707,6 +713,7 @@ def test_main_creates_repo_named_directory_when_repo_name_is_provided(
             "python-single",
             "--repo-name",
             "demo-service",
+            "--no-lock",
             "--no-install",
         ]
     )
@@ -732,6 +739,7 @@ def test_main_uses_explicit_output_dir_when_repo_name_is_also_provided(
             "demo-service",
             "--output-dir",
             str(output_dir),
+            "--no-lock",
             "--no-install",
         ]
     )
@@ -755,6 +763,7 @@ def test_main_rejects_path_like_repo_name(
                 "python-single",
                 "--repo-name",
                 "foo/bar",
+                "--no-lock",
                 "--no-install",
             ]
         )
@@ -771,6 +780,7 @@ def test_main_infers_workspace_repo_name_from_current_directory(
         [
             "--profile",
             "python-workspace",
+            "--no-lock",
             "--no-install",
         ]
     )
@@ -822,6 +832,7 @@ def test_generated_agents_files_carry_every_required_section(
         author="",
         license_id=None,
         output_dir=output_dir,
+        no_lock=True,
         no_install=True,
     )
     headings = _headings(output_dir / "AGENTS.md")
@@ -1014,6 +1025,7 @@ def _bootstrap(tmp_path: Path, **overrides: object) -> Path:
         "author": "",
         "license_id": None,
         "output_dir": output_dir,
+        "no_lock": True,
         "no_install": True,
     }
     arguments.update(overrides)
@@ -1108,3 +1120,133 @@ def test_omitted_license_states_terms_are_unselected_and_cites_rsk018(
     assert len(section) == 2
     assert "RSK018" in section[1]
     assert "__" not in section[1].split("[repo-standard-kit]:")[0]
+
+
+# --- lock file contract: --no-lock and --no-install are independent -------
+
+
+def _record_bootstrap_commands(
+    monkeypatch: pytest.MonkeyPatch,
+    output_dir: Path,
+    *,
+    uv_failure: Exception | None = None,
+) -> list[list[str]]:
+    """Record the commands bootstrap would run without executing any of them.
+
+    `uv lock` and `uv sync` both resolve dependencies over the network, so the
+    stub stands in for them and writes the lock file they would leave behind.
+    """
+    commands: list[list[str]] = []
+
+    def fake_run(command: list[str], *, cwd: Path, check: bool) -> None:
+        assert check is True
+        assert cwd == output_dir
+        commands.append(command)
+        if uv_failure is not None and command[0] == "uv":
+            raise uv_failure
+        if command[:2] in (["uv", "lock"], ["uv", "sync"]):
+            (output_dir / "uv.lock").write_text("", encoding="utf-8")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    return commands
+
+
+def test_no_install_alone_still_produces_a_lock_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """RSK009 requires uv.lock, so skipping installation must not skip locking."""
+    commands = _record_bootstrap_commands(monkeypatch, tmp_path / "generated")
+
+    output_dir = _bootstrap(tmp_path, no_lock=False, no_install=True)
+
+    assert commands == [["uv", "lock"]]
+    assert (output_dir / "uv.lock").is_file()
+    assert "RSK009" not in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("no_lock", "no_install", "expected"),
+    [
+        (
+            False,
+            False,
+            [
+                ["uv", "lock"],
+                ["uv", "sync"],
+                ["git", "init", "--initial-branch=main"],
+                ["uv", "run", "pre-commit", "install"],
+            ],
+        ),
+        (False, True, [["uv", "lock"]]),
+        (
+            True,
+            False,
+            [
+                ["uv", "sync"],
+                ["git", "init", "--initial-branch=main"],
+                ["uv", "run", "pre-commit", "install"],
+            ],
+        ),
+        (True, True, []),
+    ],
+    ids=["default", "no-install", "no-lock", "both"],
+)
+def test_lock_and_install_flags_are_independent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    no_lock: bool,
+    no_install: bool,
+    expected: list[list[str]],
+) -> None:
+    commands = _record_bootstrap_commands(monkeypatch, tmp_path / "generated")
+
+    _bootstrap(tmp_path, no_lock=no_lock, no_install=no_install)
+
+    assert commands == expected
+
+
+def test_skipping_both_steps_reports_the_rsk009_next_step(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _record_bootstrap_commands(monkeypatch, tmp_path / "generated")
+
+    output_dir = _bootstrap(tmp_path, no_lock=True, no_install=True)
+
+    error = capsys.readouterr().err
+    assert not (output_dir / "uv.lock").exists()
+    assert "RSK009" in error
+    assert "uv lock" in error
+
+
+@pytest.mark.parametrize(
+    ("uv_failure", "expected_notice"),
+    [
+        (
+            FileNotFoundError("uv"),
+            "Skipped uv lock because the executable was not found.",
+        ),
+        (
+            subprocess.CalledProcessError(2, ["uv", "lock"]),
+            "uv lock failed with exit status 2.",
+        ),
+    ],
+    ids=["uv-missing", "uv-lock-failed"],
+)
+def test_a_failed_lock_step_reports_the_rsk009_next_step(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    uv_failure: Exception,
+    expected_notice: str,
+) -> None:
+    """The warning covers every path that ends without a lock file, not the flags."""
+    _record_bootstrap_commands(
+        monkeypatch, tmp_path / "generated", uv_failure=uv_failure
+    )
+
+    output_dir = _bootstrap(tmp_path, no_lock=False, no_install=True)
+
+    error = capsys.readouterr().err
+    assert not (output_dir / "uv.lock").exists()
+    assert expected_notice in error
+    assert "RSK009" in error
