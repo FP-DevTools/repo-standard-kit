@@ -48,6 +48,11 @@ def _rule_ids(findings: list[Finding]) -> set[str]:
     return {finding.rule_id for finding in findings}
 
 
+def _status_of(findings: list[Finding], rule_id: str) -> str:
+    [finding] = [finding for finding in findings if finding.rule_id == rule_id]
+    return finding.status
+
+
 def _write_pre_commit(root: Path, hooks: list[dict[str, object]]) -> None:
     data = {"repos": [{"repo": "local", "hooks": hooks}]}
     (root / ".pre-commit-config.yaml").write_text(dump_yaml(data), encoding="utf-8")
@@ -1763,14 +1768,14 @@ def test_only_known_nonempty_ignore_reasons_suppress(tmp_path: Path) -> None:
     (root / "README.md").unlink()
     path = root / "pyproject.toml"
     _ignore(root, 'RSK004 = " "\nRSK999 = "Unknown"')
-    assert "RSK004" in _rule_ids(check_repo(root, POLICY))
+    assert _status_of(check_repo(root, POLICY), "RSK004") == "violation"
     path.write_text(
         path.read_text(encoding="utf-8").replace(
             'RSK004 = " "', 'RSK004 = "Approved reason"'
         ),
         encoding="utf-8",
     )
-    assert "RSK004" not in _rule_ids(check_repo(root, POLICY))
+    assert _status_of(check_repo(root, POLICY), "RSK004") == "suppressed"
 
 
 def test_an_exemption_that_suppressed_nothing_is_reported_but_never_blocks(
@@ -1800,13 +1805,38 @@ def test_an_exemption_that_suppressed_nothing_is_reported_but_never_blocks(
     assert item["status"] == "unused-exemption"
 
 
-def test_an_exemption_that_suppressed_a_finding_is_not_reported(
-    tmp_path: Path,
+def test_an_exemption_that_suppressed_findings_reports_them_but_never_blocks(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     root = _minimal_repo(tmp_path)
     (root / "README.md").unlink()
-    _ignore(root, 'RSK004 = "Documented reason."')
-    assert "RSK004" not in _rule_ids(check_repo(root, POLICY))
+    (root / "CHANGELOG.md").unlink()
+    _ignore(root, 'RSK004 = "Documented reason."\nRSK017 = "Second reason."')
+
+    [finding] = [f for f in check_repo(root, POLICY) if f.rule_id == "RSK004"]
+    assert finding.status == "suppressed"
+    # `level` keeps naming the rule's canonical level, exactly as it does for
+    # an unused exemption; the report sits beside the exemption it came from,
+    # states how much it hid, and says where.
+    assert finding.level == POLICY.rule("RSK004").level == "required"
+    assert finding.path == "pyproject.toml"
+    assert "suppressed 1 finding(s)" in finding.message
+    assert "Documented reason." in finding.message
+    assert finding.actual == ["README.md"]
+
+    assert cli.main([str(root), "--strict"]) == 0
+    output = capsys.readouterr().out
+    assert "RSK004 [suppressed]" in output
+    # A reader who scans only the summary must still see the suppression.
+    assert "2 finding(s), 2 rule(s) suppressed by [tool.repo-check.ignore]." in output
+
+    assert cli.main([str(root), "--format", "json"]) == 0
+    [item] = [
+        item
+        for item in json.loads(capsys.readouterr().out)
+        if item["rule_id"] == "RSK004"
+    ]
+    assert (item["level"], item["status"]) == ("required", "suppressed")
 
 
 def test_an_exemption_for_a_rule_this_run_never_evaluated_is_not_reported(
@@ -1922,7 +1952,13 @@ def test_generated_repos_pass_repo_check(profile: str, tmp_path: Path) -> None:
 
 
 def test_repository_passes_repo_check_strictly() -> None:
-    assert check_repo(REPO_ROOT, POLICY) == []
+    findings = check_repo(REPO_ROOT, POLICY)
+    assert [finding for finding in findings if finding.status == "violation"] == []
+    # This repository ships the placeholder tokens RSK011 looks for, so its
+    # own run is the first place its active exemption has to be visible.
+    assert [(finding.rule_id, finding.status) for finding in findings] == [
+        ("RSK011", "suppressed")
+    ]
 
 
 def test_repo_check_console_script_runs_end_to_end(tmp_path: Path) -> None:

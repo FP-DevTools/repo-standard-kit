@@ -1769,6 +1769,30 @@ def _unused_exemption(rule: Rule) -> Finding:
     )
 
 
+def _active_exemption(rule: Rule, reason: str, silenced: list[Finding]) -> Finding:
+    """Report what a declared exemption suppressed this run.
+
+    Twin of `_unused_exemption`, with the same split: `level` stays the rule's
+    canonical level and `status` carries what this line reports, which keeps
+    it out of the exit code. Reporting once beside the exemption rather than
+    once per silenced finding keeps the entry — the thing a reviewer weighs —
+    from being buried under the findings it hid; `actual` carries where.
+    """
+    return Finding(
+        rule.id,
+        rule.title,
+        rule.level,
+        "pyproject.toml",
+        None,
+        f"{rule.id} is exempted in [tool.repo-check.ignore] and suppressed "
+        f"{len(silenced)} finding(s) this run: {reason}",
+        sorted({finding.path for finding in silenced}),
+        None,
+        rule.remediation,
+        "suppressed",
+    )
+
+
 def check_repo(
     root: Path,
     policy: Policy,
@@ -1793,6 +1817,18 @@ def check_repo(
         )
     ignored = _load_ignore_config(root, policy)
     kept = [finding for finding in findings if finding.rule_id not in ignored]
+    # A suppression that leaves no trace makes a green run and a run that only
+    # looks green the same output, so every exemption that silenced something
+    # reports it.
+    silenced = set(ignored) & {finding.rule_id for finding in findings}
+    kept.extend(
+        _active_exemption(
+            policy.rule(rule_id),
+            ignored[rule_id],
+            [finding for finding in findings if finding.rule_id == rule_id],
+        )
+        for rule_id in sorted(silenced)
+    )
     # Only a rule this run actually evaluated can be reported as suppressing
     # nothing: a rule the profile excludes, or a platform rule nobody asked
     # for, had no finding to suppress in the first place.

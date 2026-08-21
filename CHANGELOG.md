@@ -126,6 +126,20 @@ the changes listed under **Adopters must**.
   `--check-enforcement`, is not evaluated and is never reported this way.
   `repo-adopt` reports the same finding and applies the same rule to its own
   exit code.
+- **An exemption that suppressed something is reported too.** Every
+  `[tool.repo-check.ignore]` entry that silenced a finding emits one report
+  against `pyproject.toml` with the new `status` `suppressed`, at the rule's
+  own level, carrying the declared reason, how many findings it hid, and their
+  paths in `actual`. Before this, a suppressed required rule left no trace in
+  text or `--format json`, so a green `compliance` status was not evidence the
+  standard was met and no reviewer could tell the difference. The status keeps
+  it out of the exit code — silencing the failure is what the exemption is for
+  — and the last line of text output counts the rules an exemption silenced,
+  the way `pytest` counts skips. `repo-adopt`'s summary counts them on a line
+  of its own, apart from the findings it left unfixed, and its
+  clean-repository short circuit keys off the same `violation` rule, so a
+  report about the exemption configuration never makes adoption start
+  rewriting a repository that is clean by every rule.
 
 ### Changed
 
@@ -306,6 +320,15 @@ the changes listed under **Adopters must**.
   `README.md` and `AGENTS.md` name `repo-standard-kit` — and is deleted. The
   `RSK011` exemption stays; the kit really does ship the placeholder tokens it
   tests.
+- **`repo-adopt` left a stale version comment beside a SHA it had just
+  changed.** Repinning `uses: actions/checkout@v4 # v4.2.2` wrote the starter's
+  v7.0.1 SHA and kept `# v4.2.2` next to it, which Dependabot reads as the
+  pinned version, and where the adopter had no comment it added none — so the
+  version comment `docs/quality-gates.md` requires was missing or wrong either
+  way. A pin taken from the kit's own starter workflow now carries that
+  workflow's version comment with it. An action the kit does not pin is
+  reported as a conflict as before, and a SHA the repository chose itself
+  keeps its own comment untouched.
 
 ### Adopters must
 
