@@ -289,8 +289,15 @@ remediation. Markdown explains policy but supplies no executable values.
   `on` remains a string. RSK006 inspects only executable
   `jobs.quality.steps[*].run` nodes. Comments, echo, unrelated fields, and
   shell-wrapper strings do not satisfy commands, and neither does a command
-  reachable only under a condition the policy does not declare for the
+  reachable only under a shell condition the policy does not declare for the
   profile.
+- Step conditions are unmodelled. Only `run:` is collected, so a step's `if:`
+  and `continue-on-error:` are invisible to every workflow rule, RSK006 and
+  RSK030 included: a workflow whose gate steps all carry `if: false` passes
+  `--strict`. These rules prove the workflow spells the required commands, not
+  that a pull request runs them. See
+  [quality-gates.md](quality-gates.md#5-ci-pull-request-gates) for why the gap
+  is disclosed rather than closed.
 - Pre-commit is parsed structurally. RSK007 matches hook IDs, normalized entry
   and argument tokens, and policy-owned material fields such as filters and
   `pass_filenames`.
@@ -313,7 +320,7 @@ remediation. Markdown explains policy but supplies no executable values.
   invokes the checker, not that the invocation is meaningful: a contrived
   command naming the token passes, while a token inside a comment or a
   shell-wrapper string does not, and neither does an invocation reachable only
-  under a guard policy does not declare.
+  under a shell guard policy does not declare.
 - RSK014 requires pull request protection, stale approval dismissal, required
   status checks, strict up-to-date branches, conversation resolution, and
   administrator enforcement when platform checks are requested, but permits a

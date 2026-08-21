@@ -306,6 +306,24 @@ the changes listed under **Adopters must**.
   `README.md` and `AGENTS.md` name `repo-standard-kit` — and is deleted. The
   `RSK011` exemption stays; the kit really does ship the placeholder tokens it
   tests.
+- **The guard notes above promised more than the checker delivers.** They said
+  a required command behind "your own `if`" reports a finding, but in a
+  workflow that phrase reads as the step's `if:`, and the checker never sees
+  it: RSK006 and RSK030 collect `steps[*].run` bodies and model conditionals
+  found inside them. `if: false` on every gate step and on the `repo-check`
+  step leaves `repo-check . --strict` reporting `All checks passed!` at exit
+  0. The behaviour is unchanged and accepted — the kit is for internal
+  development, and the threat model does not cover an adopter disabling their
+  own workflow — but the notes are corrected and the limit is now stated in
+  `docs/quality-gates.md` §5 and `docs/compliance.md` §Structural Boundaries.
+- The `python-workspace` `AGENTS.md` called gate 4 "a documented no-op before
+  the workspace contains its first package". It is not: on a freshly generated
+  shell the build gate exits 2 with `Workspace does not contain any buildable
+  packages`. The gate chain is what policy declares
+  and does not change; the prose now says the gate fails until
+  `repo-add-package` adds the first package, and notes that CI guards the same
+  command with `compgen -G`. `docs/bootstrap-workflow.md` carried the same
+  claim and is corrected with it.
 
 ### Adopters must
 
@@ -351,8 +369,11 @@ to see what is left; the list below is what that repairs and what it cannot.
   requires the workflow to trigger on `pull_request` and one executed command
   in `jobs.compliance.steps[*].run` to contain `repo-check`, so a workflow
   reachable only by `workflow_dispatch`, a job that only checks out the
-  repository, or an invocation sitting behind your own `if` each report a
-  required finding. The prescribed form is the
+  repository, or an invocation guarded by a shell conditional inside the
+  `run:` body each report a required finding. A step's Actions-level `if:` is
+  not one of them: the checker reads `run:` bodies and nothing else, so a
+  `repo-check` step carrying `if: false` or `continue-on-error: true` still
+  satisfies RSK030. The prescribed form is the
   one in `docs/compliance.md` §Required CI workflow, which the starter kits
   ship; `repo-adopt` appends the starter's invocation step when it finds none.
 - Move any caller of this repository's reusable workflow from
@@ -367,13 +388,16 @@ to see what is left; the list below is what that repairs and what it cannot.
   may report its status check under a concatenated name rather than as
   `compliance`, which **RSK014** requires verbatim. `docs/compliance.md`
   records what is and is not known about that.
-- Re-check every conditional in `.github/workflows/quality.yml`. RSK006 no
-  longer accepts a required command that is reachable only under a condition
-  policy does not declare, so a gate-chain command behind your own `if`, an
-  `else` or `elif` branch, a loop, or a `case` arm is now unproven and reports
-  a required finding. The permitted guard per profile is published in
-  `docs/policy-reference.md`; `python-single` permits none, and
-  `python-workspace` permits only the packages-present guard.
+- Re-check every shell conditional in `.github/workflows/quality.yml`. RSK006
+  no longer accepts a required command that is reachable only under a shell
+  condition policy does not declare, so a gate-chain command behind an
+  undeclared shell `if`, an `else` or `elif` branch, a loop, or a `case` arm
+  is now unproven and reports a required finding. The permitted guard per
+  profile is published in `docs/policy-reference.md`; `python-single` permits
+  none, and `python-workspace` permits only the packages-present guard. This
+  reaches inside `run:` bodies only. A step's Actions-level `if:` and
+  `continue-on-error:` are unread, so a gate step disabled that way still
+  passes RSK006.
 - Expect a new RSK020 finding if you have no `quality.yml` or it does not
   parse. The rule previously discarded that error and passed silently, so a
   repository in that state gains a required finding it did not have.
