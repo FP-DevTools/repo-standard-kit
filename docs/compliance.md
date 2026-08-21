@@ -177,16 +177,16 @@ jobs:
 ```
 
 This form is shorter and the runner is maintained centrally, at the cost of
-being limited to the inputs that exist: `standard-ref`, `strict`, and
-`check-enforcement`. The reusable workflow SHALL itself be pinned to a full
-commit SHA, which selects the workflow implementation the caller trusts; the
-distinct `standard-ref` input selects the checker revision, on the same terms
-as the `--from` ref above. Every input reaches the step through the
-environment and never through interpolation into Bash source, so a caller's
-value is always one quoted argument and never shell to parse. That single
-property is what keeps the step to one unconditional command: with nothing to
-escape there is nothing to validate, and a boolean input that resolves to its
-own flag needs no branch to append it.
+running exactly one command with no options. `standard-ref` is the sole input,
+and it selects which checker runs rather than what that checker does: a
+repository that wants `--strict`, `--check-enforcement` or `--profile` owns
+the command instead, which is the prescribed form above. The reusable workflow
+SHALL itself be pinned to a full commit SHA, which selects the workflow
+implementation the caller trusts; the distinct `standard-ref` input selects
+the checker revision, on the same terms as the `--from` ref above. That input
+reaches the step through the environment and never through interpolation into
+Bash source, so a caller's value is always one quoted argument and never shell
+to parse — which is why the step needs no validation of its own.
 
 Confirm the caller emits the required `compliance` status before relying on
 this form, and treat the following as the reason it is the alternative rather
@@ -200,10 +200,11 @@ is named, and this repository has not observed it. Do not treat it as settled
 in either direction — observe the check name your caller actually produces.
 
 `--check-enforcement` remains a distinct, authenticated platform audit. Add it
-to the command, or set the reusable workflow's `check-enforcement` input, only
-when the job has GitHub CLI authentication and the repository plan exposes
-branch protection or rulesets. A green default `compliance` job proves structural alignment; it does
-not prove that GitHub requires `quality` and `compliance` before merge.
+to the command only when the job has GitHub CLI authentication and the
+repository plan exposes branch protection or rulesets; wanting it is itself a
+reason to own the command rather than call the reusable workflow. A green
+default `compliance` job proves structural alignment; it does not prove that
+GitHub requires `quality` and `compliance` before merge.
 
 The isolated `uvx` path is portable within the maintained profiles, not fully
 hermetic or universal: it currently assumes GitHub Actions on `ubuntu-latest`,

@@ -432,11 +432,9 @@ def test_reusable_compliance_workflow_is_the_only_workflow_call_surface() -> Non
     workflow = load_yaml(workflow_text)
 
     assert set(workflow["on"]) == {"workflow_call"}
-    assert set(workflow["on"]["workflow_call"]["inputs"]) == {
-        "standard-ref",
-        "strict",
-        "check-enforcement",
-    }
+    # The one input selects which checker runs. Tuning what it checks is the
+    # uvx-direct form's job, which is why that form is the prescribed one.
+    assert set(workflow["on"]["workflow_call"]["inputs"]) == {"standard-ref"}
     assert workflow["permissions"] == {"contents": "read"}
     assert "  compliance:\n    name: compliance\n" in workflow_text
     assert "uvx \\" in workflow_text
@@ -451,20 +449,14 @@ def test_reusable_compliance_workflow_keeps_inputs_out_of_shell_source() -> None
         if step.get("name") == "Run repo-check"
     )
 
-    assert run_step["env"] == {
-        "REPO_STANDARD_REF": "${{ inputs.standard-ref }}",
-        "STRICT": "${{ inputs.strict && '--strict' || '' }}",
-        "CHECK_ENFORCEMENT": (
-            "${{ inputs.check-enforcement && '--check-enforcement' || '' }}"
-        ),
-    }
+    assert run_step["env"] == {"REPO_STANDARD_REF": "${{ inputs.standard-ref }}"}
     run = run_step["run"]
     assert "${{ inputs." not in run
     assert "$REPO_STANDARD_REF" in run
 
 
 def test_reusable_compliance_workflow_step_holds_no_conditional() -> None:
-    """The env indirection carries every input, so the step is one command."""
+    """One input that only selects a ref leaves nothing for the step to decide."""
     workflow = load_yaml(REUSABLE_COMPLIANCE_WORKFLOW.read_text(encoding="utf-8"))
     run = next(
         step["run"]
@@ -475,7 +467,7 @@ def test_reusable_compliance_workflow_step_holds_no_conditional() -> None:
     assert not re.search(r"\b(if|elif|else|fi|case|esac|for|while)\b", run)
 
 
-def _reusable_workflow_argv(tmp_path: Path, **env_overrides: str) -> tuple[str, ...]:
+def _reusable_workflow_argv(tmp_path: Path, standard_ref: str) -> tuple[str, ...]:
     """Execute the reusable workflow's step against a uvx stub, returning argv."""
     workflow = load_yaml(REUSABLE_COMPLIANCE_WORKFLOW.read_text(encoding="utf-8"))
     run = next(
@@ -495,7 +487,7 @@ def _reusable_workflow_argv(tmp_path: Path, **env_overrides: str) -> tuple[str, 
         pytest.skip("Bash is required to execute the reusable-workflow step")
 
     bin_dir = tmp_path / "bin"
-    bin_dir.mkdir(exist_ok=True)
+    bin_dir.mkdir()
     stub = bin_dir / "uvx"
     stub.write_text(
         '#!/usr/bin/env bash\nfor a in "$@"; do printf "%s\\n" "$a"; done\n',
@@ -508,10 +500,7 @@ def _reusable_workflow_argv(tmp_path: Path, **env_overrides: str) -> tuple[str, 
     env.update(
         {
             "PATH": os.pathsep.join((str(bin_dir), env["PATH"])),
-            "REPO_STANDARD_REF": "v1.2.0",
-            "STRICT": "",
-            "CHECK_ENFORCEMENT": "",
-            **env_overrides,
+            "REPO_STANDARD_REF": standard_ref,
         }
     )
     result = subprocess.run(
@@ -525,14 +514,14 @@ def _reusable_workflow_argv(tmp_path: Path, **env_overrides: str) -> tuple[str, 
     return tuple(result.stdout.splitlines())
 
 
-def test_reusable_compliance_workflow_passes_only_the_requested_flags(
-    tmp_path: Path,
-) -> None:
-    """Empty flag variables vanish; set ones arrive as single arguments."""
-    assert _reusable_workflow_argv(tmp_path)[-2:] == ("repo-check", ".")
-    assert _reusable_workflow_argv(
-        tmp_path, STRICT="--strict", CHECK_ENFORCEMENT="--check-enforcement"
-    )[-4:] == ("repo-check", ".", "--strict", "--check-enforcement")
+def test_reusable_compliance_workflow_runs_one_fixed_command(tmp_path: Path) -> None:
+    """The ref is the only thing a caller can move; the argv is otherwise fixed."""
+    assert _reusable_workflow_argv(tmp_path, "v1.2.0") == (
+        "--from",
+        "git+https://github.com/FP-DevTools/repo-standard-kit.git@v1.2.0",
+        "repo-check",
+        ".",
+    )
 
 
 def test_reusable_compliance_workflow_cannot_be_escaped_by_a_hostile_ref(
@@ -543,7 +532,7 @@ def test_reusable_compliance_workflow_cannot_be_escaped_by_a_hostile_ref(
     This is why the step needs no character allowlist of its own: nothing a
     caller supplies is ever parsed as Bash, so there is no escape to reject.
     """
-    argv = _reusable_workflow_argv(tmp_path, REPO_STANDARD_REF="v1.2.0; rm -rf /")
+    argv = _reusable_workflow_argv(tmp_path, "v1.2.0; rm -rf /")
 
     assert argv == (
         "--from",

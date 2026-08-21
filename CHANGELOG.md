@@ -132,6 +132,11 @@ the changes listed under **Adopters must**.
   repository is now this repository's own `pull_request` gate and nothing else:
   one file per trigger, so neither workflow branches on the event name or on
   whether a ref input was supplied.
+- **The reusable workflow drops its `strict` and `check-enforcement` inputs**
+  and now runs one fixed command, leaving `standard-ref` as its sole input.
+  Both flags are reasons to own the command, which the prescribed form above
+  exists to make easy; keeping them as inputs was the whole of what remained
+  conditional in the step.
 - **RSK015 moves from `recommended` to `advisory`.** Section 13 of
   `docs/quality-gates.md` declares `line-length = 88` a per-repository decision
   that needs no exemption, so a rule firing at `recommended` was failing
@@ -280,11 +285,14 @@ to see what is left; the list below is what that repairs and what it cannot.
   `…/.github/workflows/compliance.yml@<sha>` to
   `…/.github/workflows/compliance-reusable.yml@<sha>`. The old path is now a
   `pull_request` workflow of this repository's own and is no longer callable;
-  a caller left on it fails to resolve the workflow. Its inputs are unchanged.
-  Consider moving to the prescribed uvx-direct form instead: the reusable form
-  is supported, but a called workflow's job may report its status check under a
-  concatenated name rather than as `compliance`, which **RSK014** requires
-  verbatim. `docs/compliance.md` records what is and is not known about that.
+  a caller left on it fails to resolve the workflow. `standard-ref` is now its
+  sole input: the `strict` and `check-enforcement` booleans are gone, and a
+  `with:` block still passing either fails the call. Move such a caller to the
+  uvx-direct form, where the flag goes in the command it owns. Consider that
+  form regardless: the reusable form is supported, but a called workflow's job
+  may report its status check under a concatenated name rather than as
+  `compliance`, which **RSK014** requires verbatim. `docs/compliance.md`
+  records what is and is not known about that.
 - Re-check every conditional in `.github/workflows/quality.yml`. RSK006 no
   longer accepts a required command that is reachable only under a condition
   policy does not declare, so a gate-chain command behind your own `if`, an

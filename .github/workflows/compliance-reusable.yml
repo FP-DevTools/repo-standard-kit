@@ -9,16 +9,6 @@ on:
           policy should execute.
         type: string
         required: true
-      strict:
-        description: "Treat 'should' findings as failures too."
-        type: boolean
-        default: false
-      check-enforcement:
-        description: >-
-          Also check branch protection (§10). Needs gh and auth in the
-          caller's job.
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -34,17 +24,13 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
-      # Every input is resolved into the environment, never into Bash source,
-      # so no caller-supplied value is ever parsed as shell. The two flag
-      # variables are therefore deliberately unquoted below: each holds either
-      # one option or nothing, and word splitting is what drops the nothing.
+      # The ref is resolved into the environment, never into Bash source, so a
+      # caller's value is always one quoted argument and never shell to parse.
       - name: Run repo-check
         shell: bash
         env:
           REPO_STANDARD_REF: ${{ inputs.standard-ref }}
-          STRICT: ${{ inputs.strict && '--strict' || '' }}
-          CHECK_ENFORCEMENT: ${{ inputs.check-enforcement && '--check-enforcement' || '' }}
         run: |
           uvx \
             --from "git+https://github.com/FP-DevTools/repo-standard-kit.git@$REPO_STANDARD_REF" \
-            repo-check . $STRICT $CHECK_ENFORCEMENT
+            repo-check .
