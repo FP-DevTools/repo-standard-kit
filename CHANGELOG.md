@@ -89,10 +89,20 @@ the changes listed under **Adopters must**.
   `.github/workflows/compliance.yml` to exist, RSK028 (**required**) requires
   its `compliance` job's effective permissions to be exactly `contents: read`,
   and RSK029 (**required**) requires every remote action and reusable workflow
-  in it to carry a 40-character commit SHA. No rule requires the job to run a
-  particular command: both shipped invocations sit inside conditional branches
-  that RSK006's guard semantics leave unproven, so RSK027's rationale records
-  the gap rather than closing it with a rule this repository could not satisfy.
+  in it to carry a 40-character commit SHA.
+- **RSK030 (required): the compliance job has to invoke the checker.** An
+  existing, least-privileged, fully pinned compliance workflow could still
+  execute nothing. The rule requires the workflow to trigger on
+  `pull_request` — the other three pass on one no pull request ever starts —
+  and requires one executed command in `jobs.compliance.steps[*].run` to carry
+  `repo-check` in its argument list.
+  Policy owns the token, and the match is containment rather than an exact
+  command, because an adopter runs a released checker with `uvx` while this
+  repository runs its own working tree with `uv run` — both correct. The claim
+  is correspondingly modest and its rationale says so: a contrived command
+  naming the token passes. Reusing RSK006's guard machinery, an invocation
+  reachable only under a condition policy does not declare does not count, and
+  neither profile declares one.
 - **The `advisory` policy level**, below `recommended`: always reported, never
   blocking, not even under `--strict`. It exists for a rule that names a
   preferred value for a decision the normative prose leaves to the repository.
@@ -110,6 +120,23 @@ the changes listed under **Adopters must**.
   the wrong sequence used to pass, and now reports a required finding. Its
   required set also grows from ten sections to twelve, with `Agent Operating
   Mode` and `Single Source Of Truth` added above.
+- **The prescribed compliance workflow is now the uvx-direct form**, the one
+  both starter kits already ship: the adopter's own `compliance` job running
+  `uvx --from "git+…@<ref>" repo-check .`. `docs/compliance.md` prescribed the
+  reusable-workflow form instead, so the required section and the generated
+  repository disagreed. Owning the command means an option the checker accepts
+  is an edit to that line rather than a request for a workflow input.
+- **The reusable workflow moves to
+  `.github/workflows/compliance-reusable.yml`** and remains supported as an
+  alternative, documented with its trade-off. `compliance.yml` in this
+  repository is now this repository's own `pull_request` gate and nothing else:
+  one file per trigger, so neither workflow branches on the event name or on
+  whether a ref input was supplied.
+- **The reusable workflow drops its `strict` and `check-enforcement` inputs**
+  and now runs one fixed command, leaving `standard-ref` as its sole input.
+  Both flags are reasons to own the command, which the prescribed form above
+  exists to make easy; keeping them as inputs was the whole of what remained
+  conditional in the step.
 - **RSK015 moves from `recommended` to `advisory`.** Section 13 of
   `docs/quality-gates.md` declares `line-length = 88` a per-repository decision
   that needs no exemption, so a rule firing at `recommended` was failing
@@ -208,7 +235,7 @@ the changes listed under **Adopters must**.
 
 ### Adopters must
 
-Seven new required rules and four behaviour changes land here. Run
+Eight new required rules and four behaviour changes land here. Run
 `repo-adopt .` to have most of it done for you, then `repo-check . --strict`
 to see what is left; the list below is what that repairs and what it cannot.
 
@@ -246,6 +273,26 @@ to see what is left; the list below is what that repairs and what it cannot.
   on your behalf, so an unpinned action you added there is reported, not
   repaired. `docs/quality-gates.md` §5 already required this job; only the
   structural checks are new.
+- Make sure that job actually runs the checker, on pull requests. **RSK030**
+  requires the workflow to trigger on `pull_request` and one executed command
+  in `jobs.compliance.steps[*].run` to contain `repo-check`, so a workflow
+  reachable only by `workflow_dispatch`, a job that only checks out the
+  repository, or an invocation sitting behind your own `if` each report a
+  required finding. The prescribed form is the
+  one in `docs/compliance.md` §Required CI workflow, which the starter kits
+  ship; `repo-adopt` appends the starter's invocation step when it finds none.
+- Move any caller of this repository's reusable workflow from
+  `…/.github/workflows/compliance.yml@<sha>` to
+  `…/.github/workflows/compliance-reusable.yml@<sha>`. The old path is now a
+  `pull_request` workflow of this repository's own and is no longer callable;
+  a caller left on it fails to resolve the workflow. `standard-ref` is now its
+  sole input: the `strict` and `check-enforcement` booleans are gone, and a
+  `with:` block still passing either fails the call. Move such a caller to the
+  uvx-direct form, where the flag goes in the command it owns. Consider that
+  form regardless: the reusable form is supported, but a called workflow's job
+  may report its status check under a concatenated name rather than as
+  `compliance`, which **RSK014** requires verbatim. `docs/compliance.md`
+  records what is and is not known about that.
 - Re-check every conditional in `.github/workflows/quality.yml`. RSK006 no
   longer accepts a required command that is reachable only under a condition
   policy does not declare, so a gate-chain command behind your own `if`, an

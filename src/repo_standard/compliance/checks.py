@@ -600,6 +600,33 @@ def _workflow_job(
     return document, jobs[config["job"]], []
 
 
+def _job_shell_commands(
+    document: YamlDocument, job: dict[str, Any], config: dict[str, Any]
+) -> tuple[list[ShellCommand], Issue | None]:
+    steps = job.get("steps")
+    if not isinstance(steps, list):
+        return [], Issue(
+            config["path"],
+            f"Job {config['job']!r} has no executable steps.",
+            steps,
+            "list of run steps",
+            document.line("jobs", config["job"], "steps"),
+        )
+    commands: list[ShellCommand] = []
+    for step in steps:
+        if isinstance(step, dict) and isinstance(step.get("run"), str):
+            commands.extend(_shell_commands(step["run"]))
+    return commands, None
+
+
+def _permitted_guards(declared: list[str]) -> set[tuple[str, ...]]:
+    return {tuple(shlex.split(guard)) for guard in declared}
+
+
+def _is_executed(command: ShellCommand, permitted: set[tuple[str, ...]]) -> bool:
+    return all(guard in permitted for guard in command.guards)
+
+
 def _github_workflow_commands(
     context: CheckContext, config: dict[str, Any]
 ) -> list[Issue]:
@@ -620,29 +647,17 @@ def _github_workflow_commands(
                 document.line("on"),
             )
         )
-    steps = job.get("steps")
-    if not isinstance(steps, list):
-        issues.append(
-            Issue(
-                config["path"],
-                f"Job {config['job']!r} has no executable steps.",
-                steps,
-                "list of run steps",
-                document.line("jobs", config["job"], "steps"),
-            )
-        )
+    actual_commands, error = _job_shell_commands(document, job, config)
+    if error is not None:
+        issues.append(error)
         return issues
-    actual_commands: list[ShellCommand] = []
-    for step in steps:
-        if isinstance(step, dict) and isinstance(step.get("run"), str):
-            actual_commands.extend(_shell_commands(step["run"]))
     declared_guards = config["guards_by_profile"][context.profile]
-    permitted = {tuple(shlex.split(guard)) for guard in declared_guards}
+    permitted = _permitted_guards(declared_guards)
     present = {command.tokens for command in actual_commands}
     executed = {
         command.tokens
         for command in actual_commands
-        if all(guard in permitted for guard in command.guards)
+        if _is_executed(command, permitted)
     }
     required = [
         tuple(shlex.split(command))
@@ -676,6 +691,73 @@ def _github_workflow_commands(
                 line,
             )
         )
+    return issues
+
+
+def _github_workflow_invocation(
+    context: CheckContext, config: dict[str, Any]
+) -> list[Issue]:
+    """Require a job to execute a command carrying the token policy names.
+
+    The same correct invocation is spelled differently in different
+    repositories — an adopter runs a released checker with `uvx`, this
+    repository runs its own working tree with `uv run` — so an exact argv, the
+    way `_github_workflow_commands` matches, cannot express the requirement.
+    Containment can, at the cost of a weaker claim: the job satisfies the rule
+    when an executed command's argument list contains the token, whatever else
+    that command does.
+    """
+    document, job, errors = _workflow_job(context, config)
+    if errors:
+        return errors
+    assert document is not None
+    assert job is not None
+    assert isinstance(document.data, dict)
+    issues: list[Issue] = []
+    # A job that never starts invokes nothing, so the trigger is part of the
+    # claim rather than a separate rule's business.
+    if not _trigger_present(document.data.get("on"), config["trigger"]):
+        issues.append(
+            Issue(
+                config["path"],
+                f"Workflow does not trigger on {config['trigger']}.",
+                document.data.get("on"),
+                config["trigger"],
+                document.line("on"),
+            )
+        )
+    commands, error = _job_shell_commands(document, job, config)
+    if error is not None:
+        issues.append(error)
+        return issues
+    token = config["token"]
+    declared_guards = config["guards_by_profile"][context.profile]
+    permitted = _permitted_guards(declared_guards)
+    invocations = [command for command in commands if token in command.tokens]
+    line = document.line("jobs", config["job"], "steps")
+    if any(_is_executed(command, permitted) for command in invocations):
+        return issues
+    if invocations:
+        issues.append(
+            Issue(
+                config["path"],
+                f"Job {config['job']!r} invokes {token} only under an undeclared "
+                "guard.",
+                [shlex.join(command.tokens) for command in invocations],
+                list(declared_guards),
+                line,
+            )
+        )
+        return issues
+    issues.append(
+        Issue(
+            config["path"],
+            f"Job {config['job']!r} executes no command invoking {token}.",
+            [shlex.join(command.tokens) for command in commands],
+            token,
+            line,
+        )
+    )
     return issues
 
 
@@ -1610,6 +1692,7 @@ CHECK_HANDLERS: dict[str, CheckHandler] = {
     "agents_operating_dials": _agents_operating_dials,
     "text_pattern_each": _text_pattern_each,
     "github_workflow_commands": _github_workflow_commands,
+    "github_workflow_invocation": _github_workflow_invocation,
     "pre_commit_hooks": _pre_commit_hooks,
     "uv_build_backend": _uv_build_backend,
     "ruff_baseline": _ruff_baseline,

@@ -431,7 +431,7 @@ Remediation: State each dial in the Agent Operating Mode section of AGENTS.md, i
 - Enforcement: `structural`
 - Check kind: `path_exists`
 
-Rationale: The compliance job is what stops the rest of the standard from drifting, so its absence has to be a finding of its own. Existence is all this rule claims: no rule requires the job to run a particular command, because the checker is invoked one way against a pinned release and another against the working tree, and both forms sit inside conditional branches that RSK006's guard semantics leave unproven. A compliance workflow that exists, grants only contents: read, and pins every action can still execute nothing.
+Rationale: The compliance job is what stops the rest of the standard from drifting, so its absence has to be a finding of its own. Existence is all this rule claims; RSK030 separately requires the job to invoke the checker.
 
 Remediation: Add .github/workflows/compliance.yml with a compliance job that checks the repository against repo-standard-kit on pull requests.
 
@@ -458,6 +458,23 @@ Remediation: Set the compliance job's effective permissions to exactly `contents
 Rationale: The compliance workflow already executes code fetched from outside the repository, so a mutable action reference beside it is the widest unpinned surface the standard ships.
 
 Remediation: Pin every remote action and reusable workflow in the compliance workflow to a 40-character SHA.
+
+### RSK030: Compliance workflow invokes the checker
+
+- Level: `required`
+- Profiles: `python-single`, `python-workspace`
+- Source: [`docs/quality-gates.md` — 5. CI Pull Request Gates](../docs/quality-gates.md)
+- Enforcement: `structural`
+- Check kind: `github_workflow_invocation`
+
+Rationale: RSK027, RSK028 and RSK029 leave a compliance workflow that exists, grants only contents: read, and pins every action free to execute nothing. This rule requires the job to run the checker on pull requests: a workflow that never triggers on one satisfies the other three while leaving the SHALL in section 5 unmet, so the trigger belongs to this claim rather than to a rule of its own. It matches by containment rather than by exact command because the same correct invocation is spelled differently in different repositories, so the guarantee is correspondingly weak: it proves that an executed command's argument list carries the token policy names, not that the command is a genuine compliance run, and a contrived command mentioning the token satisfies it. What it does exclude is a token appearing only in a comment, which the shell lexer discards, and an invocation reachable only under a condition policy does not declare for the profile.
+
+Remediation: Trigger the compliance workflow on pull_request, and run repo-check from a step of its compliance job, unguarded or under a condition policy declares for the profile.
+
+| Profile | Permitted guard |
+| --- | --- |
+| `python-single` | none |
+| `python-workspace` | none |
 
 ## Retired Rule IDs
 

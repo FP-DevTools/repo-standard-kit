@@ -57,6 +57,10 @@ MANDATORY_PRE_COMMIT_ENTRIES = [
 
 STARTER_KIT_PROFILES = ("python-single", "python-workspace")
 
+REUSABLE_COMPLIANCE_WORKFLOW = (
+    REPO_ROOT / ".github" / "workflows" / "compliance-reusable.yml"
+)
+
 STARTER_KIT_ROOT = Path("src") / "repo_standard" / "starter_kits"
 
 
@@ -397,9 +401,8 @@ def test_compliance_workflows_emit_an_independent_required_status() -> None:
     assert len(setup_uv_refs) == 1
 
     root_workflow = workflow_paths[0].read_text(encoding="utf-8")
-    assert "  workflow_call:\n" in root_workflow
+    assert "  workflow_call:\n" not in root_workflow
     assert "uv run --locked --no-dev repo-check ." in root_workflow
-    assert "uvx \\" in root_workflow
     version = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
         "project"
     ]["version"]
@@ -409,9 +412,36 @@ def test_compliance_workflows_emit_an_independent_required_status() -> None:
         )
 
 
+@pytest.mark.parametrize("profile", STARTER_KIT_PROFILES)
+def test_documented_required_workflow_is_the_shape_the_kits_ship(profile: str) -> None:
+    """The prescribed shape and the shipped starter must not drift apart."""
+    starter = (
+        starter_kit_dir(profile) / ".github" / "workflows" / "compliance.yml"
+    ).read_text(encoding="utf-8")
+    documented = re.findall(
+        r"```yaml\n(.*?)```",
+        (REPO_ROOT / "docs" / "compliance.md").read_text(encoding="utf-8"),
+        re.DOTALL,
+    )
+
+    assert starter in documented
+
+
+def test_reusable_compliance_workflow_is_the_only_workflow_call_surface() -> None:
+    workflow_text = REUSABLE_COMPLIANCE_WORKFLOW.read_text(encoding="utf-8")
+    workflow = load_yaml(workflow_text)
+
+    assert set(workflow["on"]) == {"workflow_call"}
+    # The one input selects which checker runs. Tuning what it checks is the
+    # uvx-direct form's job, which is why that form is the prescribed one.
+    assert set(workflow["on"]["workflow_call"]["inputs"]) == {"standard-ref"}
+    assert workflow["permissions"] == {"contents": "read"}
+    assert "  compliance:\n    name: compliance\n" in workflow_text
+    assert "uvx \\" in workflow_text
+
+
 def test_reusable_compliance_workflow_keeps_inputs_out_of_shell_source() -> None:
-    workflow_path = REPO_ROOT / ".github" / "workflows" / "compliance.yml"
-    workflow_text = workflow_path.read_text(encoding="utf-8")
+    workflow_text = REUSABLE_COMPLIANCE_WORKFLOW.read_text(encoding="utf-8")
     workflow = load_yaml(workflow_text)
     run_step = next(
         step
@@ -419,41 +449,27 @@ def test_reusable_compliance_workflow_keeps_inputs_out_of_shell_source() -> None
         if step.get("name") == "Run repo-check"
     )
 
-    assert run_step["env"] == {
-        "REPO_STANDARD_REF": "${{ inputs.standard-ref }}",
-        "STRICT": "${{ inputs.strict }}",
-        "CHECK_ENFORCEMENT": "${{ inputs.check-enforcement }}",
-    }
+    assert run_step["env"] == {"REPO_STANDARD_REF": "${{ inputs.standard-ref }}"}
     run = run_step["run"]
     assert "${{ inputs." not in run
     assert "$REPO_STANDARD_REF" in run
-    assert '$STRICT" = "true' in run
-    assert '$CHECK_ENFORCEMENT" = "true' in run
 
 
-def test_reusable_compliance_workflow_validates_standard_ref() -> None:
-    workflow_text = (REPO_ROOT / ".github" / "workflows" / "compliance.yml").read_text(
-        encoding="utf-8"
+def test_reusable_compliance_workflow_step_holds_no_conditional() -> None:
+    """One input that only selects a ref leaves nothing for the step to decide."""
+    workflow = load_yaml(REUSABLE_COMPLIANCE_WORKFLOW.read_text(encoding="utf-8"))
+    run = next(
+        step["run"]
+        for step in workflow["jobs"]["compliance"]["steps"]
+        if step.get("name") == "Run repo-check"
     )
 
-    assert '[[ ! "$REPO_STANDARD_REF" =~ ^[A-Za-z0-9._/-]+$ ]]' in workflow_text
-    assert 'echo "Invalid repo-standard-kit ref" >&2' in workflow_text
-    assert "exit 2" in workflow_text
-    assert "repo-standard-kit.git@$REPO_STANDARD_REF" in workflow_text
+    assert not re.search(r"\b(if|elif|else|fi|case|esac|for|while)\b", run)
 
 
-@pytest.mark.parametrize(
-    ("standard_ref", "expected_returncode"),
-    [("v1.2.0", 42), ("", 41)],
-    ids=["adopter-pull-request", "direct-pull-request"],
-)
-def test_reusable_compliance_workflow_selects_the_correct_checker_environment(
-    tmp_path: Path,
-    standard_ref: str,
-    expected_returncode: int,
-) -> None:
-    workflow_path = REPO_ROOT / ".github" / "workflows" / "compliance.yml"
-    workflow = load_yaml(workflow_path.read_text(encoding="utf-8"))
+def _reusable_workflow_argv(tmp_path: Path, standard_ref: str) -> tuple[str, ...]:
+    """Execute the reusable workflow's step against a uvx stub, returning argv."""
+    workflow = load_yaml(REUSABLE_COMPLIANCE_WORKFLOW.read_text(encoding="utf-8"))
     run = next(
         step["run"]
         for step in workflow["jobs"]["compliance"]["steps"]
@@ -472,28 +488,58 @@ def test_reusable_compliance_workflow_selects_the_correct_checker_environment(
 
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    for command, returncode in (("uv", 41), ("uvx", 42)):
-        stub = bin_dir / command
-        stub.write_text(
-            f"#!/usr/bin/env bash\nexit {returncode}\n",
-            encoding="utf-8",
-            newline="\n",
-        )
-        stub.chmod(0o755)
+    stub = bin_dir / "uvx"
+    stub.write_text(
+        '#!/usr/bin/env bash\nfor a in "$@"; do printf "%s\\n" "$a"; done\n',
+        encoding="utf-8",
+        newline="\n",
+    )
+    stub.chmod(0o755)
 
     env = os.environ.copy()
     env.update(
         {
             "PATH": os.pathsep.join((str(bin_dir), env["PATH"])),
-            "GITHUB_EVENT_NAME": "pull_request",
             "REPO_STANDARD_REF": standard_ref,
-            "STRICT": "false",
-            "CHECK_ENFORCEMENT": "false",
         }
     )
-    result = subprocess.run([bash, "-c", run], cwd=REPO_ROOT, env=env, check=False)
+    result = subprocess.run(
+        [bash, "-c", run],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return tuple(result.stdout.splitlines())
 
-    assert result.returncode == expected_returncode
+
+def test_reusable_compliance_workflow_runs_one_fixed_command(tmp_path: Path) -> None:
+    """The ref is the only thing a caller can move; the argv is otherwise fixed."""
+    assert _reusable_workflow_argv(tmp_path, "v1.2.0") == (
+        "--from",
+        "git+https://github.com/FP-DevTools/repo-standard-kit.git@v1.2.0",
+        "repo-check",
+        ".",
+    )
+
+
+def test_reusable_compliance_workflow_cannot_be_escaped_by_a_hostile_ref(
+    tmp_path: Path,
+) -> None:
+    """A ref is quoted into one argument, so shell metacharacters stay inert.
+
+    This is why the step needs no character allowlist of its own: nothing a
+    caller supplies is ever parsed as Bash, so there is no escape to reject.
+    """
+    argv = _reusable_workflow_argv(tmp_path, "v1.2.0; rm -rf /")
+
+    assert argv == (
+        "--from",
+        "git+https://github.com/FP-DevTools/repo-standard-kit.git@v1.2.0; rm -rf /",
+        "repo-check",
+        ".",
+    )
 
 
 def test_root_pyproject_uses_uv_build_backend() -> None:

@@ -48,6 +48,10 @@ CHECK_SCHEMAS: dict[str, tuple[set[str], set[str]]] = {
         {"path", "job", "trigger", "commands_by_profile", "guards_by_profile"},
         set(),
     ),
+    "github_workflow_invocation": (
+        {"path", "job", "trigger", "token", "guards_by_profile"},
+        set(),
+    ),
     "pre_commit_hooks": ({"path", "hooks"}, set()),
     "uv_build_backend": ({"path", "backend"}, {"allow_missing_profiles"}),
     "ruff_baseline": ({"path", "required_select", "require_line_length"}, set()),
@@ -380,6 +384,7 @@ def _validate_check_config(kind: str, config: dict[str, Any], location: str) -> 
         "standard_major",
         "shape",
         "section",
+        "token",
     ):
         if key in config:
             _string(config[key], f"{location}.{key}")
