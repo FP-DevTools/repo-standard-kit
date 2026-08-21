@@ -70,6 +70,19 @@ def _supports_color() -> bool:
     return sys.stdout.isatty()
 
 
+def _render(value: object, *, limit: int = 4) -> str:
+    """Render a finding value, keeping a long list readable on one line.
+
+    A list-valued `actual` is a set of locations, and the whole set can run to
+    dozens. Text output is read by a person, so it carries enough to act on and
+    a count of the rest; `--format json` still emits every entry.
+    """
+    if isinstance(value, list) and len(value) > limit:
+        shown = ", ".join(repr(item) for item in value[:limit])
+        return f"[{shown}, +{len(value) - limit} more]"
+    return repr(value)
+
+
 def _format_text(findings: list[Finding], *, color: bool) -> str:
     if not findings:
         message = "All checks passed!"
@@ -88,7 +101,7 @@ def _format_text(findings: list[Finding], *, color: bool) -> str:
             f"{finding.title}: {finding.message}"
         )
         if finding.actual is not None:
-            lines.append(f"  actual: {finding.actual!r}")
+            lines.append(f"  actual: {_render(finding.actual)}")
         if finding.expected is not None:
             lines.append(f"  expected: {finding.expected!r}")
         lines.append(f"  remediation: {finding.remediation}")

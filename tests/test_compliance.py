@@ -1891,6 +1891,30 @@ def test_success_output_uses_positive_brand_color() -> None:
     )
 
 
+def test_a_long_list_value_stays_readable_in_text_output() -> None:
+    """Text output is read by a person; JSON keeps every entry."""
+    finding = Finding(
+        "RSK011",
+        "Bootstrap placeholders are fully rendered",
+        "required",
+        "pyproject.toml",
+        None,
+        "message",
+        [f"path{index}.md" for index in range(21)],
+        None,
+        "remediation",
+        "suppressed",
+    )
+
+    text = cli._format_text([finding], color=False)
+
+    assert (
+        "  actual: ['path0.md', 'path1.md', 'path2.md', 'path3.md', +17 more]" in text
+    )
+    assert "path20.md" not in text
+    assert json.loads(cli._format_json([finding]))[0]["actual"][-1] == "path20.md"
+
+
 def test_strict_mode_only_promotes_recommended_findings(tmp_path: Path) -> None:
     root = _minimal_repo(tmp_path)
     (root / "docs" / "adr").rmdir()

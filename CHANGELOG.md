@@ -338,6 +338,11 @@ the changes listed under **Adopters must**.
   `repo-add-package` adds the first package, and notes that CI guards the same
   command with `compgen -G`. `docs/bootstrap-workflow.md` carried the same
   claim and is corrected with it.
+- Text output truncates a list-valued `actual` after four entries and counts
+  the rest. The active-exemption report above carries every silenced path, and
+  this repository's own RSK011 entry lists twenty-one of them, which put a
+  1,400-character line in front of a reader who needed the count.
+  `--format json` still emits the full list.
 - **`repo-adopt` left a stale version comment beside a SHA it had just
   changed.** Repinning `uses: actions/checkout@v4 # v4.2.2` wrote the starter's
   v7.0.1 SHA and kept `# v4.2.2` next to it, which Dependabot reads as the
