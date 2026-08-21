@@ -315,8 +315,8 @@ Each later `repo-add-package --package-name widget_api` run adds:
 - The repository passes the full `docs/quality-gates.md` chain, which needs the
   `uv.lock` the default path produces
 - `[tool.repo-standard]` declares the generated profile and standard major
-- The quality workflow grants only `contents: read` and pins remote actions to
-  full commit SHAs; Dependabot is configured to propose GitHub Actions updates
+- Both workflows grant only `contents: read` and pin remote actions to full
+  commit SHAs; Dependabot is configured to propose GitHub Actions updates
 - Separate `quality` and `compliance` status checks run on pull requests and
   are suitable for branch-protection enforcement
 
