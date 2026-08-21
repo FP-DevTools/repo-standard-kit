@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import copy
-import importlib.metadata
 import json
 import os
 import re
@@ -27,6 +26,7 @@ from repo_standard.compliance.checks import Finding, check_repo, load_policy
 from repo_standard.github_references import is_full_commit_sha
 from repo_standard.policy import Shape
 from repo_standard.policy.models import LEVEL_ORDER
+from repo_standard.project_metadata import kit_version
 from repo_standard.repo_init import (
     PLACEHOLDERS,
     UNLICENSED_NOTICE,
@@ -112,16 +112,6 @@ _ROUND_TRIP_YAML = YAML()
 _ROUND_TRIP_YAML.preserve_quotes = True
 _ROUND_TRIP_YAML.width = 88
 _ROUND_TRIP_YAML.indent(mapping=2, sequence=4, offset=2)
-
-
-def _kit_version() -> str:
-    try:
-        return importlib.metadata.version("repo-standard-kit")
-    except importlib.metadata.PackageNotFoundError:
-        pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
-        return str(
-            tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["version"]
-        )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -789,7 +779,7 @@ def plan_adoption(root: Path, profile: str | None = None) -> AdoptionPlan:
         return AdoptionPlan(
             root=root,
             profile=selected,
-            version=_kit_version(),
+            version=kit_version(),
             changes=(),
             unchanged=unchanged,
             conflicts=(),
@@ -861,7 +851,7 @@ def plan_adoption(root: Path, profile: str | None = None) -> AdoptionPlan:
     return AdoptionPlan(
         root=root,
         profile=selected,
-        version=_kit_version(),
+        version=kit_version(),
         changes=tuple(changes),
         unchanged=tuple(sorted(set(unchanged))),
         conflicts=tuple(conflicts),
@@ -985,9 +975,15 @@ def main(argv: list[str] | None = None) -> int:
                 _run(shlex.split(command), root, native_tls=args.native_tls)
         findings = _remaining_findings(plan)
         _print_summary(plan, findings)
-        return (
-            1 if plan.conflicts or any(f.level == "required" for f in findings) else 0
-        )
+        # Same rule `repo-check` applies: only a `violation` can fail a run.
+        # An `unused-exemption` is reported at its rule's canonical level and
+        # must not turn adoption into a failure.
+        blocking = [
+            finding
+            for finding in findings
+            if finding.level == "required" and finding.status == "violation"
+        ]
+        return 1 if plan.conflicts or blocking else 0
     except AdoptionError as error:
         print(f"repo-adopt: {error}", file=sys.stderr)
         return 2

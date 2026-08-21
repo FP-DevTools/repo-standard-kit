@@ -109,6 +109,23 @@ the changes listed under **Adopters must**.
 - Both starter kits ship a `.gitignore`, so a freshly bootstrapped repository
   no longer starts with `.venv/`, `__pycache__/`, and other build and cache
   paths committable.
+- **`repo-check --version`** prints the running package version and the
+  `standard_version` and standard major compiled into its policy. Adopters pin
+  the checker by Git ref, so the first question about a disputed finding —
+  which checker produced it — now has an answer.
+- **An exemption that suppressed nothing is reported.** A declared
+  `[tool.repo-check.ignore]` entry whose rule this run evaluated and passed
+  emits a finding against `pyproject.toml` with the new `status`
+  `unused-exemption`, at the rule's own level. `level` keeps naming how binding
+  the rule is and `status` names what the finding is, so neither field means
+  two things; only a `violation` can reach exit code `1`, which leaves a dead
+  exemption visible and never blocking. Text output now prints the status
+  beside the rule ID whenever it is not `violation`, so an `indeterminate`
+  platform finding is also no longer read as a plain failure. A rule the
+  profile excludes, or a platform rule under a run without
+  `--check-enforcement`, is not evaluated and is never reported this way.
+  `repo-adopt` reports the same finding and applies the same rule to its own
+  exit code.
 
 ### Changed
 
@@ -247,6 +264,17 @@ the changes listed under **Adopters must**.
 - `docs/compliance.md` issued `SHALL` requirements while absent from the
   companion-document index, so a document declared non-normative was issuing
   requirements; it is now indexed in `docs/repo-standard.md`.
+- **A failing RSK005 printed the whole document it read.** The handler passed
+  the searched text as the finding's `actual`, so a `README.md` missing its
+  standard reference arrived as one repr'd line thousands of characters long —
+  the clarity attribute breaking exactly where it fires. The pattern it wanted
+  is the evidence, and the finding now carries only that. RSK005 also gained
+  the negative-path coverage it never had, including the deliberate silence on
+  a missing document, which RSK001 and RSK004 own.
+- This repository's own `RSK005` exemption suppressed nothing — both
+  `README.md` and `AGENTS.md` name `repo-standard-kit` — and is deleted. The
+  `RSK011` exemption stays; the kit really does ship the placeholder tokens it
+  tests.
 
 ### Adopters must
 
@@ -320,7 +348,9 @@ to see what is left; the list below is what that repairs and what it cannot.
   repository in that state gains a required finding it did not have.
 - Stop reading `severity` from `repo-check --format json`. The field is gone.
   Read `level` for how binding a finding is, and `status` for `indeterminate`
-  results.
+  results. `status` now also carries `unused-exemption`, so treat it as an
+  open set rather than matching two literals; a consumer that keys the exit
+  decision off it should act on `violation` alone.
 - Stop importing `load_rules` from `repo_standard.compliance.checks`. The v0.4
   compatibility alias is gone; call `load_policy`.
 - Nothing for RSK015. It moved to the new `advisory` level, so a
