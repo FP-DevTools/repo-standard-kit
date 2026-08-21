@@ -107,6 +107,18 @@ def render_reference(policy: Policy) -> str:
                 for dial in rule.check.config["dials"]
             )
             lines.append("")
+        # A permitted guard is not machinery either: it is the only condition a
+        # repository may put between CI and a required command, so the reader
+        # gets it here instead of from a prose copy that can drift.
+        guards = rule.check.config.get("guards_by_profile")
+        if isinstance(guards, dict):
+            lines.extend(["| Profile | Permitted guard |", "| --- | --- |"])
+            lines.extend(
+                f"| `{profile}` | "
+                f"{', '.join(f'`{guard}`' for guard in declared) or 'none'} |"
+                for profile, declared in sorted(guards.items())
+            )
+            lines.append("")
     if policy.retired_rule_ids:
         lines.extend(
             [

@@ -181,7 +181,12 @@ Remediation: Link repo-standard-kit from README.md and AGENTS.md.
 
 Rationale: Pull requests must execute the same reproducible gates as local work.
 
-Remediation: Add the pull_request trigger, quality job, and complete commands.
+Remediation: Add the pull_request trigger, quality job, and complete commands, and gate a command only with the condition policy declares for the profile.
+
+| Profile | Permitted guard |
+| --- | --- |
+| `python-single` | none |
+| `python-workspace` | `compgen -G "packages/*/pyproject.toml" > /dev/null` |
 
 ### RSK007: Mandatory pre-commit hooks are configured structurally
 

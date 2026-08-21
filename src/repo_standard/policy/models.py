@@ -45,7 +45,7 @@ CHECK_SCHEMAS: dict[str, tuple[set[str], set[str]]] = {
     "agents_operating_dials": ({"path", "section", "dials"}, set()),
     "text_pattern_each": ({"paths", "pattern"}, set()),
     "github_workflow_commands": (
-        {"path", "job", "trigger", "commands_by_profile"},
+        {"path", "job", "trigger", "commands_by_profile", "guards_by_profile"},
         set(),
     ),
     "pre_commit_hooks": ({"path", "hooks"}, set()),
@@ -435,6 +435,14 @@ def _validate_check_config(kind: str, config: dict[str, Any], location: str) -> 
         )
         for profile_id, values in commands.items():
             _strings(values, f"{location}.commands_by_profile.{profile_id}")
+    # A profile with no permitted guard states an empty list: policy owning the
+    # guard form means the absence of one is declared, not merely unwritten.
+    if "guards_by_profile" in config:
+        guards = _mapping(config["guards_by_profile"], f"{location}.guards_by_profile")
+        for profile_id, values in guards.items():
+            _strings(
+                values, f"{location}.guards_by_profile.{profile_id}", non_empty=False
+            )
     if "hooks" in config:
         hooks = config["hooks"]
         if not isinstance(hooks, list) or not hooks:
@@ -671,20 +679,17 @@ class Policy:
                     f"{location}.rules.{rule.id}.profiles",
                     f"unknown profiles: {sorted(unknown)}",
                 )
-            commands = rule.check.config.get("commands_by_profile")
-            if isinstance(commands, dict):
-                unknown_commands = set(commands) - known_profiles
-                if unknown_commands:
-                    _fail(
-                        f"{location}.rules.{rule.id}.check.config.commands_by_profile",
-                        f"unknown profiles: {sorted(unknown_commands)}",
-                    )
-                missing_commands = set(rule.profiles) - set(commands)
-                if missing_commands:
-                    _fail(
-                        f"{location}.rules.{rule.id}.check.config.commands_by_profile",
-                        f"missing profiles: {sorted(missing_commands)}",
-                    )
+            for key in ("commands_by_profile", "guards_by_profile"):
+                by_profile = rule.check.config.get(key)
+                if not isinstance(by_profile, dict):
+                    continue
+                where = f"{location}.rules.{rule.id}.check.config.{key}"
+                unknown_declared = set(by_profile) - known_profiles
+                if unknown_declared:
+                    _fail(where, f"unknown profiles: {sorted(unknown_declared)}")
+                missing_declared = set(rule.profiles) - set(by_profile)
+                if missing_declared:
+                    _fail(where, f"missing profiles: {sorted(missing_declared)}")
             allowed_missing = rule.check.config.get("allow_missing_profiles")
             if isinstance(allowed_missing, list):
                 unknown_allowed = set(allowed_missing) - known_profiles

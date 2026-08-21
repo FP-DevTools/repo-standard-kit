@@ -272,6 +272,29 @@ def test_rsk003_reuses_the_workflow_quality_commands() -> None:
     )
 
 
+def test_rsk006_declares_the_permitted_guard_for_every_profile() -> None:
+    """Silence about a guard must be a declaration, not an omission."""
+    rule = POLICY.rule("RSK006")
+    guards = rule.check.config["guards_by_profile"]
+    assert set(guards) == set(rule.profiles)
+    assert "guards_by_profile" in CHECK_SCHEMAS["github_workflow_commands"][0]
+    assert guards["python-single"] == []
+
+
+def test_a_guard_declared_for_an_unknown_profile_is_rejected(tmp_path: Path) -> None:
+    root = _policy_checkout(tmp_path)
+
+    def mutation(data: dict[str, object]) -> None:
+        rules = data["rules"]
+        assert isinstance(rules, list)
+        rule = next(item for item in rules if item["id"] == "RSK006")
+        rule["check"]["config"]["guards_by_profile"] = {"unknown": []}
+
+    _mutate_base(root, mutation)
+    with pytest.raises(PolicyError, match="guards_by_profile: unknown profiles"):
+        load_source_policy(root)
+
+
 def test_rsk021_policy_is_workflow_scoped() -> None:
     assert POLICY.rule("RSK021").check.config == {
         "path": ".github/workflows/quality.yml"
@@ -657,6 +680,103 @@ def test_missing_trigger_job_or_steps_reports_rsk006(
     path = root / ".github" / "workflows" / "quality.yml"
     path.write_text(mutation(path.read_text(encoding="utf-8")), encoding="utf-8")
     assert "RSK006" in _rule_ids(check_repo(root, POLICY))
+
+
+def test_a_required_command_under_an_undeclared_guard_reports_rsk006(
+    tmp_path: Path,
+) -> None:
+    """A skipped gate still exits zero, so the guard has to be policy-owned."""
+    root = _minimal_repo(tmp_path)
+    path = root / ".github" / "workflows" / "quality.yml"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            "      - run: uv build\n",
+            "      - run: |\n"
+            '          if [ -n "$SKIP" ]; then\n'
+            "            uv build\n"
+            "          fi\n",
+        ),
+        encoding="utf-8",
+    )
+    [finding] = [f for f in check_repo(root, POLICY) if f.rule_id == "RSK006"]
+    assert finding.message == (
+        "Quality job runs required commands only under an undeclared guard: uv build."
+    )
+    assert finding.expected == []
+
+
+def _workspace_guard() -> str:
+    [guard] = POLICY.rule("RSK006").check.config["guards_by_profile"][
+        "python-workspace"
+    ]
+    return str(guard)
+
+
+def _guard_the_workspace_build(root: Path, guard: str, body: str) -> None:
+    path = root / ".github" / "workflows" / "quality.yml"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            "      - run: uv build --all-packages\n",
+            f"      - run: |\n          if {guard}; then\n{body}          fi\n",
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_the_declared_guard_satisfies_rsk006_and_no_other_does(
+    tmp_path: Path,
+) -> None:
+    guard = _workspace_guard()
+    body = "            uv build --all-packages\n"
+
+    declared = tmp_path / "declared"
+    declared.mkdir()
+    root = _minimal_repo(declared, "python-workspace")
+    _guard_the_workspace_build(root, guard, body)
+    assert "RSK006" not in _rule_ids(check_repo(root, POLICY))
+
+    undeclared = tmp_path / "undeclared"
+    undeclared.mkdir()
+    other = _minimal_repo(undeclared, "python-workspace")
+    _guard_the_workspace_build(other, "compgen -G 'src/*' > /dev/null", body)
+    [finding] = [f for f in check_repo(other, POLICY) if f.rule_id == "RSK006"]
+    assert finding.actual == ["uv build --all-packages"]
+    assert finding.expected == [guard]
+
+
+def test_a_command_in_the_else_branch_does_not_satisfy_rsk006(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path, "python-workspace")
+    body = (
+        "            echo skipped\n"
+        "          else\n"
+        "            uv build --all-packages\n"
+    )
+    _guard_the_workspace_build(root, _workspace_guard(), body)
+    assert "RSK006" in _rule_ids(check_repo(root, POLICY))
+
+
+def test_a_missing_workflow_is_reported_by_every_workflow_rule(
+    tmp_path: Path,
+) -> None:
+    """RSK020 used to swallow the error its two siblings reported."""
+    root = _minimal_repo(tmp_path)
+    (root / ".github" / "workflows" / "quality.yml").unlink()
+    findings = {f.rule_id: f for f in check_repo(root, POLICY)}
+    assert {"RSK006", "RSK020", "RSK021"} <= set(findings)
+    for rule_id in ("RSK006", "RSK020", "RSK021"):
+        assert ".github/workflows/quality.yml is missing." in findings[rule_id].message
+
+
+def test_an_unusable_quality_job_is_reported_by_every_workflow_rule(
+    tmp_path: Path,
+) -> None:
+    root = _minimal_repo(tmp_path)
+    path = root / ".github" / "workflows" / "quality.yml"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("  quality:\n", "  other:\n"),
+        encoding="utf-8",
+    )
+    assert "RSK020" in _rule_ids(check_repo(root, POLICY))
 
 
 def test_malformed_workflow_reports_yaml_line(tmp_path: Path) -> None:
@@ -1096,6 +1216,33 @@ def test_fully_compliant_branch_protection_passes(
     assert "RSK022" not in rule_ids
 
 
+def test_both_protection_rules_share_one_platform_query(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two rules read the same branch; two answers could disagree."""
+    root = _minimal_repo(tmp_path)
+    calls: list[list[str]] = []
+
+    def fake_run(
+        command: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        if command[:3] == ["git", "remote", "get-url"]:
+            return subprocess.CompletedProcess(
+                command, 0, "https://github.com/org/repo.git\n", ""
+            )
+        return subprocess.CompletedProcess(
+            command, 0, json.dumps(_compliant_branch_protection()), ""
+        )
+
+    monkeypatch.setattr(checks.subprocess, "run", fake_run)
+    rule_ids = _rule_ids(check_repo(root, POLICY, include_platform=True))
+    assert not {"RSK014", "RSK022"} & rule_ids
+    assert [command for command in calls if command[:2] == ["gh", "api"]] == [
+        ["gh", "api", "repos/org/repo/branches/main/protection"]
+    ]
+
+
 def test_zero_approvals_passes_required_policy_but_reports_recommendation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1533,6 +1680,30 @@ def test_reordered_sections_are_reported_even_when_all_are_present(
     assert finding.actual.index("Repository Layout") < finding.actual.index(
         "Documentation Rules"
     )
+
+
+def test_a_repeated_declared_section_is_reported_wherever_it_sits(
+    tmp_path: Path,
+) -> None:
+    """A subsequence keeps the first occurrence, so the repeat needs its own say."""
+    root = _minimal_repo(tmp_path)
+    path = root / "README.md"
+    text = path.read_text(encoding="utf-8")
+    path.write_text(f"{text}\n## Install\n\nDetail.\n", encoding="utf-8")
+
+    [finding] = [f for f in check_repo(root, POLICY) if f.rule_id == "RSK023"]
+    assert finding.message == "Declared sections appear more than once: Install."
+    assert finding.actual.count("Install") == 2
+
+
+def test_an_unlisted_section_may_repeat(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    path = root / "README.md"
+    text = path.read_text(encoding="utf-8").replace(
+        "## Usage", "## Notes\n\nDetail.\n\n## Usage"
+    )
+    path.write_text(f"{text}\n## Notes\n\nDetail.\n", encoding="utf-8")
+    assert "RSK023" not in _rule_ids(check_repo(root, POLICY))
 
 
 def test_unlisted_sections_are_legal_anywhere(tmp_path: Path) -> None:

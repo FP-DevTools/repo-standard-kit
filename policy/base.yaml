@@ -127,8 +127,14 @@ rules:
             - uv run pre-commit run --all-files
             - uv run pytest
             - uv build --all-packages
+        guards_by_profile:
+          python-single: []
+          python-workspace:
+            - 'compgen -G "packages/*/pyproject.toml" > /dev/null'
     rationale: Pull requests must execute the same reproducible gates as local work.
-    remediation: Add the pull_request trigger, quality job, and complete commands.
+    remediation: >-
+      Add the pull_request trigger, quality job, and complete commands, and
+      gate a command only with the condition policy declares for the profile.
 
   - id: RSK007
     title: Mandatory pre-commit hooks are configured structurally

@@ -117,6 +117,13 @@ is inspected; comments, echoed strings, unrelated fields, and commands hidden
 inside a shell-wrapper string do not count. Whitespace, comments, multiline
 commands, and equivalent command formatting are normalized before comparison.
 
+A conditional block that skips a gate still exits zero, so a required command
+inside one proves nothing by itself. Policy owns the permitted guard: a
+required command counts when it is unguarded, or when its only condition is
+the guard the [policy reference](policy-reference.md#rsk006-quality-workflow-executes-the-mandatory-gate-chain)
+declares for the resolved profile. Any other condition, an `else` or `elif`
+branch, a loop body, and a `case` arm leave the command unproven.
+
 Every pull request shall also run an independent `compliance` job that checks
 the repository against repo-standard-kit. The separate status prevents a
 quality workflow from weakening or removing required gates while still

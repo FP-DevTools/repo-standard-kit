@@ -179,6 +179,12 @@
               "uv build --all-packages"
             ]
           },
+          "guards_by_profile": {
+            "python-single": [],
+            "python-workspace": [
+              "compgen -G \"packages/*/pyproject.toml\" > /dev/null"
+            ]
+          },
           "job": "quality",
           "path": ".github/workflows/quality.yml",
           "trigger": "pull_request"
@@ -193,7 +199,7 @@
         "python-workspace"
       ],
       "rationale": "Pull requests must execute the same reproducible gates as local work.",
-      "remediation": "Add the pull_request trigger, quality job, and complete commands.",
+      "remediation": "Add the pull_request trigger, quality job, and complete commands, and gate a command only with the condition policy declares for the profile.",
       "source": {
         "document": "docs/quality-gates.md",
         "section": "5. CI Pull Request Gates"
