@@ -181,9 +181,12 @@ being limited to the inputs that exist: `standard-ref`, `strict`, and
 `check-enforcement`. The reusable workflow SHALL itself be pinned to a full
 commit SHA, which selects the workflow implementation the caller trusts; the
 distinct `standard-ref` input selects the checker revision, on the same terms
-as the `--from` ref above. The workflow passes that input through the
-environment, validates it against a narrow Git-ref character allowlist, and
-never interpolates caller-controlled inputs directly into Bash source.
+as the `--from` ref above. Every input reaches the step through the
+environment and never through interpolation into Bash source, so a caller's
+value is always one quoted argument and never shell to parse. That single
+property is what keeps the step to one unconditional command: with nothing to
+escape there is nothing to validate, and a boolean input that resolves to its
+own flag needs no branch to append it.
 
 Confirm the caller emits the required `compliance` status before relying on
 this form, and treat the following as the reason it is the alternative rather

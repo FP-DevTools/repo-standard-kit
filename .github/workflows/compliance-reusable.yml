@@ -34,24 +34,17 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
+      # Every input is resolved into the environment, never into Bash source,
+      # so no caller-supplied value is ever parsed as shell. The two flag
+      # variables are therefore deliberately unquoted below: each holds either
+      # one option or nothing, and word splitting is what drops the nothing.
       - name: Run repo-check
         shell: bash
         env:
           REPO_STANDARD_REF: ${{ inputs.standard-ref }}
-          STRICT: ${{ inputs.strict }}
-          CHECK_ENFORCEMENT: ${{ inputs.check-enforcement }}
+          STRICT: ${{ inputs.strict && '--strict' || '' }}
+          CHECK_ENFORCEMENT: ${{ inputs.check-enforcement && '--check-enforcement' || '' }}
         run: |
-          args=(--format text)
-          if [ "$STRICT" = "true" ]; then
-            args+=(--strict)
-          fi
-          if [ "$CHECK_ENFORCEMENT" = "true" ]; then
-            args+=(--check-enforcement)
-          fi
-          if [[ ! "$REPO_STANDARD_REF" =~ ^[A-Za-z0-9._/-]+$ ]]; then
-            echo "Invalid repo-standard-kit ref" >&2
-            exit 2
-          fi
           uvx \
             --from "git+https://github.com/FP-DevTools/repo-standard-kit.git@$REPO_STANDARD_REF" \
-            repo-check . "${args[@]}"
+            repo-check . $STRICT $CHECK_ENFORCEMENT
