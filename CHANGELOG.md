@@ -105,10 +105,11 @@ the changes listed under **Adopters must**.
 - **The standard major moves to `2`.** Every adopting repository must declare
   `standard = "2"` under `[tool.repo-standard]`; `standard = "1"` is now an
   RSK019 required finding.
-- RSK002 is re-expressed on the shared shape record. Its ten required sections
-  are unchanged, but it now also enforces their **order**, which it did not
-  check before — a repository whose `AGENTS.md` carried every heading in the
-  wrong sequence used to pass, and now reports a required finding.
+- RSK002 is re-expressed on the shared shape record, and now enforces **order**
+  as well as presence — a repository whose `AGENTS.md` carried every heading in
+  the wrong sequence used to pass, and now reports a required finding. Its
+  required set also grows from ten sections to twelve, with `Agent Operating
+  Mode` and `Single Source Of Truth` added above.
 - **RSK015 moves from `recommended` to `advisory`.** Section 13 of
   `docs/quality-gates.md` declares `line-length = 88` a per-repository decision
   that needs no exemption, so a rule firing at `recommended` was failing
