@@ -4,3 +4,15 @@ updates:
     directory: /
     schedule:
       interval: weekly
+  # The pins this repository hands to adopters live inside the starter kits, and
+  # Dependabot only expands `directory: /` into `.github/workflows`. Every other
+  # directory is scanned as-is, so each starter kit registers its workflow
+  # directory itself.
+  - package-ecosystem: github-actions
+    directory: /src/repo_standard/starter_kits/python-single/.github/workflows
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /src/repo_standard/starter_kits/python-workspace/.github/workflows
+    schedule:
+      interval: weekly

@@ -102,11 +102,11 @@ adopter calls a reusable workflow — nor on whether a ref input was supplied.
 Together with the `quality` job, this gives every adopting repository the same
 two required status names and therefore the same branch-protection ruleset.
 
-### Optional pre-commit feedback
+### Local pre-commit feedback
 
-The pre-commit hook provides earlier local feedback. When it is configured,
-the quality workflow repeats the structural check before the independently
-required compliance job; that defense-in-depth duplication is intentional.
+The pre-commit hook exists for local feedback: it reports a structural defect
+before the push rather than after the pull request opens. Both starter kits
+wire it in.
 
 ```yaml
 repos:
@@ -115,6 +115,19 @@ repos:
     hooks:
       - id: repo-check
 ```
+
+In CI the check runs once, in `compliance`. The starter quality workflows set
+`SKIP: repo-check` on the pre-commit step, because running every hook is itself
+a gate and would otherwise run the same check a second time. A single
+compliance defect would then turn both required statuses red, and neither
+status would say which of the two it failed on. Skipping the hook in
+`quality` weakens nothing: `compliance` is independently required, so the
+defect still blocks the merge, and it blocks it in exactly one place.
+
+This repository configures the hook as a `repo: local` hook running
+`uv run repo-check .`, the invocation its own compliance workflow uses. Pinning
+a `rev:` here would check the working tree against a published release rather
+than against itself.
 
 ### Required CI workflow
 
