@@ -11,14 +11,17 @@ import pytest
 import tomlkit
 from conftest import REPO_ROOT, dump_yaml, load_yaml
 
-from repo_standard.compliance.checks import check_repo, load_policy
+from repo_standard.compliance.checks import Finding, check_repo, load_policy
+from repo_standard.policy.models import LEVEL_ORDER
 from repo_standard.repo_adopt import (
     AdoptionError,
+    AdoptionPlan,
     CommandError,
     _kit_version,
     _merge_agents,
     _merge_pyproject,
     _merge_readme,
+    _print_summary,
     _project_values,
     _run,
     apply_plan,
@@ -575,3 +578,39 @@ def test_new_pyproject_tables_are_placed_in_declared_order(tmp_path: Path) -> No
     )
     assert _is_subsequence(tables, shape.headings), f"table order is wrong: {tables}"
     assert tables.index("dependency-groups") < tables.index("build-system")
+
+
+def test_summary_reports_every_declared_level(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A level policy declares but the summary omits is a silently dropped finding."""
+    plan = AdoptionPlan(
+        root=tmp_path,
+        profile="python-single",
+        version="0.0.0",
+        changes=(),
+        unchanged=(),
+        conflicts=(),
+        dependency_metadata_changed=False,
+    )
+    findings = [
+        Finding(
+            rule_id=f"RSK{index:03d}",
+            title="title",
+            level=level,
+            path="pyproject.toml",
+            line=None,
+            message=f"{level} message",
+            actual=None,
+            expected=None,
+            remediation="remediate",
+        )
+        for index, level in enumerate(LEVEL_ORDER, 1)
+    ]
+
+    _print_summary(plan, findings)
+
+    output = capsys.readouterr().out
+    for level in LEVEL_ORDER:
+        assert f"remaining {level} findings: 1" in output
+        assert f"{level} message" in output

@@ -17,7 +17,8 @@ Options:
 - `--profile auto|python-single|python-workspace` selects an explicit override.
 - `--check-enforcement` also queries classic branch protection or effective
   active rulesets for RSK014.
-- `--strict` promotes recommended findings to failures.
+- `--strict` promotes recommended findings to failures. It does not promote
+  advisory findings.
 
 Exit code `0` means no blocking findings. Exit code `1` means a required rule
 failed, or a recommended rule failed under `--strict`. Exit code `2` is a
@@ -25,8 +26,9 @@ usage or indeterminate command error, including an explicitly requested
 platform check whose evidence could not be obtained.
 
 Required findings fail by default. Recommended findings are always visible but
-fail only under `--strict`; this behavior is unchanged from the pre-v1 `shall`
-and `should` contract.
+fail only under `--strict`. Advisory findings are always visible and never
+affect the exit code, because the underlying decision belongs to the
+repository; `docs/repo-standard.md` defines the three levels.
 
 ## Profile Resolution
 
@@ -53,9 +55,11 @@ checks execute for the best deterministic profile.
 
 Every finding includes the rule ID, title, canonical level, path and line when
 available, message, actual value, expected value, remediation, and status.
-The JSON output also carries a legacy `severity` field: `required` derives
-`shall`, `recommended` derives `should`, and an unavailable platform command
-derives the legacy `platform` value plus `status: "indeterminate"`.
+`level` is the sole name for how binding a finding is, and `status` reports
+`violation` or, for an unavailable platform command, `indeterminate`. The
+legacy `severity` field that restated `level` as `shall` or `should`, and an
+unavailable platform command as `platform`, is removed in v2; read `level` and
+`status` instead.
 
 YAML and TOML parse failures report parser locations. Workflow findings report
 the relevant node line when the YAML parser exposes one.

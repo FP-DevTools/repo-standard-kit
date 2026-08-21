@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 from repo_standard.compliance.checks import Finding, check_repo, load_policy
+from repo_standard.policy.models import DEFAULT_LEVELS, STRICT_LEVELS
 
 _POSITIVE = "\033[38;2;35;209;111m"
 _RESET = "\033[0m"
@@ -39,7 +40,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--strict",
         action="store_true",
-        help="Treat 'should' findings as failures too.",
+        help="Treat recommended findings as failures too. Advisory never fails.",
     )
     return parser
 
@@ -87,7 +88,6 @@ def _format_json(findings: list[Finding]) -> str:
                     "rule_id": finding.rule_id,
                     "title": finding.title,
                     "level": finding.level,
-                    "severity": finding.severity,
                     "path": finding.path,
                     "line": finding.line,
                     "message": finding.message,
@@ -126,7 +126,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if any(finding.status == "indeterminate" for finding in findings):
         return 2
-    levels = {"required", "recommended"} if args.strict else {"required"}
+    # `advisory` belongs to neither set: those findings are always printed
+    # above and never reach the exit code, not even under `--strict`.
+    levels = STRICT_LEVELS if args.strict else DEFAULT_LEVELS
     if any(finding.level in levels for finding in findings):
         return 1
     return 0

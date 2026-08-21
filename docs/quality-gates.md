@@ -422,8 +422,10 @@ looks like. This section fixes the configuration those gates run with.
 ### Ruff configuration
 
 RSK010 enforces the explicit line-length declaration and mandatory Ruff
-families at the **required** level. RSK015 checks the preferred line length and
-RSK016 checks the `PT` family at the **recommended** level.
+families at the **required** level. RSK016 checks the `PT` family at the
+**recommended** level. RSK015 checks the preferred line length at the
+**advisory** level, because the value itself stays a per-repository decision
+below: the finding is reported but never fails, not even under `--strict`.
 
 Every adopting repository shall declare an explicit `line-length` in
 `[tool.ruff]`, and shall select at least the following rule families:

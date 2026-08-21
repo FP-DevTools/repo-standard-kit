@@ -44,7 +44,6 @@ class Finding:
     rule_id: str
     title: str
     level: str
-    severity: str
     path: str
     line: int | None
     message: str
@@ -1513,12 +1512,10 @@ CHECK_HANDLERS: dict[str, CheckHandler] = {
 
 
 def _finding(rule: Rule, issue: Issue) -> Finding:
-    severity = "platform" if issue.status == "indeterminate" else rule.severity
     return Finding(
         rule.id,
         rule.title,
         rule.level,
-        severity,
         issue.path,
         issue.line,
         issue.message,

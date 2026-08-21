@@ -19,6 +19,11 @@ recommended policy level whose finding is non-blocking unless strict checking
 is requested; MAY identifies an optional choice. Plain imperatives carry the
 same level made explicit by their surrounding section or policy reference.
 
+A rule may also carry the **advisory** level. It states a preference for a
+decision this standard leaves to the repository: the finding is always
+reported and never blocks, not even under strict checking. Prose that declares
+a choice free and still names a preferred value is advisory, not SHOULD.
+
 `policy/base.yaml` and `policy/profiles/` are the sole source of executable
 values, applicability, and check configuration for machine-enforced rules.
 Normative Markdown explains those rules and human-review-only guidance but is

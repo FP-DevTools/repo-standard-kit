@@ -26,6 +26,7 @@ from repo_standard.bootstrap_defaults import DEFAULT_PYTHON_VERSION
 from repo_standard.compliance.checks import Finding, check_repo, load_policy
 from repo_standard.github_references import is_full_commit_sha
 from repo_standard.policy import Shape
+from repo_standard.policy.models import LEVEL_ORDER
 from repo_standard.repo_init import (
     PLACEHOLDERS,
     UNLICENSED_NOTICE,
@@ -919,14 +920,13 @@ def _print_summary(plan: AdoptionPlan, findings: list[Finding] | None) -> None:
     if findings is None:
         print("remaining findings: not evaluated during dry-run")
         return
-    required = [finding for finding in findings if finding.level == "required"]
-    recommended = [finding for finding in findings if finding.level == "recommended"]
-    print(f"remaining required findings: {len(required)}")
-    for finding in required:
-        print(f"  - {finding.rule_id} {finding.path}: {finding.message}")
-    print(f"remaining recommended findings: {len(recommended)}")
-    for finding in recommended:
-        print(f"  - {finding.rule_id} {finding.path}: {finding.message}")
+    # Walking the declared levels keeps this summary complete when policy gains
+    # one; naming them here is how `advisory` findings went unreported.
+    for level in LEVEL_ORDER:
+        matching = [finding for finding in findings if finding.level == level]
+        print(f"remaining {level} findings: {len(matching)}")
+        for finding in matching:
+            print(f"  - {finding.rule_id} {finding.path}: {finding.message}")
 
 
 def main(argv: list[str] | None = None) -> int:
