@@ -49,7 +49,7 @@ CHECK_SCHEMAS: dict[str, tuple[set[str], set[str]]] = {
         set(),
     ),
     "github_workflow_invocation": (
-        {"path", "job", "token", "guards_by_profile"},
+        {"path", "job", "trigger", "token", "guards_by_profile"},
         set(),
     ),
     "pre_commit_hooks": ({"path", "hooks"}, set()),

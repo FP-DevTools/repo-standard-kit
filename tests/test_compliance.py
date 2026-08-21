@@ -1019,6 +1019,7 @@ def test_rsk030_owns_the_invocation_token_and_declares_every_guard() -> None:
     assert rule.check.config == {
         "path": ".github/workflows/compliance.yml",
         "job": "compliance",
+        "trigger": "pull_request",
         "token": "repo-check",
         "guards_by_profile": {"python-single": [], "python-workspace": []},
     }
@@ -1054,6 +1055,22 @@ def test_a_compliance_job_that_never_invokes_the_checker_reports_rsk030(
     assert finding.message == (
         "Job 'compliance' executes no command invoking repo-check."
     )
+
+
+def test_a_compliance_workflow_that_no_pull_request_starts_reports_rsk030(
+    tmp_path: Path,
+) -> None:
+    """A job that never starts invokes nothing, however well it is written."""
+    root = _minimal_repo(tmp_path)
+    path = root / ".github" / "workflows" / "compliance.yml"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            "on:\n  pull_request:\n", "on:\n  workflow_dispatch:\n"
+        ),
+        encoding="utf-8",
+    )
+    [finding] = [f for f in check_repo(root, POLICY) if f.rule_id == "RSK030"]
+    assert finding.message == "Workflow does not trigger on pull_request."
 
 
 def test_an_invocation_under_an_undeclared_guard_reports_rsk030(

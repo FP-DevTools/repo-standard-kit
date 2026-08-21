@@ -92,8 +92,10 @@ the changes listed under **Adopters must**.
   in it to carry a 40-character commit SHA.
 - **RSK030 (required): the compliance job has to invoke the checker.** An
   existing, least-privileged, fully pinned compliance workflow could still
-  execute nothing. The rule requires one executed command in
-  `jobs.compliance.steps[*].run` to carry `repo-check` in its argument list.
+  execute nothing. The rule requires the workflow to trigger on
+  `pull_request` — the other three pass on one no pull request ever starts —
+  and requires one executed command in `jobs.compliance.steps[*].run` to carry
+  `repo-check` in its argument list.
   Policy owns the token, and the match is containment rather than an exact
   command, because an adopter runs a released checker with `uvx` while this
   repository runs its own working tree with `uv run` — both correct. The claim
@@ -266,10 +268,12 @@ to see what is left; the list below is what that repairs and what it cannot.
   on your behalf, so an unpinned action you added there is reported, not
   repaired. `docs/quality-gates.md` §5 already required this job; only the
   structural checks are new.
-- Make sure that job actually runs the checker. **RSK030** requires one
-  executed command in `jobs.compliance.steps[*].run` to contain `repo-check`,
-  so a job that only checks out the repository, or one whose invocation sits
-  behind your own `if`, reports a required finding. The prescribed form is the
+- Make sure that job actually runs the checker, on pull requests. **RSK030**
+  requires the workflow to trigger on `pull_request` and one executed command
+  in `jobs.compliance.steps[*].run` to contain `repo-check`, so a workflow
+  reachable only by `workflow_dispatch`, a job that only checks out the
+  repository, or an invocation sitting behind your own `if` each report a
+  required finding. The prescribed form is the
   one in `docs/compliance.md` §Required CI workflow, which the starter kits
   ship; `repo-adopt` appends the starter's invocation step when it finds none.
 - Move any caller of this repository's reusable workflow from

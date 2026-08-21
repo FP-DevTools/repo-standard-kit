@@ -712,18 +712,33 @@ def _github_workflow_invocation(
         return errors
     assert document is not None
     assert job is not None
+    assert isinstance(document.data, dict)
+    issues: list[Issue] = []
+    # A job that never starts invokes nothing, so the trigger is part of the
+    # claim rather than a separate rule's business.
+    if not _trigger_present(document.data.get("on"), config["trigger"]):
+        issues.append(
+            Issue(
+                config["path"],
+                f"Workflow does not trigger on {config['trigger']}.",
+                document.data.get("on"),
+                config["trigger"],
+                document.line("on"),
+            )
+        )
     commands, error = _job_shell_commands(document, job, config)
     if error is not None:
-        return [error]
+        issues.append(error)
+        return issues
     token = config["token"]
     declared_guards = config["guards_by_profile"][context.profile]
     permitted = _permitted_guards(declared_guards)
     invocations = [command for command in commands if token in command.tokens]
     line = document.line("jobs", config["job"], "steps")
     if any(_is_executed(command, permitted) for command in invocations):
-        return []
+        return issues
     if invocations:
-        return [
+        issues.append(
             Issue(
                 config["path"],
                 f"Job {config['job']!r} invokes {token} only under an undeclared "
@@ -732,8 +747,9 @@ def _github_workflow_invocation(
                 list(declared_guards),
                 line,
             )
-        ]
-    return [
+        )
+        return issues
+    issues.append(
         Issue(
             config["path"],
             f"Job {config['job']!r} executes no command invoking {token}.",
@@ -741,7 +757,8 @@ def _github_workflow_invocation(
             token,
             line,
         )
-    ]
+    )
+    return issues
 
 
 def _normalized_tokens(

@@ -251,8 +251,10 @@ remediation. Markdown explains policy but supplies no executable values.
   in every job in the quality workflow; local and Docker actions are exempt.
 - RSK027 requires `.github/workflows/compliance.yml` to exist. RSK028 and
   RSK029 apply the permission and pin obligations above to that workflow and
-  its `compliance` job. RSK030 reads its `run` steps and requires one executed
-  command to contain `repo-check`. Policy owns that token, and the match is
+  its `compliance` job. RSK030 requires the workflow to trigger on
+  `pull_request` — the other three pass on one that never runs — and reads its
+  `run` steps for one executed command containing `repo-check`. Policy owns
+  that token, and the match is
   containment rather than an exact command, because the released and
   working-tree invocations differ legitimately. It therefore proves the job
   invokes the checker, not that the invocation is meaningful: a contrived

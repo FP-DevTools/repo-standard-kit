@@ -603,6 +603,7 @@ rules:
       config:
         path: .github/workflows/compliance.yml
         job: compliance
+        trigger: pull_request
         token: repo-check
         guards_by_profile:
           python-single: []
@@ -610,7 +611,10 @@ rules:
     rationale: >-
       RSK027, RSK028 and RSK029 leave a compliance workflow that exists, grants
       only contents: read, and pins every action free to execute nothing. This
-      rule requires the job to run the checker. It matches by containment
+      rule requires the job to run the checker on pull requests: a workflow
+      that never triggers on one satisfies the other three while leaving the
+      SHALL in section 5 unmet, so the trigger belongs to this claim rather
+      than to a rule of its own. It matches by containment
       rather than by exact command because the same correct invocation is
       spelled differently in different repositories, so the guarantee is
       correspondingly weak: it proves that an executed command's argument list
@@ -620,5 +624,6 @@ rules:
       the shell lexer discards, and an invocation reachable only under a
       condition policy does not declare for the profile.
     remediation: >-
-      Run repo-check from a step of the compliance job, unguarded or under a
-      condition policy declares for the profile.
+      Trigger the compliance workflow on pull_request, and run repo-check from
+      a step of its compliance job, unguarded or under a condition policy
+      declares for the profile.
