@@ -73,3 +73,12 @@ repos:
         # policy/shapes.yaml. Linting them as standalone files reports MD041 on
         # every one. The rendered documents they produce are linted normally.
         exclude: ^templates/content/
+      # Adopters pin the published hook to a release. This repository is the
+      # release, so it checks its own working tree — the same invocation its
+      # compliance workflow runs. CI skips it there; see .github/workflows.
+      - id: repo-check
+        name: repo-check
+        entry: uv run repo-check .
+        language: system
+        pass_filenames: false
+        always_run: true

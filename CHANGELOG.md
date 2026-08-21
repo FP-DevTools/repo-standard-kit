@@ -203,6 +203,32 @@ the changes listed under **Adopters must**.
   the other twenty-four rules already keep, and the limitation analysis RSK030
   carried was already stated in section 5 of `docs/quality-gates.md`, which is
   where it stays.
+- **Action pins are now compared across every governed workflow.** The
+  agreement check applied to the three `compliance.yml` files only, so a
+  Dependabot bump to the root `quality.yml` could leave both starter kits'
+  `quality.yml` on the previous SHA with the suite still green. One helper now
+  collects the pins from all five files — root `quality`, root `compliance`,
+  `compliance-reusable`, and both kits' pair — and every remote action must
+  resolve to a single SHA across them. `.github/dependabot.yml` also registers
+  each starter kit's workflow directory, because `directory: /` is the only
+  value Dependabot expands into `.github/workflows`; every other value is
+  scanned as given, so the kits' pins were never being offered updates at all.
+- **`repo-check` runs once in CI, in `compliance`.** It previously ran twice in
+  an adopting repository: inside `quality` through
+  `uv run pre-commit run --all-files`, and again in `compliance`. One
+  structural defect turned both required statuses red, and neither said which
+  of the two it had failed on. The starter quality workflows now set
+  `SKIP: repo-check` on the pre-commit step. Nothing is weakened — `compliance`
+  is an independently required status, so the defect still blocks the merge,
+  from one place. The hook itself stays in both kits, for the local feedback it
+  was always the better tool for, and `docs/compliance.md` describes it that
+  way instead of calling the duplication intentional.
+- This repository configures the hook too, as a `repo: local` hook running
+  `uv run repo-check .` — the invocation its own compliance workflow uses.
+  Pinning a `rev:` would have checked the working tree against a published
+  release rather than against itself, which is why the kit shipped a hook its
+  own home did not run. Its `quality.yml` sets the same `SKIP: repo-check`, so
+  the rule the standard states holds here as well.
 
 ### Removed
 
@@ -329,6 +355,11 @@ to see what is left; the list below is what that repairs and what it cannot.
   `--strict` on this alone starts passing.
 - Nothing for `docs/diagrams/`. The starter kits and `repo-adopt` no longer
   create it; an existing directory is untouched and no rule references it.
+- Optionally add `env: {SKIP: repo-check}` to the pre-commit step of your
+  `.github/workflows/quality.yml`, so a structural defect fails `compliance`
+  alone rather than both required statuses. No rule requires it, and
+  `repo-adopt` leaves a pre-commit step it already matches untouched, so this
+  one is a hand edit.
 
 ## [1.2.0] - 2026-08-20
 

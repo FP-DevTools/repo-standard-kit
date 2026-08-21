@@ -7,6 +7,7 @@ import subprocess
 import tarfile
 import tomllib
 import zipfile
+from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
@@ -63,9 +64,36 @@ REUSABLE_COMPLIANCE_WORKFLOW = (
 
 STARTER_KIT_ROOT = Path("src") / "repo_standard" / "starter_kits"
 
+ACTION_PIN = re.compile(r"uses: ([^@\s]+)@([0-9a-f]{40})")
+
 
 def starter_kit_dir(profile: str) -> Path:
     return Path(__file__).resolve().parents[1] / STARTER_KIT_ROOT / profile
+
+
+def starter_workflow_dir(profile: str) -> Path:
+    return starter_kit_dir(profile) / ".github" / "workflows"
+
+
+GOVERNED_WORKFLOWS = (
+    REPO_ROOT / ".github" / "workflows" / "quality.yml",
+    REPO_ROOT / ".github" / "workflows" / "compliance.yml",
+    REUSABLE_COMPLIANCE_WORKFLOW,
+    *(
+        starter_workflow_dir(profile) / name
+        for profile in STARTER_KIT_PROFILES
+        for name in ("quality.yml", "compliance.yml")
+    ),
+)
+
+
+def action_pins(paths: Iterable[Path]) -> dict[str, set[str]]:
+    """Map each pinned remote action to every SHA the given workflows pin it to."""
+    pins: dict[str, set[str]] = {}
+    for path in paths:
+        for action, sha in ACTION_PIN.findall(path.read_text(encoding="utf-8")):
+            pins.setdefault(action, set()).add(sha)
+    return pins
 
 
 def test_bootstrap_repo_renders_python_single_starter(tmp_path: Path) -> None:
@@ -352,20 +380,59 @@ def test_python_single_starter_build_requirement_matches_bootstrap_default() -> 
     assert data["build-system"]["requires"] == [DEFAULT_UV_BUILD_REQUIREMENT]
 
 
-def test_quality_workflows_use_mandatory_ci_gate_set() -> None:
-    repo_root = Path(__file__).resolve().parents[1]
-    workflow_paths = [
-        repo_root / ".github" / "workflows" / "quality.yml",
-        *(
-            starter_kit_dir(profile) / ".github" / "workflows" / "quality.yml"
-            for profile in STARTER_KIT_PROFILES
-        ),
-    ]
+QUALITY_WORKFLOWS = (
+    REPO_ROOT / ".github" / "workflows" / "quality.yml",
+    *(
+        starter_workflow_dir(profile) / "quality.yml"
+        for profile in STARTER_KIT_PROFILES
+    ),
+)
 
-    for workflow_path in workflow_paths:
+
+def test_quality_workflows_use_mandatory_ci_gate_set() -> None:
+    for workflow_path in QUALITY_WORKFLOWS:
         workflow_text = workflow_path.read_text(encoding="utf-8")
         for command in MANDATORY_CI_COMMANDS:
             assert command in workflow_text
+
+
+def test_quality_workflows_leave_repo_check_to_the_compliance_status() -> None:
+    """Two required statuses failing on one defect cannot say which failed."""
+    for workflow_path in QUALITY_WORKFLOWS:
+        workflow = load_yaml(workflow_path.read_text(encoding="utf-8"))
+        step = next(
+            step
+            for step in workflow["jobs"]["quality"]["steps"]
+            if "pre-commit run" in str(step.get("run", ""))
+        )
+        assert step.get("env") == {"SKIP": "repo-check"}, workflow_path
+
+
+def test_governed_workflows_pin_each_action_to_a_single_sha() -> None:
+    """A bump to one workflow must not leave a sibling on the old pin."""
+    drifted = {
+        action: sorted(shas)
+        for action, shas in action_pins(GOVERNED_WORKFLOWS).items()
+        if len(shas) > 1
+    }
+
+    assert not drifted, f"action pins disagree across governed workflows: {drifted}"
+
+
+def test_dependabot_watches_every_workflow_directory_the_kit_ships() -> None:
+    """`directory: /` only expands to the root `.github/workflows`."""
+    config = load_yaml((REPO_ROOT / ".github" / "dependabot.yml").read_text("utf-8"))
+    watched = {
+        update["directory"]
+        for update in config["updates"]
+        if update["package-ecosystem"] == "github-actions"
+    }
+
+    expected = {"/"} | {
+        "/" + starter_workflow_dir(profile).relative_to(REPO_ROOT).as_posix()
+        for profile in STARTER_KIT_PROFILES
+    }
+    assert watched == expected
 
 
 def test_compliance_workflows_emit_an_independent_required_status() -> None:
@@ -378,27 +445,18 @@ def test_compliance_workflows_emit_an_independent_required_status() -> None:
         ),
     ]
 
-    checkout_refs: set[str] = set()
-    setup_uv_refs: set[str] = set()
     for workflow_path in workflow_paths:
         assert workflow_path.name == "compliance.yml"
         workflow_text = workflow_path.read_text(encoding="utf-8")
         assert "  pull_request:\n" in workflow_text
         assert "permissions:\n  contents: read\n" in workflow_text
         assert "  compliance:\n    name: compliance\n" in workflow_text
-        checkout_match = re.search(
-            r"uses: (actions/checkout@[0-9a-f]{40})", workflow_text
-        )
-        setup_uv_match = re.search(
-            r"uses: (astral-sh/setup-uv@[0-9a-f]{40})", workflow_text
-        )
-        assert checkout_match
-        assert setup_uv_match
-        checkout_refs.add(checkout_match.group(1))
-        setup_uv_refs.add(setup_uv_match.group(1))
-
-    assert len(checkout_refs) == 1
-    assert len(setup_uv_refs) == 1
+        # Agreement between files is a separate claim, made across every
+        # governed workflow rather than only these three.
+        assert set(action_pins([workflow_path])) == {
+            "actions/checkout",
+            "astral-sh/setup-uv",
+        }
 
     root_workflow = workflow_paths[0].read_text(encoding="utf-8")
     assert "  workflow_call:\n" not in root_workflow
