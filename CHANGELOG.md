@@ -112,10 +112,15 @@ the changes listed under **Adopters must**.
 
 ### Changed
 
-- **The shipped `uv_build` pin widens from `>=0.11.20,<0.12` to `>=0.12.5,<0.13`**
+- **The shipped `uv_build` pin widens from `>=0.11.20,<0.12` to `>=0.12,<0.13`**
   so `uv build` no longer warns against current `uv` releases; this reaches
   every repository `repo-init` creates and every package `repo-add-package`
-  adds.
+  adds. The floor accepts any `0.12` backend rather than the newest patch
+  `uv init` would generate, so an adopter a few patches behind builds without
+  a warning too. The upper bound stays: `uv` documents it as what "ensures
+  that your package continues to build correctly as new versions are
+  released", and the backend follows `uv`'s own versioning policy, so a
+  `0.13` backend may read `[tool.uv.build-backend]` differently.
 - **The standard major moves to `2`.** Every adopting repository must declare
   `standard = "2"` under `[tool.repo-standard]`; `standard = "1"` is now an
   RSK019 required finding.
