@@ -126,6 +126,20 @@ the changes listed under **Adopters must**.
   `--check-enforcement`, is not evaluated and is never reported this way.
   `repo-adopt` reports the same finding and applies the same rule to its own
   exit code.
+- **An exemption that suppressed something is reported too.** Every
+  `[tool.repo-check.ignore]` entry that silenced a finding emits one report
+  against `pyproject.toml` with the new `status` `suppressed`, at the rule's
+  own level, carrying the declared reason, how many findings it hid, and their
+  paths in `actual`. Before this, a suppressed required rule left no trace in
+  text or `--format json`, so a green `compliance` status was not evidence the
+  standard was met and no reviewer could tell the difference. The status keeps
+  it out of the exit code — silencing the failure is what the exemption is for
+  — and the last line of text output counts the rules an exemption silenced,
+  the way `pytest` counts skips. `repo-adopt`'s summary counts them on a line
+  of its own, apart from the findings it left unfixed, and its
+  clean-repository short circuit keys off the same `violation` rule, so a
+  report about the exemption configuration never makes adoption start
+  rewriting a repository that is clean by every rule.
 
 ### Changed
 
@@ -306,6 +320,38 @@ the changes listed under **Adopters must**.
   `README.md` and `AGENTS.md` name `repo-standard-kit` — and is deleted. The
   `RSK011` exemption stays; the kit really does ship the placeholder tokens it
   tests.
+- **The guard notes above promised more than the checker delivers.** They said
+  a required command behind "your own `if`" reports a finding, but in a
+  workflow that phrase reads as the step's `if:`, and the checker never sees
+  it: RSK006 and RSK030 collect `steps[*].run` bodies and model conditionals
+  found inside them. `if: false` on every gate step and on the `repo-check`
+  step leaves `repo-check . --strict` reporting `All checks passed!` at exit
+  0. The behaviour is unchanged and accepted — the kit is for internal
+  development, and the threat model does not cover an adopter disabling their
+  own workflow — but the notes are corrected and the limit is now stated in
+  `docs/quality-gates.md` §5 and `docs/compliance.md` §Structural Boundaries.
+- The `python-workspace` `AGENTS.md` called gate 4 "a documented no-op before
+  the workspace contains its first package". It is not: on a freshly generated
+  shell the build gate exits 2 with `Workspace does not contain any buildable
+  packages`. The gate chain is what policy declares
+  and does not change; the prose now says the gate fails until
+  `repo-add-package` adds the first package, and notes that CI guards the same
+  command with `compgen -G`. `docs/bootstrap-workflow.md` carried the same
+  claim and is corrected with it.
+- Text output truncates a list-valued `actual` after four entries and counts
+  the rest. The active-exemption report above carries every silenced path, and
+  this repository's own RSK011 entry lists twenty-one of them, which put a
+  1,400-character line in front of a reader who needed the count.
+  `--format json` still emits the full list.
+- **`repo-adopt` left a stale version comment beside a SHA it had just
+  changed.** Repinning `uses: actions/checkout@v4 # v4.2.2` wrote the starter's
+  v7.0.1 SHA and kept `# v4.2.2` next to it, which Dependabot reads as the
+  pinned version, and where the adopter had no comment it added none — so the
+  version comment `docs/quality-gates.md` requires was missing or wrong either
+  way. A pin taken from the kit's own starter workflow now carries that
+  workflow's version comment with it. An action the kit does not pin is
+  reported as a conflict as before, and a SHA the repository chose itself
+  keeps its own comment untouched.
 
 ### Adopters must
 
@@ -351,8 +397,11 @@ to see what is left; the list below is what that repairs and what it cannot.
   requires the workflow to trigger on `pull_request` and one executed command
   in `jobs.compliance.steps[*].run` to contain `repo-check`, so a workflow
   reachable only by `workflow_dispatch`, a job that only checks out the
-  repository, or an invocation sitting behind your own `if` each report a
-  required finding. The prescribed form is the
+  repository, or an invocation guarded by a shell conditional inside the
+  `run:` body each report a required finding. A step's Actions-level `if:` is
+  not one of them: the checker reads `run:` bodies and nothing else, so a
+  `repo-check` step carrying `if: false` or `continue-on-error: true` still
+  satisfies RSK030. The prescribed form is the
   one in `docs/compliance.md` §Required CI workflow, which the starter kits
   ship; `repo-adopt` appends the starter's invocation step when it finds none.
 - Move any caller of this repository's reusable workflow from
@@ -367,13 +416,16 @@ to see what is left; the list below is what that repairs and what it cannot.
   may report its status check under a concatenated name rather than as
   `compliance`, which **RSK014** requires verbatim. `docs/compliance.md`
   records what is and is not known about that.
-- Re-check every conditional in `.github/workflows/quality.yml`. RSK006 no
-  longer accepts a required command that is reachable only under a condition
-  policy does not declare, so a gate-chain command behind your own `if`, an
-  `else` or `elif` branch, a loop, or a `case` arm is now unproven and reports
-  a required finding. The permitted guard per profile is published in
-  `docs/policy-reference.md`; `python-single` permits none, and
-  `python-workspace` permits only the packages-present guard.
+- Re-check every shell conditional in `.github/workflows/quality.yml`. RSK006
+  no longer accepts a required command that is reachable only under a shell
+  condition policy does not declare, so a gate-chain command behind an
+  undeclared shell `if`, an `else` or `elif` branch, a loop, or a `case` arm
+  is now unproven and reports a required finding. The permitted guard per
+  profile is published in `docs/policy-reference.md`; `python-single` permits
+  none, and `python-workspace` permits only the packages-present guard. This
+  reaches inside `run:` bodies only. A step's Actions-level `if:` and
+  `continue-on-error:` are unread, so a gate step disabled that way still
+  passes RSK006.
 - Expect a new RSK020 finding if you have no `quality.yml` or it does not
   parse. The rule previously discarded that error and passed silently, so a
   repository in that state gains a required finding it did not have.

@@ -66,6 +66,8 @@ what *this* finding is:
 - `violation` — the rule failed. The only status that can reach exit code `1`.
 - `indeterminate` — an explicitly requested platform command produced no
   usable evidence. Exit code `2`.
+- `suppressed` — an exemption silenced the findings this rule produced.
+  Reported below, and never blocking.
 - `unused-exemption` — the rule passed while an exemption for it was declared.
   Reported below, and never blocking.
 
@@ -76,7 +78,8 @@ as `platform`, is removed in v2; read `level` and `status` instead.
 
 Text output prints the status beside the rule ID as `RSK012
 [unused-exemption]` whenever it is not `violation`, so the level column is
-never read as a failure that did not happen.
+never read as a failure that did not happen. Its last line counts the findings
+printed and, when any exemption is active, how many rules it silenced.
 
 `actual` is omitted where quoting it is not evidence: a rule that searches a
 whole document for a pattern reports the pattern it wanted, not the document
@@ -98,6 +101,17 @@ Only a known rule ID with a non-empty string reason suppresses findings. Empty
 reasons, unknown IDs, malformed TOML, and non-string values suppress nothing.
 Owner, expiry, and reference metadata remain deferred.
 
+An exemption that suppressed something is reported. `repo-check` emits one
+finding against `pyproject.toml` per exemption that silenced anything, with
+status `suppressed`, at the rule's own level, carrying the declared reason,
+how many findings it hid, and the paths in `actual`. It is reported once
+beside the exemption rather than once per silenced finding, so the entry a
+reviewer has to weigh is not buried under what it hid. It never affects the
+exit code — silencing the failure is what the exemption is for — but a green
+run and a run that only looks green stop being the same output, in text and in
+`--format json` alike. `repo-adopt` counts the same reports on a line of its
+own, apart from the findings it left unfixed.
+
 An exemption that suppressed nothing is reported. When a rule this run
 evaluated produced no finding and an exemption for it is declared, `repo-check`
 emits a finding against `pyproject.toml` with status `unused-exemption`, at the
@@ -107,7 +121,7 @@ repository broke. A rule the resolved profile excludes, and a platform rule
 under a run without `--check-enforcement`, are not evaluated and so are never
 reported this way.
 
-The report exists because an exemption is a claim, and a claim nothing
+That second report exists because an exemption is a claim, and a claim nothing
 exercises stops being reviewed. The `Single Source Of Truth` section every
 `AGENTS.md` carries requires one home per fact and treats deleting the stale
 copy as part of the change: an exemption that outlives the finding it was
@@ -289,8 +303,15 @@ remediation. Markdown explains policy but supplies no executable values.
   `on` remains a string. RSK006 inspects only executable
   `jobs.quality.steps[*].run` nodes. Comments, echo, unrelated fields, and
   shell-wrapper strings do not satisfy commands, and neither does a command
-  reachable only under a condition the policy does not declare for the
+  reachable only under a shell condition the policy does not declare for the
   profile.
+- Step conditions are unmodelled. Only `run:` is collected, so a step's `if:`
+  and `continue-on-error:` are invisible to every workflow rule, RSK006 and
+  RSK030 included: a workflow whose gate steps all carry `if: false` passes
+  `--strict`. These rules prove the workflow spells the required commands, not
+  that a pull request runs them. See
+  [quality-gates.md](quality-gates.md#5-ci-pull-request-gates) for why the gap
+  is disclosed rather than closed.
 - Pre-commit is parsed structurally. RSK007 matches hook IDs, normalized entry
   and argument tokens, and policy-owned material fields such as filters and
   `pass_filenames`.
@@ -313,7 +334,7 @@ remediation. Markdown explains policy but supplies no executable values.
   invokes the checker, not that the invocation is meaningful: a contrived
   command naming the token passes, while a token inside a comment or a
   shell-wrapper string does not, and neither does an invocation reachable only
-  under a guard policy does not declare.
+  under a shell guard policy does not declare.
 - RSK014 requires pull request protection, stale approval dismissal, required
   status checks, strict up-to-date branches, conversation resolution, and
   administrator enforcement when platform checks are requested, but permits a

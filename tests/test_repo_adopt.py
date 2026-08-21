@@ -23,6 +23,7 @@ from repo_standard.repo_adopt import (
     _merge_readme,
     _print_summary,
     _project_values,
+    _read_starter,
     _run,
     apply_plan,
     main,
@@ -709,3 +710,86 @@ def test_summary_reports_every_declared_level(
     for level in LEVEL_ORDER:
         assert f"remaining {level} findings: 1" in output
         assert f"{level} message" in output
+
+
+def test_summary_counts_a_suppressed_finding_apart_from_remaining_ones(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A silenced required rule the summary omits is a silently green adoption."""
+    plan = AdoptionPlan(
+        root=tmp_path,
+        profile="python-single",
+        version="0.0.0",
+        changes=(),
+        unchanged=(),
+        conflicts=(),
+        dependency_metadata_changed=False,
+    )
+    findings = [
+        Finding(
+            rule_id="RSK004",
+            title="title",
+            level="required",
+            path="README.md",
+            line=None,
+            message=(
+                "Required file is missing. Suppressed by "
+                "[tool.repo-check.ignore]: Docs live in the wiki."
+            ),
+            actual=None,
+            expected=None,
+            remediation="remediate",
+            status="suppressed",
+        )
+    ]
+
+    _print_summary(plan, findings)
+
+    output = capsys.readouterr().out
+    assert "remaining required findings: 0" in output
+    assert "suppressed by [tool.repo-check.ignore]: 1" in output
+    assert "  - RSK004 README.md:" in output
+
+
+def _starter_pinned_uses(profile: str, relative: str) -> list[str]:
+    """Every `uses: <action>@<sha> # <version>` line the starter workflow pins."""
+    return [
+        line.strip()
+        for line in _read_starter(profile, relative).splitlines()
+        if line.lstrip().startswith("uses:") and "#" in line
+    ]
+
+
+def test_repinning_carries_the_starters_version_comment_across(
+    tmp_path: Path,
+) -> None:
+    """A stale annotation beside a fresh SHA is what Dependabot reads as current."""
+    root = tmp_path / "existing"
+    _write_minimal_repo(root, "python-single")
+    workflow = root / ".github" / "workflows" / "quality.yml"
+    workflow.parent.mkdir(parents=True)
+    workflow.write_text(
+        "on: pull_request\n"
+        "jobs:\n"
+        "  quality:\n"
+        "    runs-on: ubuntu-latest\n"
+        "    steps:\n"
+        "      - uses: actions/checkout@v4 # v4.2.2\n"
+        "\n"
+        "      - uses: astral-sh/setup-uv@v3\n",
+        encoding="utf-8",
+    )
+
+    apply_plan(plan_adoption(root, "python-single"))
+
+    # ruamel round-trips comments as attached tokens, so assert on the bytes
+    # written rather than on the reloaded document.
+    written = workflow.read_text(encoding="utf-8")
+    pinned = _starter_pinned_uses("python-single", ".github/workflows/quality.yml")
+    assert len(pinned) == 2
+    for line in pinned:
+        assert line in written
+    # The annotation the repin invalidated is gone, and the blank line the
+    # replaced comment token carried is still where it was.
+    assert "v4.2.2" not in written
+    assert "\n\n      - uses: astral-sh/setup-uv@" in written

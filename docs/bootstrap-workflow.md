@@ -318,7 +318,15 @@ values here.
 - `AGENTS.md` is concrete enough to use immediately, with no generic filler
 - `repo-check .` reports no required findings, and the full
   `docs/quality-gates.md` chain passes on the `uv.lock` the default path
-  produces
+  produces, with the one `python-workspace` exception below
+
+A generated `python-workspace` shell holds no packages yet, so its fourth
+gate, `uv build --all-packages`, exits 2 with `Workspace does not contain any
+buildable packages` until the first `repo-add-package` run. Add the package
+before running the chain locally. CI is unaffected: the workspace quality
+workflow wraps that command in `compgen -G "packages/*/pyproject.toml"`. The
+chain in `AGENTS.md` stays unguarded because RSK003 requires it to be the
+exact ordered chain the standard declares for the profile.
 
 The generated compliance workflow runs the released checker through `uvx` in
 an isolated tool environment. It does not add `repo-standard-kit` to the new

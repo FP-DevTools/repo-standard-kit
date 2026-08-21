@@ -70,6 +70,19 @@ def _supports_color() -> bool:
     return sys.stdout.isatty()
 
 
+def _render(value: object, *, limit: int = 4) -> str:
+    """Render a finding value, keeping a long list readable on one line.
+
+    A list-valued `actual` is a set of locations, and the whole set can run to
+    dozens. Text output is read by a person, so it carries enough to act on and
+    a count of the rest; `--format json` still emits every entry.
+    """
+    if isinstance(value, list) and len(value) > limit:
+        shown = ", ".join(repr(item) for item in value[:limit])
+        return f"[{shown}, +{len(value) - limit} more]"
+    return repr(value)
+
+
 def _format_text(findings: list[Finding], *, color: bool) -> str:
     if not findings:
         message = "All checks passed!"
@@ -88,11 +101,17 @@ def _format_text(findings: list[Finding], *, color: bool) -> str:
             f"{finding.title}: {finding.message}"
         )
         if finding.actual is not None:
-            lines.append(f"  actual: {finding.actual!r}")
+            lines.append(f"  actual: {_render(finding.actual)}")
         if finding.expected is not None:
             lines.append(f"  expected: {finding.expected!r}")
         lines.append(f"  remediation: {finding.remediation}")
-    lines.append(f"\n{len(findings)} finding(s).")
+    # A reader scanning the last line must see that an exemption is active
+    # without reading every finding above it, the way pytest reports skips.
+    suppressed = sum(1 for finding in findings if finding.status == "suppressed")
+    summary = f"{len(findings)} finding(s)"
+    if suppressed:
+        summary += f", {suppressed} rule(s) suppressed by [tool.repo-check.ignore]"
+    lines.append(f"\n{summary}.")
     return "\n".join(lines) + "\n"
 
 
@@ -145,7 +164,8 @@ def main(argv: list[str] | None = None) -> int:
     # `advisory` belongs to neither set: those findings are always printed
     # above and never reach the exit code, not even under `--strict`. Only a
     # `violation` can fail a run at all — an `unused-exemption` is a report
-    # about the configuration, not a rule the repository broke.
+    # about the configuration, not a rule the repository broke, and a
+    # `suppressed` finding is one the adopter's exemption already answered.
     levels = STRICT_LEVELS if args.strict else DEFAULT_LEVELS
     if any(
         finding.level in levels and finding.status == "violation"

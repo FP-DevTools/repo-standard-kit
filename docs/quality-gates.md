@@ -124,6 +124,18 @@ the guard the [policy reference](policy-reference.md#rsk006-quality-workflow-exe
 declares for the resolved profile. Any other condition, an `else` or `elif`
 branch, a loop body, and a `case` arm leave the command unproven.
 
+That reach ends at the shell. The conditionals modelled above are the ones
+written inside a `run:` body; a step's own `if:` and `continue-on-error:` are
+never read, because only `run:` is collected. A gate step carrying `if: false`
+or `continue-on-error: true` therefore satisfies RSK006, and the same holds
+for the RSK030 invocation below. The rules prove that the workflow spells the
+chain correctly, not that a pull request executes it. Closing that would mean
+evaluating Actions expressions, which the checker does not do, so the gap is
+disclosed rather than fixed: this standard is for internal development, where
+a repository disabling its own gates is a review problem rather than an
+adversary. Read a green `quality` status as evidence only alongside the
+workflow diff that produced it.
+
 Every pull request shall also run an independent `compliance` job that checks
 the repository against repo-standard-kit. The separate status prevents a
 quality workflow from weakening or removing required gates while still

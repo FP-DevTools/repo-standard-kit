@@ -444,6 +444,33 @@ def _action_family(value: str) -> str:
     return value.split("@", maxsplit=1)[0]
 
 
+def _uses_comment(step: Any) -> str | None:
+    """The `# v7.0.1` version annotation beside a step's `uses` value."""
+    comments = getattr(step, "ca", None)
+    token = comments.items.get("uses") if comments is not None else None
+    value = token[2].value if token is not None and token[2] is not None else ""
+    return value.split("\n", maxsplit=1)[0].strip() or None
+
+
+def _set_uses_comment(step: Any, comment: str) -> None:
+    """Rewrite the version annotation the repinned SHA just invalidated.
+
+    A stale annotation is worse than an absent one, because Dependabot reads
+    it as the pinned version. The existing token also carries whatever blank
+    line followed the step, so only its first line is replaced.
+    """
+    comments = getattr(step, "ca", None)
+    token = comments.items.get("uses") if comments is not None else None
+    if token is None or token[2] is None:
+        # Column 0 lets the emitter place the comment one space after the
+        # value; leaving the column to ruamel aligns it to whatever it last
+        # saw, which is not the same file twice.
+        step.yaml_add_eol_comment(comment, "uses", column=0)
+        return
+    existing = token[2].value
+    token[2].value = comment + existing[len(existing.split("\n", maxsplit=1)[0]) :]
+
+
 def _merge_workflow(
     path: Path, profile: str, relative: str, job_name: str
 ) -> tuple[str, list[str]]:
@@ -533,6 +560,12 @@ def _merge_workflow(
             current_ref = str(match["uses"]).rsplit("@", maxsplit=1)[-1]
             if not is_full_commit_sha(current_ref):
                 match["uses"] = expected_uses
+                # The starter's SHA and its version comment are one fact, so
+                # the pin carries the comment across rather than leaving the
+                # adopter's annotation describing the ref it replaced.
+                starter_comment = _uses_comment(expected_step)
+                if starter_comment is not None:
+                    _set_uses_comment(match, starter_comment)
         elif job_name == "compliance" and update_run:
             match["run"] = expected_run
 
@@ -767,12 +800,20 @@ def plan_adoption(root: Path, profile: str | None = None) -> AdoptionPlan:
     selected = _resolve_profile(root, document, profile)
     policy = load_policy()
     # The short circuit below returns an empty plan when `check_repo` finds
-    # nothing. No rule checks .gitignore -- a file this repo-specific is a poor
-    # fit for a structural rule -- so a repository can be clean by every rule
-    # and still have none, which is why presence is asked here rather than
-    # inferred from the findings.
+    # nothing to repair. No rule checks .gitignore -- a file this repo-specific
+    # is a poor fit for a structural rule -- so a repository can be clean by
+    # every rule and still have none, which is why presence is asked here
+    # rather than inferred from the findings.
     gitignore_present = (root / ".gitignore").is_file()
-    if not check_repo(root, policy, profile=selected) and gitignore_present:
+    # Only a `violation` names something adoption could repair: a report about
+    # the exemption configuration, active or dead, must not turn a repository
+    # that is clean by every rule into one adoption starts rewriting.
+    repairable = [
+        finding
+        for finding in check_repo(root, policy, profile=selected)
+        if finding.status == "violation"
+    ]
+    if not repairable and gitignore_present:
         unchanged = tuple(
             relative for relative in _MANAGED_SURFACES if (root / relative).exists()
         )
@@ -936,11 +977,22 @@ def _print_summary(plan: AdoptionPlan, findings: list[Finding] | None) -> None:
         return
     # Walking the declared levels keeps this summary complete when policy gains
     # one; naming them here is how `advisory` findings went unreported.
+    suppressed = [finding for finding in findings if finding.status == "suppressed"]
     for level in LEVEL_ORDER:
-        matching = [finding for finding in findings if finding.level == level]
+        matching = [
+            finding
+            for finding in findings
+            if finding.level == level and finding.status != "suppressed"
+        ]
         print(f"remaining {level} findings: {len(matching)}")
         for finding in matching:
             print(f"  - {finding.rule_id} {finding.path}: {finding.message}")
+    # A silenced finding counted as remaining would contradict the exit code,
+    # and dropped from the summary it is the same blind spot `repo-check` just
+    # closed, so it is reported on a line of its own.
+    print(f"suppressed by [tool.repo-check.ignore]: {len(suppressed)}")
+    for finding in suppressed:
+        print(f"  - {finding.rule_id} {finding.path}: {finding.message}")
 
 
 def main(argv: list[str] | None = None) -> int:
