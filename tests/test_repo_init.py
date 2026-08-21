@@ -1250,3 +1250,60 @@ def test_a_failed_lock_step_reports_the_rsk009_next_step(
     assert not (output_dir / "uv.lock").exists()
     assert expected_notice in error
     assert "RSK009" in error
+
+
+@pytest.mark.parametrize(
+    ("failure", "expected_notice"),
+    [
+        (
+            FileNotFoundError("uv"),
+            "Skipped uv sync because the executable was not found.",
+        ),
+        (
+            subprocess.CalledProcessError(2, ["uv", "sync"]),
+            "uv sync failed with exit status 2.",
+        ),
+    ],
+    ids=["uv-missing", "uv-sync-failed"],
+)
+def test_a_failed_install_step_is_reported_like_a_failed_lock_step(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    failure: Exception,
+    expected_notice: str,
+) -> None:
+    """Both optional steps fail alike: stderr keeps the reason, nothing aborts."""
+
+    def fake_run(command: list[str], *, cwd: Path, check: bool) -> None:
+        raise failure
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    assert run_optional_installs(tmp_path) is False
+    assert expected_notice in capsys.readouterr().err
+
+
+def test_main_exits_non_zero_when_an_optional_step_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A generated repository whose lock or sync failed must not report success."""
+
+    def fake_run(command: list[str], *, cwd: Path, check: bool) -> None:
+        raise subprocess.CalledProcessError(2, command)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    exit_code = main(
+        [
+            "--profile",
+            "python-single",
+            "--repo-name",
+            "demo-service",
+            "--output-dir",
+            str(tmp_path / "demo-service"),
+            "--no-install",
+        ]
+    )
+
+    assert exit_code == 1

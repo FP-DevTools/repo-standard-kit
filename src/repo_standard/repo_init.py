@@ -83,8 +83,16 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Target directory. Defaults to the current working directory.",
     )
-    parser.add_argument("--no-lock", action="store_true")
-    parser.add_argument("--no-install", action="store_true")
+    parser.add_argument(
+        "--no-lock",
+        action="store_true",
+        help="Skip uv lock, leaving lockfile creation to the maintainer.",
+    )
+    parser.add_argument(
+        "--no-install",
+        action="store_true",
+        help="Skip environment synchronization and pre-commit hook installation.",
+    )
     return parser
 
 
@@ -291,19 +299,28 @@ def ensure_git_repository(output_dir: Path) -> None:
     )
 
 
-def run_lock(output_dir: Path) -> None:
+def run_step(command: list[str], output_dir: Path, label: str) -> bool:
+    """Run one optional bootstrap step, reporting failure without aborting.
+
+    Every optional step fails the same way: the generated files stay on disk,
+    the reason goes to stderr, and the caller reports a non-zero exit so the
+    failure is visible to a script. Aborting instead would leave a half-checked
+    repository behind a traceback.
+    """
     try:
-        subprocess.run(["uv", "lock"], cwd=output_dir, check=True)
+        subprocess.run(command, cwd=output_dir, check=True)
     except FileNotFoundError:
-        print(
-            "Skipped uv lock because the executable was not found.",
-            file=sys.stderr,
-        )
+        print(f"Skipped {label} because the executable was not found.", file=sys.stderr)
+        return False
     except subprocess.CalledProcessError as error:
-        print(
-            f"uv lock failed with exit status {error.returncode}.",
-            file=sys.stderr,
-        )
+        print(f"{label} failed with exit status {error.returncode}.", file=sys.stderr)
+        return False
+    return True
+
+
+def run_lock(output_dir: Path) -> bool:
+    """Return whether `uv lock` produced a lock file."""
+    return run_step(["uv", "lock"], output_dir, "uv lock")
 
 
 def warn_when_lock_file_missing(output_dir: Path) -> None:
@@ -317,26 +334,21 @@ def warn_when_lock_file_missing(output_dir: Path) -> None:
     )
 
 
-def run_optional_installs(output_dir: Path) -> None:
-    try:
-        subprocess.run(["uv", "sync"], cwd=output_dir, check=True)
-    except FileNotFoundError:
-        print(
-            "Skipped uv sync because the executable was not found.",
-            file=sys.stderr,
-        )
-        return
+def run_optional_installs(output_dir: Path) -> bool:
+    """Return whether environment synchronization and hook installation completed."""
+    if not run_step(["uv", "sync"], output_dir, "uv sync"):
+        return False
 
-    ensure_git_repository(output_dir)
     try:
-        subprocess.run(
-            ["uv", "run", "pre-commit", "install"], cwd=output_dir, check=True
-        )
-    except FileNotFoundError:
-        print(
-            "Skipped uv run pre-commit install because the executable was not found.",
-            file=sys.stderr,
-        )
+        ensure_git_repository(output_dir)
+    except RuntimeError as error:
+        print(error, file=sys.stderr)
+        return False
+    return run_step(
+        ["uv", "run", "pre-commit", "install"],
+        output_dir,
+        "uv run pre-commit install",
+    )
 
 
 def bootstrap_repo(
@@ -352,7 +364,8 @@ def bootstrap_repo(
     output_dir: Path,
     no_lock: bool,
     no_install: bool,
-) -> Path:
+) -> bool:
+    """Generate the repository; return whether every attempted step completed."""
     if profile == "python-single":
         package_name = package_name or infer_package_name(repo_name)
         validate_package_name(package_name)
@@ -389,13 +402,14 @@ def bootstrap_repo(
     )
     ensure_no_unresolved_placeholders(output_dir)
 
+    complete = True
     if not no_lock:
-        run_lock(output_dir)
+        complete = run_lock(output_dir) and complete
     if not no_install:
-        run_optional_installs(output_dir)
+        complete = run_optional_installs(output_dir) and complete
     warn_when_lock_file_missing(output_dir)
 
-    return output_dir
+    return complete
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -405,7 +419,7 @@ def main(argv: list[str] | None = None) -> int:
         validate_repo_name(args.repo_name)
     repo_name = args.repo_name or infer_repo_name(output_dir)
 
-    bootstrap_repo(
+    complete = bootstrap_repo(
         profile=args.profile,
         repo_name=repo_name,
         package_name=args.package_name,
@@ -419,7 +433,7 @@ def main(argv: list[str] | None = None) -> int:
         no_install=args.no_install,
     )
     print(f"Bootstrapped {repo_name} into {output_dir}")
-    return 0
+    return 0 if complete else 1
 
 
 if __name__ == "__main__":
