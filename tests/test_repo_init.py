@@ -112,6 +112,9 @@ def test_bootstrap_repo_renders_python_single_starter(tmp_path: Path) -> None:
     assert not (output_dir / ".ruff_cache").exists()
     assert (output_dir / "src" / "demo_service" / "__init__.py").exists()
     assert not (output_dir / "src" / "package_name").exists()
+    gitignore_text = (output_dir / ".gitignore").read_text(encoding="utf-8")
+    for entry in (".venv/", "__pycache__/", ".pytest_cache/", ".ruff_cache/", "dist/"):
+        assert entry in gitignore_text
 
 
 def test_bootstrap_repo_infers_package_name_for_python_single(tmp_path: Path) -> None:
@@ -179,6 +182,9 @@ def test_bootstrap_repo_renders_python_workspace_starter(tmp_path: Path) -> None
     assert not (output_dir / ".ruff_cache").exists()
     assert (output_dir / "packages" / ".gitkeep").exists()
     assert not (output_dir / "src").exists()
+    gitignore_text = (output_dir / ".gitignore").read_text(encoding="utf-8")
+    for entry in (".venv/", "__pycache__/", ".pytest_cache/", ".ruff_cache/", "dist/"):
+        assert entry in gitignore_text
 
     # M1: pytest must not exit 5 (empty collection) before any package exists.
     assert (output_dir / "tests" / "test_workspace_shell.py").exists()

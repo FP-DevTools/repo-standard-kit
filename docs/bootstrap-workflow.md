@@ -40,10 +40,11 @@ is already compliant and produces no planned changes.
 the checkout:
 
 - Standard-owned assets such as the compliance workflow, GitHub Actions
-  Dependabot entry, Markdown configuration, changelog skeleton, and
-  documentation directories are added when missing. Existing non-empty ADR
+  Dependabot entry, Markdown configuration, changelog skeleton, `.gitignore`,
+  and documentation directories are added when missing. Existing non-empty ADR
   and diagram directories are authoritative and are never seeded with starter
-  files or conflicting decision numbers.
+  files or conflicting decision numbers. An existing `.gitignore` is left
+  untouched; it is never merged with the starter's.
 - `pyproject.toml`, `.pre-commit-config.yaml`, and the quality workflow are
   structurally merged. Existing project dependencies, build settings,
   services, custom hooks, and additional steps remain in place.
@@ -257,6 +258,7 @@ widget-service/
   .github/dependabot.yml
   .github/workflows/compliance.yml
   .github/workflows/quality.yml
+  .gitignore
   .pre-commit-config.yaml
   .pymarkdown.json
   AGENTS.md
@@ -283,6 +285,7 @@ widget-platform/
   .github/dependabot.yml
   .github/workflows/compliance.yml
   .github/workflows/quality.yml
+  .gitignore
   .pre-commit-config.yaml
   .pymarkdown.json
   AGENTS.md

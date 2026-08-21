@@ -96,6 +96,7 @@ _MANAGED_SURFACES = (
     "AGENTS.md",
     "README.md",
     "CHANGELOG.md",
+    ".gitignore",
     "docs/adr",
     "docs/diagrams",
 )
@@ -131,9 +132,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("target", nargs="?", default=".")
     parser.add_argument("--profile", choices=policy.profile_ids)
-    parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--no-lock", action="store_true")
-    parser.add_argument("--no-install", action="store_true")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Plan and print the reconciliation without writing, staging, or "
+        "running any command.",
+    )
+    parser.add_argument(
+        "--no-lock",
+        action="store_true",
+        help="Skip uv lock, leaving lockfile refresh to the maintainer.",
+    )
+    parser.add_argument(
+        "--no-install",
+        action="store_true",
+        help="Skip environment synchronization after reconciliation.",
+    )
     parser.add_argument(
         "--native-tls",
         action="store_true",
@@ -761,7 +775,12 @@ def plan_adoption(root: Path, profile: str | None = None) -> AdoptionPlan:
     document = _parse_toml(root / "pyproject.toml")
     selected = _resolve_profile(root, document, profile)
     policy = load_policy()
-    if not check_repo(root, policy, profile=selected):
+    # No rule checks .gitignore (a repo-specific file is a poor fit for a
+    # structural rule), so a repository can be fully compliant and still lack
+    # one. The short circuit below only fires when `check_repo` already found
+    # something to fix, so it is gated on the file's presence too.
+    gitignore_present = (root / ".gitignore").is_file()
+    if not check_repo(root, policy, profile=selected) and gitignore_present:
         unchanged = tuple(
             relative for relative in _MANAGED_SURFACES if (root / relative).exists()
         )
@@ -815,6 +834,12 @@ def plan_adoption(root: Path, profile: str | None = None) -> AdoptionPlan:
         generated["CHANGELOG.md"] = _render(
             _read_starter(selected, "CHANGELOG.md"), values
         )
+
+    gitignore = root / ".gitignore"
+    if gitignore.exists():
+        unchanged.append(".gitignore")
+    else:
+        generated[".gitignore"] = _read_starter(selected, ".gitignore")
 
     for directory, starter_file in (
         ("docs/adr", "docs/adr/0001-template.md"),
