@@ -35,6 +35,22 @@ repository layout, bootstrapping, and the Python profiles.
 Templates and starter kits implement that standard; the documents it indexes
 define the intent and rules.
 
+### Design Principles
+
+Why the standard is shaped the way it is. These are rationale, not rules — each
+is enforced by the document named beside it.
+
+- **Portable**: no workspace-specific filesystem assumptions, so the standard
+  travels between organizations — `docs/repo-standard.md`
+- **Practical**: exact commands and concrete file layouts, not abstract policy —
+  `docs/quality-gates.md`
+- **Collaborative**: explicit human and agent responsibility boundaries —
+  `docs/agent-operating-model.md`
+- **Typed**: strong typing expectations for Python code —
+  `docs/quality-gates.md`, `docs/policy-reference.md#profiles`
+- **Small-batch**: short-lived branches and small PRs for parallel work —
+  `docs/git-workflow.md`
+
 ### Current Profiles
 
 - `python-single`: one package rooted at `src/<package_name>/`
