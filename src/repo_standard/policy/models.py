@@ -20,7 +20,8 @@ _SAFE_YAML = YAML(typ="safe")
 # default; `recommended` fails only under strict checking; `advisory` is always
 # reported and never fails, because the prose it comes from leaves the choice
 # to the repository.
-LEVELS = {"required", "recommended", "advisory"}
+LEVEL_ORDER = ("required", "recommended", "advisory")
+LEVELS = set(LEVEL_ORDER)
 STRICT_LEVELS = {"required", "recommended"}
 DEFAULT_LEVELS = {"required"}
 ENFORCEMENT_MODES = {"structural", "platform"}
