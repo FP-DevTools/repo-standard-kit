@@ -137,6 +137,29 @@ def test_adoption_reaches_zero_required_findings_and_is_idempotent(
     assert repeated.changes == ()
 
 
+def test_missing_gitignore_is_added_never_merged(tmp_path: Path) -> None:
+    root = tmp_path / "existing"
+    _write_minimal_repo(root, "python-single")
+
+    apply_plan(plan_adoption(root, "python-single"))
+
+    gitignore = (root / ".gitignore").read_text(encoding="utf-8")
+    assert ".venv/" in gitignore
+    assert "__pycache__/" in gitignore
+
+
+def test_existing_gitignore_is_left_untouched(tmp_path: Path) -> None:
+    root = tmp_path / "existing"
+    _write_minimal_repo(root, "python-single")
+    (root / ".gitignore").write_text("node_modules/\n", encoding="utf-8")
+
+    plan = plan_adoption(root, "python-single")
+    apply_plan(plan)
+
+    assert ".gitignore" not in {change.path.as_posix() for change in plan.changes}
+    assert (root / ".gitignore").read_text(encoding="utf-8") == "node_modules/\n"
+
+
 def test_dry_run_is_read_only_and_does_not_require_git(tmp_path: Path) -> None:
     root = tmp_path / "existing"
     _write_minimal_repo(root, "python-single")
@@ -234,6 +257,24 @@ def test_non_uv_build_backend_is_preserved_without_conflict(tmp_path: Path) -> N
     )
     assert backend_finding.level == "recommended"
     assert not [finding for finding in findings if finding.level == "required"]
+
+
+def test_fully_compliant_repository_still_gets_a_missing_gitignore(
+    tmp_path: Path,
+) -> None:
+    """No rule checks `.gitignore`, so zero findings must not short-circuit it."""
+    root = tmp_path / "existing"
+    _write_minimal_repo(root, "python-single")
+    apply_plan(plan_adoption(root, "python-single"))
+    (root / "LICENSE").write_text("Approved license terms.\n", encoding="utf-8")
+    assert check_repo(root, load_policy(), profile="python-single") == []
+    (root / ".gitignore").unlink()
+
+    plan = plan_adoption(root, "python-single")
+
+    assert {change.path.as_posix() for change in plan.changes} == {".gitignore"}
+    apply_plan(plan)
+    assert (root / ".gitignore").is_file()
 
 
 def test_structurally_compliant_repository_is_a_no_op(tmp_path: Path) -> None:

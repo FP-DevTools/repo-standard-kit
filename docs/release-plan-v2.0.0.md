@@ -4,13 +4,14 @@ This is a working tracker, not part of the standard. It records the audit
 findings for `chore/release-v2.0.0`, the decisions taken about them, and the
 phase each correction belongs to.
 
-**P7 deletes this file.** It exists to keep seven phases coordinated while the
+**P7 deletes this file.** It exists to keep eight phases coordinated while the
 release branch is open, and `pyproject.toml` ships `docs/**` to adopters, so it
 must not survive the tag.
 
 ## Context
 
-An audit of `chore/release-v2.0.0` found 22 issues the gates do not catch.
+An audit of `chore/release-v2.0.0` found 22 issues the gates do not catch. Two
+further findings (23, 24) surfaced during the work, bringing the total to 24.
 `uv run pytest` passes and `repo-check . --strict` is clean; that is part of
 the finding rather than a reassurance.
 
@@ -24,24 +25,27 @@ the finding rather than a reassurance.
 | D4 | New `advisory` policy level; RSK015 moves to it | `line-length = 88` stays visible and stops failing `--strict` |
 | D5 | `repo-init` gains `repo-adopt`'s `--no-lock` / `--no-install` split | Bootstrapped repositories stop failing required RSK009 |
 | D6 | Drop `load_rules` and the JSON `severity` field | Must land with D4, or `advisory` needs an invented `shall`/`should` value |
+| D7 | No rule checks `.gitignore`; shipping it in the starter is enough | Fixes finding 23 without adding a check that would be noise in every adopter's output |
 
 ## Phases
 
 Each phase is a sub-issue and one PR into `chore/release-v2.0.0`. Critical path
-is P3 → P5 → P7; P1, P2, P4 and P6 run alongside it.
+is P3 → P5 → P7; P2, P4 and P8 run alongside it.
 
 | Phase | Scope | Findings | Depends on | Status |
 | --- | --- | --- | --- | --- |
-| P1 | Factual corrections | 4, 5, 6, 8, 10, 15, 18 | — | In progress |
-| P2 | Root documents under the generator | 7 | P1 | Not started |
-| P3 | Policy schema: `advisory`, drop `severity` | 19, dead weight | — | Not started |
-| P4 | Checker correctness | 13, 14, 20, 22 | — | Not started |
+| P1 | Factual corrections | 4, 5, 6, 8, 10, 15, 18 | — | Merged (#49) |
+| P2 | Root documents under the generator | 7 | P1 | Merged (#58) |
+| P3 | Policy schema: `advisory`, drop `severity` | 19, dead weight | — | Merged (#57) |
+| P4 | Checker correctness | 13, 14, 20, 22 | — | In progress (#59) |
 | P5 | Coverage: compliance workflow and shapes | 11, 12, 16, 17 | P3 | Not started |
-| P6 | Bootstrap contract and dead weight | 9, 21 | — | In progress |
+| P6 | Bootstrap contract and dead weight | 9, 21 | — | Merged (#53) |
 | P7 | Release finalization | 1, 2, 3 | all | Not started |
+| P8 | Starter `.gitignore`, `repo-adopt` flag docs | 23, 24 | — | In progress (#56) |
 
 P1 precedes P2 so the corrected prose is what gets migrated into fragments,
-rather than migrating the defects and fixing them twice.
+rather than migrating the defects and fixing them twice. P8 shares no files
+with any other phase and blocks nothing.
 
 ## Findings Index
 
@@ -114,9 +118,24 @@ Numbers are stable identifiers referenced by the phase table and the sub-issues.
 
 ### Dead weight
 
-- `checks.py:82-83` — `load_rules`, a compatibility alias for the v0.4 name.
-- `models.py:470-473` and `cli.py:90` — the JSON `severity` field, carrying an
-  expired "through v1" promise.
-- `pyproject.toml:43` — `profiles/**` in `source-include`.
+- `load_rules`, a compatibility alias for the v0.4 name. Removed by P6 (#53).
+- The JSON `severity` field, carrying an expired "through v1" promise. Removed
+  by P3 (#57).
+- `profiles/**` in `source-include`. Removed by P1 (#49).
 - `docs/diagrams/README.md` — a placeholder shipped into every generated
-  repository that no rule references.
+  repository that no rule references. **Still present and owned by no phase.**
+  Deleting it is a starter-kit change; leaving it needs a rule that gives it a
+  reason to exist. P7 must not tag with this unresolved.
+
+### Findings added during the work
+
+- **23.** Neither starter kit ships a `.gitignore`, and `repo-init` never
+  writes one, so a bootstrapped repository starts with `.venv/`,
+  `__pycache__/`, `.pytest_cache/`, `.ruff_cache/` and `dist/` all
+  committable. Sharpened by P6: `repo-init` now runs `uv lock` and `uv sync`
+  on the default path, so a generated repository has a `.venv/` before the
+  maintainer's first commit. Resolved by D7 and scoped to P8.
+- **24.** `repo_adopt.build_parser` declared `--dry-run`, `--no-lock` and
+  `--no-install` with no help text, so `repo-adopt --help` listed three flags
+  with no explanation. Its failure handling was already correct — only the
+  help text was missing. Scoped to P8.
