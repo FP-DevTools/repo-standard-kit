@@ -269,7 +269,7 @@ Remediation: Protect main with pull request protection, stale approval dismissal
 
 ### RSK015: Ruff line length uses the recommended baseline
 
-- Level: `recommended`
+- Level: `advisory`
 - Profiles: `python-single`, `python-workspace`
 - Source: [`docs/quality-gates.md` — 13. Formatting Baseline](../docs/quality-gates.md)
 - Enforcement: `structural`

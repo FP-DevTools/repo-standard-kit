@@ -31,7 +31,7 @@ from repo_standard.policy import (
     load_source_policy,
 )
 from repo_standard.policy.compiler import render_compiled, render_reference
-from repo_standard.policy.models import CHECK_SCHEMAS
+from repo_standard.policy.models import CHECK_SCHEMAS, LEVELS
 from repo_standard.repo_init import bootstrap_repo
 
 POLICY = load_policy()
@@ -539,7 +539,6 @@ def test_finding_contains_actionable_contract_fields(tmp_path: Path) -> None:
     finding = next(f for f in check_repo(root, POLICY) if f.rule_id == "RSK004")
     assert finding.title
     assert finding.level == "required"
-    assert finding.severity == "shall"
     assert finding.actual == "missing"
     assert finding.expected == "file"
     assert finding.remediation
@@ -561,9 +560,46 @@ def test_non_uv_build_backend_is_a_strict_only_recommendation(
         finding for finding in check_repo(root, POLICY) if finding.rule_id == "RSK008"
     )
     assert finding.level == "recommended"
-    assert finding.severity == "should"
     assert cli.main([str(root)]) == 0
     assert cli.main([str(root), "--strict"]) == 1
+
+
+def test_line_length_is_advisory_while_pytest_rules_stay_recommended() -> None:
+    assert LEVELS == {"required", "recommended", "advisory"}
+    assert POLICY.rule("RSK015").level == "advisory"
+    assert POLICY.rule("RSK016").level == "recommended"
+
+
+def test_advisory_finding_is_reported_but_never_blocks(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _minimal_repo(tmp_path)
+    pyproject = root / "pyproject.toml"
+    baseline = POLICY.rule("RSK015").check.config["value"]
+    declared = baseline + 12
+    pyproject.write_text(
+        pyproject.read_text(encoding="utf-8").replace(
+            f"line-length = {baseline}", f"line-length = {declared}"
+        ),
+        encoding="utf-8",
+    )
+
+    [finding] = [f for f in check_repo(root, POLICY) if f.rule_id == "RSK015"]
+    assert finding.level == "advisory"
+    assert finding.actual == declared
+    assert finding.expected == baseline
+
+    # Reported in both modes, and blocking in neither — not even under --strict.
+    assert cli.main([str(root)]) == 0
+    assert "RSK015" in capsys.readouterr().out
+    assert cli.main([str(root), "--strict", "--format", "json"]) == 0
+    [item] = [
+        item
+        for item in json.loads(capsys.readouterr().out)
+        if item["rule_id"] == "RSK015"
+    ]
+    assert item["level"] == "advisory"
+    assert "severity" not in item
 
 
 # --- GitHub workflow structure, commands, permissions, and pins -----------
@@ -1073,7 +1109,6 @@ def test_zero_approvals_passes_required_policy_but_reports_recommendation(
     assert not any(finding.rule_id == "RSK014" for finding in findings)
     [finding] = [finding for finding in findings if finding.rule_id == "RSK022"]
     assert finding.level == "recommended"
-    assert finding.severity == "should"
     assert finding.status == "violation"
     assert finding.message == "main requires too few approving reviews."
 
@@ -1155,7 +1190,6 @@ def test_zero_approval_ruleset_passes_rsk014_but_reports_rsk022(
     assert not any(finding.rule_id == "RSK014" for finding in findings)
     [finding] = [finding for finding in findings if finding.rule_id == "RSK022"]
     assert finding.level == "recommended"
-    assert finding.severity == "should"
     assert finding.message == "main requires too few approving reviews."
 
 
@@ -1319,7 +1353,7 @@ def test_only_known_nonempty_ignore_reasons_suppress(tmp_path: Path) -> None:
     assert "RSK004" not in _rule_ids(check_repo(root, POLICY))
 
 
-def test_json_output_retains_legacy_fields_and_adds_actionable_fields(
+def test_json_output_carries_actionable_fields_and_no_legacy_severity(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     root = _minimal_repo(tmp_path)
@@ -1330,7 +1364,7 @@ def test_json_output_retains_legacy_fields_and_adds_actionable_fields(
         for item in json.loads(capsys.readouterr().out)
         if item["rule_id"] == "RSK004"
     ]
-    assert {"rule_id", "severity", "path", "line", "message"} <= item.keys()
+    assert {"rule_id", "path", "line", "message"} <= item.keys()
     assert {
         "title",
         "level",
@@ -1339,6 +1373,7 @@ def test_json_output_retains_legacy_fields_and_adds_actionable_fields(
         "remediation",
         "status",
     } <= item.keys()
+    assert "severity" not in item
 
 
 def test_success_output_uses_positive_brand_color() -> None:
@@ -1355,7 +1390,7 @@ def test_strict_mode_only_promotes_recommended_findings(tmp_path: Path) -> None:
 
 
 def test_unavailable_requested_platform_check_is_command_error(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     root = _minimal_repo(tmp_path)
 
@@ -1372,7 +1407,18 @@ def test_unavailable_requested_platform_check_is_command_error(
     findings = check_repo(root, POLICY, include_platform=True)
     finding = next(f for f in findings if f.rule_id == "RSK014")
     assert finding.status == "indeterminate"
-    assert finding.severity == "platform"
+
+    # `status` is the only carrier of the indeterminate signal now that the
+    # legacy `severity: "platform"` value is gone, so JSON must still emit it.
+    assert cli.main([str(root), "--check-enforcement", "--format", "json"]) == 2
+    [item] = [
+        item
+        for item in json.loads(capsys.readouterr().out)
+        if item["rule_id"] == "RSK014"
+    ]
+    assert item["status"] == "indeterminate"
+    assert item["level"] == "required"
+    assert "severity" not in item
 
 
 @pytest.mark.parametrize("profile", STARTER_KIT_PROFILES)

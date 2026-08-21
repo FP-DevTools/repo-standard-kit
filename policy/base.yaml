@@ -305,7 +305,7 @@ rules:
 
   - id: RSK015
     title: Ruff line length uses the recommended baseline
-    level: recommended
+    level: advisory
     profiles: [python-single, python-workspace]
     source:
       document: docs/quality-gates.md

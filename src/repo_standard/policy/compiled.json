@@ -490,7 +490,7 @@
       },
       "enforcement": "structural",
       "id": "RSK015",
-      "level": "recommended",
+      "level": "advisory",
       "profiles": [
         "python-single",
         "python-workspace"

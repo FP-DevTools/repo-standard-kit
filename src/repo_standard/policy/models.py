@@ -16,7 +16,13 @@ COMPILED_POLICY_PATH = Path(__file__).resolve().parent / "compiled.json"
 
 _SAFE_YAML = YAML(typ="safe")
 
-LEVELS = {"required", "recommended"}
+# Policy levels, ordered from most to least binding. `required` fails by
+# default; `recommended` fails only under strict checking; `advisory` is always
+# reported and never fails, because the prose it comes from leaves the choice
+# to the repository.
+LEVELS = {"required", "recommended", "advisory"}
+STRICT_LEVELS = {"required", "recommended"}
+DEFAULT_LEVELS = {"required"}
 ENFORCEMENT_MODES = {"structural", "platform"}
 MARKER_KINDS = {"file", "directory"}
 GITHUB_PERMISSION_VALUES = {"none", "read", "write"}
@@ -466,11 +472,6 @@ class Rule:
     check: Check
     rationale: str
     remediation: str
-
-    @property
-    def severity(self) -> str:
-        """Legacy JSON compatibility field retained through v1."""
-        return "shall" if self.level == "required" else "should"
 
     @classmethod
     def from_data(cls, value: Any, location: str) -> Rule:
