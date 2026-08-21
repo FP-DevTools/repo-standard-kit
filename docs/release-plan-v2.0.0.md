@@ -118,12 +118,14 @@ Numbers are stable identifiers referenced by the phase table and the sub-issues.
 
 ### Dead weight
 
-- `checks.py:82-83` — `load_rules`, a compatibility alias for the v0.4 name.
-- `models.py:470-473` and `cli.py:90` — the JSON `severity` field, carrying an
-  expired "through v1" promise.
-- `pyproject.toml:43` — `profiles/**` in `source-include`.
+- `load_rules`, a compatibility alias for the v0.4 name. Removed by P6 (#53).
+- The JSON `severity` field, carrying an expired "through v1" promise. Removed
+  by P3 (#57).
+- `profiles/**` in `source-include`. Removed by P1 (#49).
 - `docs/diagrams/README.md` — a placeholder shipped into every generated
-  repository that no rule references.
+  repository that no rule references. **Still present and owned by no phase.**
+  Deleting it is a starter-kit change; leaving it needs a rule that gives it a
+  reason to exist. P7 must not tag with this unresolved.
 
 ### Findings added during the work
 

@@ -775,10 +775,11 @@ def plan_adoption(root: Path, profile: str | None = None) -> AdoptionPlan:
     document = _parse_toml(root / "pyproject.toml")
     selected = _resolve_profile(root, document, profile)
     policy = load_policy()
-    # No rule checks .gitignore (a repo-specific file is a poor fit for a
-    # structural rule), so a repository can be fully compliant and still lack
-    # one. The short circuit below only fires when `check_repo` already found
-    # something to fix, so it is gated on the file's presence too.
+    # The short circuit below returns an empty plan when `check_repo` finds
+    # nothing. No rule checks .gitignore -- a file this repo-specific is a poor
+    # fit for a structural rule -- so a repository can be clean by every rule
+    # and still have none, which is why presence is asked here rather than
+    # inferred from the findings.
     gitignore_present = (root / ".gitignore").is_file()
     if not check_repo(root, policy, profile=selected) and gitignore_present:
         unchanged = tuple(
