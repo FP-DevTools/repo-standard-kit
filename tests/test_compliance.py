@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 import re
 import shutil
@@ -1003,13 +1004,117 @@ def test_shipped_compliance_workflows_satisfy_their_rules(profile: str) -> None:
     for root in (REPO_ROOT, kit):
         issues = [
             issue
-            for rule_id in ("RSK027", "RSK028", "RSK029")
+            for rule_id in ("RSK027", "RSK028", "RSK029", "RSK030")
             for issue in CHECK_HANDLERS[POLICY.rule(rule_id).check.kind](
                 checks.CheckContext(root=root, policy=POLICY, profile=profile),
                 POLICY.rule(rule_id).check.config,
             )
         ]
         assert issues == []
+
+
+def test_rsk030_owns_the_invocation_token_and_declares_every_guard() -> None:
+    rule = POLICY.rule("RSK030")
+    assert rule.level == "required"
+    assert rule.check.config == {
+        "path": ".github/workflows/compliance.yml",
+        "job": "compliance",
+        "token": "repo-check",
+        "guards_by_profile": {"python-single": [], "python-workspace": []},
+    }
+    assert rule.check.config["token"] not in inspect.getsource(
+        CHECK_HANDLERS[rule.check.kind]
+    )
+
+
+def _rewrite_compliance_step(root: Path, run: str) -> None:
+    path = root / ".github" / "workflows" / "compliance.yml"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("      - run: repo-check .\n", run),
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.parametrize(
+    "run",
+    [
+        "      - run: echo checked\n",
+        "      - run: bash -c 'repo-check .'\n",
+        "      - run: |\n          echo checked\n          # repo-check .\n",
+        "      - name: repo-check .\n        run: echo checked\n",
+    ],
+    ids=["absent", "shell-wrapper", "comment", "step-name"],
+)
+def test_a_compliance_job_that_never_invokes_the_checker_reports_rsk030(
+    tmp_path: Path, run: str
+) -> None:
+    root = _minimal_repo(tmp_path)
+    _rewrite_compliance_step(root, run)
+    [finding] = [f for f in check_repo(root, POLICY) if f.rule_id == "RSK030"]
+    assert finding.message == (
+        "Job 'compliance' executes no command invoking repo-check."
+    )
+
+
+def test_an_invocation_under_an_undeclared_guard_reports_rsk030(
+    tmp_path: Path,
+) -> None:
+    """A skipped compliance run still exits zero, so the guard has to be owned."""
+    root = _minimal_repo(tmp_path)
+    _rewrite_compliance_step(
+        root,
+        "      - run: |\n"
+        '          if [ -n "$SKIP" ]; then\n'
+        "            repo-check .\n"
+        "          fi\n",
+    )
+    [finding] = [f for f in check_repo(root, POLICY) if f.rule_id == "RSK030"]
+    assert finding.message == (
+        "Job 'compliance' invokes repo-check only under an undeclared guard."
+    )
+    assert finding.expected == []
+
+
+@pytest.mark.parametrize(
+    "run",
+    [
+        "      - run: uv run --locked --no-dev repo-check . --format text\n",
+        '      - run: uvx --from "git+https://host/kit.git@v2.0.0" repo-check .\n',
+    ],
+    ids=["working-tree", "released"],
+)
+def test_either_legitimate_invocation_satisfies_rsk030(
+    tmp_path: Path, run: str
+) -> None:
+    root = _minimal_repo(tmp_path)
+    _rewrite_compliance_step(root, run)
+    assert "RSK030" not in _rule_ids(check_repo(root, POLICY))
+
+
+def test_rsk030_accepts_a_command_that_only_mentions_the_token(
+    tmp_path: Path,
+) -> None:
+    """Containment cannot tell a real run from a contrived one; policy says so."""
+    root = _minimal_repo(tmp_path)
+    _rewrite_compliance_step(root, "      - run: echo repo-check\n")
+    assert "RSK030" not in _rule_ids(check_repo(root, POLICY))
+
+
+def test_the_reusable_compliance_workflow_is_pinned_and_least_privileged() -> None:
+    """No rule reads this file: RSK029's path is fixed and adopters have no such
+    file, so the kit refuses to ship the surface it forbids elsewhere."""
+    context = checks.CheckContext(
+        root=REPO_ROOT, policy=POLICY, profile="python-single"
+    )
+    path = ".github/workflows/compliance-reusable.yml"
+    assert CHECK_HANDLERS["github_workflow_pins"](context, {"path": path}) == []
+    assert (
+        CHECK_HANDLERS["github_workflow_permissions"](
+            context,
+            {"path": path, "job": "compliance", "permissions": {"contents": "read"}},
+        )
+        == []
+    )
 
 
 # --- pre-commit structure -------------------------------------------------

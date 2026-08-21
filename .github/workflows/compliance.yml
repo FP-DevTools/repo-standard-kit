@@ -2,24 +2,6 @@ name: Compliance
 
 on:
   pull_request:
-  workflow_call:
-    inputs:
-      standard-ref:
-        description: >-
-          Released repo-standard-kit ref whose packaged checker and compiled
-          policy should execute.
-        type: string
-        required: true
-      strict:
-        description: "Treat 'should' findings as failures too."
-        type: boolean
-        default: false
-      check-enforcement:
-        description: >-
-          Also check branch protection (§10). Needs gh and auth in the
-          caller's job.
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -36,27 +18,4 @@ jobs:
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
       - name: Run repo-check
-        shell: bash
-        env:
-          REPO_STANDARD_REF: ${{ inputs.standard-ref }}
-          STRICT: ${{ inputs.strict }}
-          CHECK_ENFORCEMENT: ${{ inputs.check-enforcement }}
-        run: |
-          args=(--format text)
-          if [ "$STRICT" = "true" ]; then
-            args+=(--strict)
-          fi
-          if [ "$CHECK_ENFORCEMENT" = "true" ]; then
-            args+=(--check-enforcement)
-          fi
-          if [ -n "$REPO_STANDARD_REF" ]; then
-            if [[ ! "$REPO_STANDARD_REF" =~ ^[A-Za-z0-9._/-]+$ ]]; then
-              echo "Invalid repo-standard-kit ref" >&2
-              exit 2
-            fi
-            uvx \
-              --from "git+https://github.com/FP-DevTools/repo-standard-kit.git@$REPO_STANDARD_REF" \
-              repo-check . "${args[@]}"
-          else
-            uv run --locked --no-dev repo-check . "${args[@]}"
-          fi
+        run: uv run --locked --no-dev repo-check .

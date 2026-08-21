@@ -1,0 +1,57 @@
+name: Compliance (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      standard-ref:
+        description: >-
+          Released repo-standard-kit ref whose packaged checker and compiled
+          policy should execute.
+        type: string
+        required: true
+      strict:
+        description: "Treat 'should' findings as failures too."
+        type: boolean
+        default: false
+      check-enforcement:
+        description: >-
+          Also check branch protection (§10). Needs gh and auth in the
+          caller's job.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  compliance:
+    name: compliance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+
+      - name: Run repo-check
+        shell: bash
+        env:
+          REPO_STANDARD_REF: ${{ inputs.standard-ref }}
+          STRICT: ${{ inputs.strict }}
+          CHECK_ENFORCEMENT: ${{ inputs.check-enforcement }}
+        run: |
+          args=(--format text)
+          if [ "$STRICT" = "true" ]; then
+            args+=(--strict)
+          fi
+          if [ "$CHECK_ENFORCEMENT" = "true" ]; then
+            args+=(--check-enforcement)
+          fi
+          if [[ ! "$REPO_STANDARD_REF" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+            echo "Invalid repo-standard-kit ref" >&2
+            exit 2
+          fi
+          uvx \
+            --from "git+https://github.com/FP-DevTools/repo-standard-kit.git@$REPO_STANDARD_REF" \
+            repo-check . "${args[@]}"

@@ -84,19 +84,20 @@ status. This CI check does not replace `quality`: compliance verifies the
 standard-owned structure, while quality executes the declared gate chain.
 
 The starter kits and this standards repository all use the canonical
-`.github/workflows/compliance.yml` name and emit a `compliance` job. The
-standards repository's workflow also remains callable by adopters. A repository
-may instead call that reusable workflow from its canonical file, provided the
-resulting required status is named `compliance`.
+`.github/workflows/compliance.yml` name and emit a `compliance` job. A
+repository may instead call the reusable workflow this repository publishes at
+`.github/workflows/compliance-reusable.yml` from its canonical file, provided
+the resulting required status is named `compliance`.
 
-Both adopter forms execute the selected checker with `uvx`. The isolated tool
-environment neither reads nor changes the adopter's `uv.lock`, and
-`repo-standard-kit` does not belong in the adopter's project dependencies.
-Direct pull requests in `repo-standard-kit` are the exception: the root workflow
-runs the checked-out implementation with `uv run --locked --no-dev` so changes
-to the checker itself receive coverage before release. The reusable workflow
-selects these paths from the required `standard-ref` input; it does not use the
-inherited event name, which is still `pull_request` when an adopter calls it.
+An adopter executes the selected checker with `uvx`, in either form. The
+isolated tool environment neither reads nor changes the adopter's `uv.lock`,
+and `repo-standard-kit` does not belong in the adopter's project dependencies.
+Direct pull requests in `repo-standard-kit` are the exception: its own
+`compliance.yml` runs the checked-out implementation with
+`uv run --locked --no-dev` so changes to the checker itself receive coverage
+before release. Each trigger owns a file rather than sharing one, so neither
+workflow branches on the event name — which is still `pull_request` when an
+adopter calls a reusable workflow — nor on whether a ref input was supplied.
 
 Together with the `quality` job, this gives every adopting repository the same
 two required status names and therefore the same branch-protection ruleset.
@@ -117,6 +118,51 @@ repos:
 
 ### Required CI workflow
 
+The required shape is the one both starter kits ship: a workflow the repository
+owns, running the released checker directly.
+
+```yaml
+name: Compliance
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  compliance:
+    name: compliance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+
+      - name: Check repository compliance
+        run: >-
+          uvx --from
+          "git+https://github.com/FP-DevTools/repo-standard-kit.git@v2.0.0"
+          repo-check .
+```
+
+Every remote action SHALL be pinned to a full commit SHA; keep the version
+comment beside it so dependency updates stay readable. The ref in the `--from`
+URL selects the released `repo-standard-kit` revision whose packaged checker
+and compiled policy are executed. A commit SHA gives the strongest
+reproducibility. A human-readable release tag such as `v2.0.0` is permitted
+only when repository governance keeps release tags immutable.
+
+Because the repository owns the command, any option the checker accepts —
+`--strict`, `--check-enforcement`, `--profile` — is an edit to that line rather
+than a request for a new workflow input.
+
+### Alternative: calling the reusable workflow
+
+The caller is one job:
+
 ```yaml
 name: Compliance
 
@@ -125,27 +171,35 @@ on:
 
 jobs:
   compliance:
-    uses: FP-DevTools/repo-standard-kit/.github/workflows/compliance.yml@<full-sha>
+    uses: FP-DevTools/repo-standard-kit/.github/workflows/compliance-reusable.yml@<full-sha>
     with:
       standard-ref: v2.0.0
 ```
 
-The reusable workflow itself SHALL be pinned to a full commit SHA. That
-immutable `uses:` reference selects the workflow implementation the caller
-trusts. The distinct `standard-ref` input selects the released
-`repo-standard-kit` revision whose packaged checker and compiled policy are
-executed. A commit SHA gives the strongest reproducibility. A human-readable
-release tag such as `v2.0.0` is permitted only when repository governance keeps
-release tags immutable.
-The workflow passes that input through the environment, validates it against a
-narrow Git-ref character allowlist, and never interpolates caller-controlled
-inputs directly into Bash source. Confirm the caller emits the required
-`compliance` status.
+This form is shorter and the runner is maintained centrally, at the cost of
+being limited to the inputs that exist: `standard-ref`, `strict`, and
+`check-enforcement`. The reusable workflow SHALL itself be pinned to a full
+commit SHA, which selects the workflow implementation the caller trusts; the
+distinct `standard-ref` input selects the checker revision, on the same terms
+as the `--from` ref above. The workflow passes that input through the
+environment, validates it against a narrow Git-ref character allowlist, and
+never interpolates caller-controlled inputs directly into Bash source.
 
-`--check-enforcement` remains a distinct, authenticated platform audit. Enable
-the reusable workflow's `check-enforcement` input only when the job has GitHub
-CLI authentication and the repository plan exposes branch protection or
-rulesets. A green default `compliance` job proves structural alignment; it does
+Confirm the caller emits the required `compliance` status before relying on
+this form, and treat the following as the reason it is the alternative rather
+than the prescribed shape. A called workflow's job is widely reported to
+surface as `<caller-job-id> / <called-job-name>`, which would make this example
+report as `compliance / compliance` and not as `compliance`. RSK014 requires
+the context names to be exactly `quality` and `compliance`, and GitHub matches
+a required status check by exact name. **This behaviour is unverified**:
+GitHub's own Actions documentation does not state how a called workflow's check
+is named, and this repository has not observed it. Do not treat it as settled
+in either direction — observe the check name your caller actually produces.
+
+`--check-enforcement` remains a distinct, authenticated platform audit. Add it
+to the command, or set the reusable workflow's `check-enforcement` input, only
+when the job has GitHub CLI authentication and the repository plan exposes
+branch protection or rulesets. A green default `compliance` job proves structural alignment; it does
 not prove that GitHub requires `quality` and `compliance` before merge.
 
 The isolated `uvx` path is portable within the maintained profiles, not fully
@@ -197,9 +251,14 @@ remediation. Markdown explains policy but supplies no executable values.
   in every job in the quality workflow; local and Docker actions are exempt.
 - RSK027 requires `.github/workflows/compliance.yml` to exist. RSK028 and
   RSK029 apply the permission and pin obligations above to that workflow and
-  its `compliance` job. No rule reads its `run` steps: the checker has no one
-  invocation to require, so an existing, least-privileged, fully pinned
-  compliance workflow can still execute nothing.
+  its `compliance` job. RSK030 reads its `run` steps and requires one executed
+  command to contain `repo-check`. Policy owns that token, and the match is
+  containment rather than an exact command, because the released and
+  working-tree invocations differ legitimately. It therefore proves the job
+  invokes the checker, not that the invocation is meaningful: a contrived
+  command naming the token passes, while a token inside a comment or a
+  shell-wrapper string does not, and neither does an invocation reachable only
+  under a guard policy does not declare.
 - RSK014 requires pull request protection, stale approval dismissal, required
   status checks, strict up-to-date branches, conversation resolution, and
   administrator enforcement when platform checks are requested, but permits a

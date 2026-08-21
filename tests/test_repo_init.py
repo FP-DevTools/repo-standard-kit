@@ -57,6 +57,10 @@ MANDATORY_PRE_COMMIT_ENTRIES = [
 
 STARTER_KIT_PROFILES = ("python-single", "python-workspace")
 
+REUSABLE_COMPLIANCE_WORKFLOW = (
+    REPO_ROOT / ".github" / "workflows" / "compliance-reusable.yml"
+)
+
 STARTER_KIT_ROOT = Path("src") / "repo_standard" / "starter_kits"
 
 
@@ -397,9 +401,8 @@ def test_compliance_workflows_emit_an_independent_required_status() -> None:
     assert len(setup_uv_refs) == 1
 
     root_workflow = workflow_paths[0].read_text(encoding="utf-8")
-    assert "  workflow_call:\n" in root_workflow
+    assert "  workflow_call:\n" not in root_workflow
     assert "uv run --locked --no-dev repo-check ." in root_workflow
-    assert "uvx \\" in root_workflow
     version = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
         "project"
     ]["version"]
@@ -409,9 +412,38 @@ def test_compliance_workflows_emit_an_independent_required_status() -> None:
         )
 
 
+@pytest.mark.parametrize("profile", STARTER_KIT_PROFILES)
+def test_documented_required_workflow_is_the_shape_the_kits_ship(profile: str) -> None:
+    """The prescribed shape and the shipped starter must not drift apart."""
+    starter = (
+        starter_kit_dir(profile) / ".github" / "workflows" / "compliance.yml"
+    ).read_text(encoding="utf-8")
+    documented = re.findall(
+        r"```yaml\n(.*?)```",
+        (REPO_ROOT / "docs" / "compliance.md").read_text(encoding="utf-8"),
+        re.DOTALL,
+    )
+
+    assert starter in documented
+
+
+def test_reusable_compliance_workflow_is_the_only_workflow_call_surface() -> None:
+    workflow_text = REUSABLE_COMPLIANCE_WORKFLOW.read_text(encoding="utf-8")
+    workflow = load_yaml(workflow_text)
+
+    assert set(workflow["on"]) == {"workflow_call"}
+    assert set(workflow["on"]["workflow_call"]["inputs"]) == {
+        "standard-ref",
+        "strict",
+        "check-enforcement",
+    }
+    assert workflow["permissions"] == {"contents": "read"}
+    assert "  compliance:\n    name: compliance\n" in workflow_text
+    assert "uvx \\" in workflow_text
+
+
 def test_reusable_compliance_workflow_keeps_inputs_out_of_shell_source() -> None:
-    workflow_path = REPO_ROOT / ".github" / "workflows" / "compliance.yml"
-    workflow_text = workflow_path.read_text(encoding="utf-8")
+    workflow_text = REUSABLE_COMPLIANCE_WORKFLOW.read_text(encoding="utf-8")
     workflow = load_yaml(workflow_text)
     run_step = next(
         step
@@ -432,9 +464,7 @@ def test_reusable_compliance_workflow_keeps_inputs_out_of_shell_source() -> None
 
 
 def test_reusable_compliance_workflow_validates_standard_ref() -> None:
-    workflow_text = (REPO_ROOT / ".github" / "workflows" / "compliance.yml").read_text(
-        encoding="utf-8"
-    )
+    workflow_text = REUSABLE_COMPLIANCE_WORKFLOW.read_text(encoding="utf-8")
 
     assert '[[ ! "$REPO_STANDARD_REF" =~ ^[A-Za-z0-9._/-]+$ ]]' in workflow_text
     assert 'echo "Invalid repo-standard-kit ref" >&2' in workflow_text
@@ -444,16 +474,15 @@ def test_reusable_compliance_workflow_validates_standard_ref() -> None:
 
 @pytest.mark.parametrize(
     ("standard_ref", "expected_returncode"),
-    [("v1.2.0", 42), ("", 41)],
-    ids=["adopter-pull-request", "direct-pull-request"],
+    [("v1.2.0", 42), ("", 2), ("v1.2.0; rm -rf /", 2)],
+    ids=["released-ref", "empty-ref", "rejected-ref"],
 )
-def test_reusable_compliance_workflow_selects_the_correct_checker_environment(
+def test_reusable_compliance_workflow_runs_uvx_only_for_an_accepted_ref(
     tmp_path: Path,
     standard_ref: str,
     expected_returncode: int,
 ) -> None:
-    workflow_path = REPO_ROOT / ".github" / "workflows" / "compliance.yml"
-    workflow = load_yaml(workflow_path.read_text(encoding="utf-8"))
+    workflow = load_yaml(REUSABLE_COMPLIANCE_WORKFLOW.read_text(encoding="utf-8"))
     run = next(
         step["run"]
         for step in workflow["jobs"]["compliance"]["steps"]
@@ -472,20 +501,14 @@ def test_reusable_compliance_workflow_selects_the_correct_checker_environment(
 
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    for command, returncode in (("uv", 41), ("uvx", 42)):
-        stub = bin_dir / command
-        stub.write_text(
-            f"#!/usr/bin/env bash\nexit {returncode}\n",
-            encoding="utf-8",
-            newline="\n",
-        )
-        stub.chmod(0o755)
+    stub = bin_dir / "uvx"
+    stub.write_text("#!/usr/bin/env bash\nexit 42\n", encoding="utf-8", newline="\n")
+    stub.chmod(0o755)
 
     env = os.environ.copy()
     env.update(
         {
             "PATH": os.pathsep.join((str(bin_dir), env["PATH"])),
-            "GITHUB_EVENT_NAME": "pull_request",
             "REPO_STANDARD_REF": standard_ref,
             "STRICT": "false",
             "CHECK_ENFORCEMENT": "false",

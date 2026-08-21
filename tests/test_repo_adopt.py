@@ -430,6 +430,33 @@ def test_recognized_older_compliance_step_is_updated_in_place(tmp_path: Path) ->
     assert f"@v{_kit_version()}" in compliance_steps[0]["run"]
 
 
+def test_a_compliance_job_that_invokes_nothing_gains_the_invocation(
+    tmp_path: Path,
+) -> None:
+    """RSK030 is repairable through the existing merge: no new repair path."""
+    root = tmp_path / "existing"
+    _write_minimal_repo(root, "python-single")
+    workflow = root / ".github" / "workflows" / "compliance.yml"
+    workflow.parent.mkdir(parents=True)
+    workflow.write_text(
+        "name: Compliance\n"
+        "on: pull_request\n"
+        "jobs:\n"
+        "  compliance:\n"
+        "    runs-on: ubuntu-latest\n"
+        "    steps:\n"
+        "      - name: Say nothing\n"
+        "        run: echo compliant\n",
+        encoding="utf-8",
+    )
+
+    apply_plan(plan_adoption(root, "python-single"))
+
+    assert "RSK030" not in {
+        finding.rule_id for finding in check_repo(root, load_policy())
+    }
+
+
 def test_interrupted_command_reports_the_exact_command(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -543,12 +543,7 @@ rules:
     rationale: >-
       The compliance job is what stops the rest of the standard from drifting,
       so its absence has to be a finding of its own. Existence is all this rule
-      claims: no rule requires the job to run a particular command, because the
-      checker is invoked one way against a pinned release and another against
-      the working tree, and both forms sit inside conditional branches that
-      RSK006's guard semantics leave unproven. A compliance workflow that
-      exists, grants only contents: read, and pins every action can still
-      execute nothing.
+      claims; RSK030 separately requires the job to invoke the checker.
     remediation: >-
       Add .github/workflows/compliance.yml with a compliance job that checks the
       repository against repo-standard-kit on pull requests.
@@ -594,3 +589,36 @@ rules:
     remediation: >-
       Pin every remote action and reusable workflow in the compliance workflow
       to a 40-character SHA.
+
+  - id: RSK030
+    title: Compliance workflow invokes the checker
+    level: required
+    profiles: [python-single, python-workspace]
+    source:
+      document: docs/quality-gates.md
+      section: 5. CI Pull Request Gates
+    enforcement: structural
+    check:
+      kind: github_workflow_invocation
+      config:
+        path: .github/workflows/compliance.yml
+        job: compliance
+        token: repo-check
+        guards_by_profile:
+          python-single: []
+          python-workspace: []
+    rationale: >-
+      RSK027, RSK028 and RSK029 leave a compliance workflow that exists, grants
+      only contents: read, and pins every action free to execute nothing. This
+      rule requires the job to run the checker. It matches by containment
+      rather than by exact command because the same correct invocation is
+      spelled differently in different repositories, so the guarantee is
+      correspondingly weak: it proves that an executed command's argument list
+      carries the token policy names, not that the command is a genuine
+      compliance run, and a contrived command mentioning the token satisfies
+      it. What it does exclude is a token appearing only in a comment, which
+      the shell lexer discards, and an invocation reachable only under a
+      condition policy does not declare for the profile.
+    remediation: >-
+      Run repo-check from a step of the compliance job, unguarded or under a
+      condition policy declares for the profile.
