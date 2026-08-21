@@ -32,7 +32,7 @@ This repository provides:
 - GitHub Actions CI that mirrors the documented local quality gates
 - `uv`-based dependency and build configuration for Python projects
 
-## The Standard
+### The Standard
 
 [docs/repo-standard.md](docs/repo-standard.md) is the normative entry point. It
 states the contract a repository must satisfy and indexes the companion
@@ -42,7 +42,7 @@ repository layout, bootstrapping, and the Python profiles.
 Templates and starter kits implement that standard; the documents it indexes
 define the intent and rules.
 
-## Current Profiles
+### Current Profiles
 
 - `python-single`: one package rooted at `src/<package_name>/`
 - `python-workspace`: monorepo with per-package projects under `packages/`
@@ -218,7 +218,7 @@ uv run python scripts/generate_policy.py
 `uv run pytest` fails when `src/repo_standard/policy/compiled.json` or
 [docs/policy-reference.md](docs/policy-reference.md) is stale.
 
-## Design Principles
+### Design Principles
 
 Why the standard is shaped the way it is. These are rationale, not rules — each
 is enforced by the document named beside it.

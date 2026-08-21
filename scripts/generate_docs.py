@@ -11,6 +11,11 @@ Two fragment ids are reserved and are not shape sections: ``_preamble`` (the
 title and any prose before the first heading) and ``_epilogue`` (link reference
 definitions). Shape section ids are kebab-case, so the leading underscore
 cannot collide with one.
+
+A fragment resolves to the target's variant first and to ``shared`` only when
+the variant has none, so an empty fragment is how a variant declines what the
+``shared`` fallback would otherwise give it: an optional section it does not
+carry, or an epilogue of link definitions it does not use.
 """
 
 from __future__ import annotations
@@ -33,7 +38,10 @@ STARTER_KITS = SRC / "repo_standard" / "starter_kits"
 
 # These companion documents own their subjects.  AGENTS.md is a generated
 # projection so repositories receive the same guidance without a second prose
-# copy to maintain in template fragments.
+# copy to maintain in template fragments.  A variant that states the subject
+# for itself overrides the projection with its own fragment: this repository
+# publishes those documents rather than adopting them, so its responsibilities
+# and its build order are its own, not the ones it hands to adopters.
 DERIVED_SECTIONS = {
     ("AGENTS", "human-and-agent-responsibilities"): REPO_ROOT
     / "docs"
@@ -45,6 +53,7 @@ PREAMBLE = "_preamble"
 EPILOGUE = "_epilogue"
 SHARED = "shared"
 TEMPLATE = "template"
+KIT = "kit"
 
 
 class GeneratorError(RuntimeError):
@@ -68,6 +77,11 @@ class Target:
 
 
 TARGETS = (
+    # This repository is `python-single` by its own `pyproject.toml`, but its
+    # root documents are the kit's, not the starter's, so they take a variant
+    # of their own rather than the profile's fragments.
+    Target("README", "readme", KIT, "python-single", REPO_ROOT),
+    Target("AGENTS", "agents", KIT, "python-single", REPO_ROOT),
     Target("README", "readme", TEMPLATE, "python-single", REPO_ROOT / "templates"),
     Target("AGENTS", "agents", TEMPLATE, "python-single", REPO_ROOT / "templates"),
     *(
@@ -82,9 +96,11 @@ TARGETS = (
 )
 
 
-def _fragment(document: str, fragment_id: str, variant: str) -> str | None:
+def _fragment(
+    document: str, fragment_id: str, variant: str, *, fallback: bool = True
+) -> str | None:
     """Resolve ``(document, fragment, variant)``, falling back to ``shared``."""
-    for candidate in (variant, SHARED):
+    for candidate in (variant, SHARED) if fallback else (variant,):
         path = CONTENT_ROOT / document / f"{fragment_id}.{candidate}.md"
         if path.is_file():
             return path.read_text(encoding="utf-8").strip("\n")
@@ -140,20 +156,23 @@ def render(policy: Policy, target: Target) -> str:
     parts = [preamble]
 
     for section in shape.sections:
-        body = _derived_section(target.document, section.id)
+        body = _fragment(target.document, section.id, target.variant, fallback=False)
+        if body is None:
+            body = _derived_section(target.document, section.id)
         if body is None:
             body = _fragment(target.document, section.id, target.variant)
-        if body is None:
+        if not body:
             if section.level == "required":
                 raise GeneratorError(
                     f"{target.document}/{section.id}: required by shape "
-                    f"{shape.id!r} but no fragment for variant {target.variant!r}"
+                    f"{shape.id!r} but variant {target.variant!r} resolves to "
+                    "no content"
                 )
             continue
         parts.append(f"{marks} {section.heading}\n\n{body}")
 
     epilogue = _fragment(target.document, EPILOGUE, target.variant)
-    if epilogue is not None:
+    if epilogue:
         parts.append(epilogue)
 
     text = "\n\n".join(parts) + "\n"

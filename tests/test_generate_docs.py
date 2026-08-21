@@ -199,10 +199,26 @@ def test_the_gate_chain_is_injected_from_policy_not_written_by_hand() -> None:
 def test_agents_sections_are_projected_from_companion_documents(
     section_id: str, source: str, nested_heading: str
 ) -> None:
-    """Companion documents own operating guidance; AGENTS.md only projects it."""
+    """Companion documents own operating guidance; AGENTS.md only projects it.
+
+    The kit is the exception, and only through an explicit fragment: it
+    publishes those documents rather than adopting them, so its own AGENTS.md
+    states its responsibilities and its build order instead of projecting the
+    guidance it hands to adopters.
+    """
     assert generate_docs.DERIVED_SECTIONS[("AGENTS", section_id)] == REPO_ROOT / source
-    assert not list((generate_docs.CONTENT_ROOT / "AGENTS").glob(f"{section_id}.*.md"))
-    rendered = generate_docs.render(
-        POLICY, next(t for t in generate_docs.TARGETS if t.document == "AGENTS")
+    fragments = {
+        path.name
+        for path in (generate_docs.CONTENT_ROOT / "AGENTS").glob(f"{section_id}.*.md")
+    }
+    assert fragments <= {f"{section_id}.{generate_docs.KIT}.md"}, (
+        f"{sorted(fragments)} would stop {source} from reaching the AGENTS.md "
+        "of every repository adopting the standard"
     )
-    assert nested_heading in rendered
+    for target in (t for t in generate_docs.TARGETS if t.document == "AGENTS"):
+        projected = nested_heading in generate_docs.render(POLICY, target)
+        expected = target.variant != generate_docs.KIT
+        assert projected is expected, (
+            f"{target.variant} AGENTS.md must "
+            f"{'project' if expected else 'override'} {source} in {section_id}"
+        )
