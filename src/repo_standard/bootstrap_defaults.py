@@ -6,4 +6,4 @@ dependency version pin.
 """
 
 DEFAULT_PYTHON_VERSION = "3.12"
-DEFAULT_UV_BUILD_REQUIREMENT = "uv_build>=0.11.20,<0.12"
+DEFAULT_UV_BUILD_REQUIREMENT = "uv_build>=0.12.5,<0.13"
