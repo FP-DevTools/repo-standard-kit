@@ -767,7 +767,7 @@
         "python-single",
         "python-workspace"
       ],
-      "rationale": "Agent behaviour left to model defaults varies between runs and between repositories. Stating the calibration where agents already read their operating boundaries is what makes the work consistent across every repository adopting the standard.",
+      "rationale": "Agent behaviour left to model defaults varies between runs and between repositories, which is the opposite of what a standard is for.",
       "remediation": "State each dial in the Agent Operating Mode section of AGENTS.md, in the declared order and at the declared level.",
       "source": {
         "document": "docs/repo-standard.md",
@@ -790,7 +790,7 @@
         "python-single",
         "python-workspace"
       ],
-      "rationale": "The compliance job is what stops the rest of the standard from drifting, so its absence has to be a finding of its own. Existence is all this rule claims; RSK030 separately requires the job to invoke the checker.",
+      "rationale": "The job that keeps the rest of the standard from drifting cannot itself go missing unnoticed. Existence is all this rule claims.",
       "remediation": "Add .github/workflows/compliance.yml with a compliance job that checks the repository against repo-standard-kit on pull requests.",
       "source": {
         "document": "docs/quality-gates.md",
@@ -816,7 +816,7 @@
         "python-single",
         "python-workspace"
       ],
-      "rationale": "The compliance job reads the repository and reports on it. A write scope on the token that runs a checker fetched from outside the repository would let that fetched code change what it is auditing.",
+      "rationale": "The compliance job only reads the repository and reports on it, so a write scope would let the checker it fetches from outside change what it is auditing.",
       "remediation": "Set the compliance job's effective permissions to exactly `contents: read`.",
       "source": {
         "document": "docs/quality-gates.md",
@@ -838,7 +838,7 @@
         "python-single",
         "python-workspace"
       ],
-      "rationale": "The compliance workflow already executes code fetched from outside the repository, so a mutable action reference beside it is the widest unpinned surface the standard ships.",
+      "rationale": "The compliance workflow executes code fetched from outside the repository, so an unpinned action beside it is the widest mutable surface the standard ships.",
       "remediation": "Pin every remote action and reusable workflow in the compliance workflow to a 40-character SHA.",
       "source": {
         "document": "docs/quality-gates.md",
@@ -867,7 +867,7 @@
         "python-single",
         "python-workspace"
       ],
-      "rationale": "RSK027, RSK028 and RSK029 leave a compliance workflow that exists, grants only contents: read, and pins every action free to execute nothing. This rule requires the job to run the checker on pull requests: a workflow that never triggers on one satisfies the other three while leaving the SHALL in section 5 unmet, so the trigger belongs to this claim rather than to a rule of its own. It matches by containment rather than by exact command because the same correct invocation is spelled differently in different repositories, so the guarantee is correspondingly weak: it proves that an executed command's argument list carries the token policy names, not that the command is a genuine compliance run, and a contrived command mentioning the token satisfies it. What it does exclude is a token appearing only in a comment, which the shell lexer discards, and an invocation reachable only under a condition policy does not declare for the profile.",
+      "rationale": "An existing, least-privileged, fully pinned compliance workflow can still execute nothing. This rule requires the compliance job to run the checker on pull requests.",
       "remediation": "Trigger the compliance workflow on pull_request, and run repo-check from a step of its compliance job, unguarded or under a condition policy declares for the profile.",
       "source": {
         "document": "docs/quality-gates.md",

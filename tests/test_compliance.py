@@ -32,7 +32,11 @@ from repo_standard.policy import (
     load_source_policy,
 )
 from repo_standard.policy.compiler import render_compiled, render_reference
-from repo_standard.policy.models import CHECK_SCHEMAS, LEVELS
+from repo_standard.policy.models import (
+    CHECK_SCHEMAS,
+    LEVELS,
+    RATIONALE_MAX_LENGTH,
+)
 from repo_standard.repo_init import bootstrap_repo
 
 POLICY = load_policy()
@@ -251,6 +255,23 @@ def test_invalid_policy_is_rejected(
     root = _policy_checkout(tmp_path)
     _mutate_base(root, mutation)
     with pytest.raises(PolicyError, match=message):
+        load_source_policy(root)
+
+
+def test_an_over_long_rationale_is_rejected(tmp_path: Path) -> None:
+    """The rationale register is a ceiling in the schema, not a review habit."""
+    root = _policy_checkout(tmp_path)
+
+    def mutation(data: dict[str, object]) -> None:
+        rules = data["rules"]
+        assert isinstance(rules, list)
+        rules[0]["rationale"] = "Why the rule exists. " * 20
+
+    _mutate_base(root, mutation)
+    with pytest.raises(
+        PolicyError,
+        match=rf"rationale: expected at most {RATIONALE_MAX_LENGTH} characters",
+    ):
         load_source_policy(root)
 
 
