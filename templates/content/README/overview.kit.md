@@ -30,8 +30,7 @@ This repository provides:
 [docs/repo-standard.md](docs/repo-standard.md) is the normative entry point. It
 states the contract a repository must satisfy and indexes the companion
 documents covering quality gates, the agent operating model, Git workflow,
-repository layout, bootstrapping, compliance checking, and the Python
-profiles.
+repository layout, bootstrapping, compliance checking, and the Python profiles.
 
 Templates and starter kits implement that standard; the documents it indexes
 define the intent and rules.
