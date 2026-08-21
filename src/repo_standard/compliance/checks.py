@@ -8,7 +8,7 @@ import shlex
 import subprocess
 import tomllib
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -68,6 +68,13 @@ class CheckContext:
     root: Path
     policy: Policy
     profile: str
+    # Platform answers already fetched during this run, keyed by query. Scoped
+    # to the context so one run sees one consistent view and the next run
+    # starts from the platform again.
+    _platform_responses: dict[
+        tuple[str, bool],
+        tuple[subprocess.CompletedProcess[str] | None, Issue | None],
+    ] = field(default_factory=dict, compare=False, repr=False)
 
 
 CheckHandler = Callable[[CheckContext, dict[str, Any]], list[Issue]]
@@ -217,7 +224,10 @@ def _shape_issues(shape: Shape, path: str, actual: list[str]) -> list[Issue]:
 
     Presence is checked for required sections only. Order is checked as a
     subsequence: sections the shape does not list are ignored entirely, and a
-    listed section that is absent simply drops out of the comparison.
+    listed section that is absent simply drops out of the comparison. A
+    declared section that appears more than once is reported in its own right,
+    because the subsequence comparison keeps only the first occurrence and
+    would otherwise accept a repeat sitting anywhere in the document.
     """
     issues: list[Issue] = []
     missing = [heading for heading in shape.required if heading not in actual]
@@ -232,9 +242,24 @@ def _shape_issues(shape: Shape, path: str, actual: list[str]) -> list[Issue]:
         )
     listed = set(shape.headings)
     observed: list[str] = []
+    repeated: list[str] = []
     for heading in actual:
-        if heading in listed and heading not in observed:
-            observed.append(heading)
+        if heading not in listed:
+            continue
+        if heading in observed:
+            if heading not in repeated:
+                repeated.append(heading)
+            continue
+        observed.append(heading)
+    if repeated:
+        issues.append(
+            Issue(
+                path,
+                f"Declared sections appear more than once: {', '.join(repeated)}.",
+                actual,
+                list(shape.headings),
+            )
+        )
     expected = [heading for heading in shape.headings if heading in observed]
     if observed != expected:
         issues.append(
@@ -423,10 +448,66 @@ def _text_pattern_each(context: CheckContext, config: dict[str, Any]) -> list[Is
     return issues
 
 
-def _shell_commands(run: str) -> list[list[str]]:
-    """Return executable command token lists from an Actions `run` scalar."""
+@dataclass(frozen=True)
+class ShellCommand:
+    """One command a `run` scalar executes, with the conditions gating it.
+
+    A guard is `None` when its condition is not a plain `if` test — an `else`
+    or `elif` branch, a loop body, a `case` arm — because policy declares a
+    permitted guard as one literal condition and nothing else can match it.
+    """
+
+    tokens: tuple[str, ...]
+    guards: tuple[tuple[str, ...] | None, ...] = ()
+
+
+_SHELL_OPERATORS = {";", ";;", "&&", "||", "&", "|"}
+_BLOCK_PREFIXES = {"then", "do", "{"}
+_BLOCK_CLOSERS = {"fi", "done", "esac"}
+_CONDITION_OPENERS = {"if", "elif", "while", "until"}
+_BODY_OPENERS = {"for", "case"}
+
+
+def _consume_shell_segment(
+    segment: list[str],
+    guards: list[tuple[str, ...] | None],
+    commands: list[ShellCommand],
+) -> None:
+    while segment and segment[0] in _BLOCK_PREFIXES:
+        segment.pop(0)
+    while segment and (segment[-1] in _BLOCK_CLOSERS or segment[-1] == "}"):
+        if segment.pop() in _BLOCK_CLOSERS and guards:
+            guards.pop()
+    if not segment:
+        return
+    keyword = segment[0]
+    if keyword == "else":
+        if guards:
+            guards[-1] = None
+        return
+    if keyword in _CONDITION_OPENERS:
+        if keyword == "elif" and guards:
+            guards[-1] = None
+        else:
+            guards.append(tuple(segment[1:]) if keyword == "if" else None)
+        return
+    if keyword in _BODY_OPENERS:
+        guards.append(None)
+        return
+    commands.append(ShellCommand(tuple(segment), tuple(guards)))
+
+
+def _shell_commands(run: str) -> list[ShellCommand]:
+    """Return executable commands from an Actions `run` scalar, with guards.
+
+    A conditional block can skip a command while the step still exits zero, so
+    a required command found inside one proves nothing on its own. The guard
+    travels with the command and only policy decides which condition, if any,
+    may gate a gate.
+    """
     normalized = re.sub(r"\\\r?\n", " ", run)
-    commands: list[list[str]] = []
+    commands: list[ShellCommand] = []
+    guards: list[tuple[str, ...] | None] = []
     for line in normalized.splitlines() or [normalized]:
         lexer = shlex.shlex(line, posix=True, punctuation_chars=";&|")
         lexer.whitespace_split = True
@@ -437,13 +518,8 @@ def _shell_commands(run: str) -> list[list[str]]:
         except ValueError:
             continue
         for token in [*tokens, ";"]:
-            if token in {";", "&&", "||", "&", "|"}:
-                while segment and segment[0] in {"then", "do", "{"}:
-                    segment.pop(0)
-                while segment and segment[-1] in {"fi", "done", "}"}:
-                    segment.pop()
-                if segment:
-                    commands.append(segment)
+            if token in _SHELL_OPERATORS:
+                _consume_shell_segment(segment, guards, commands)
                 segment = []
             else:
                 segment.append(token)
@@ -556,15 +632,24 @@ def _github_workflow_commands(
             )
         )
         return issues
-    actual_commands: list[list[str]] = []
+    actual_commands: list[ShellCommand] = []
     for step in steps:
         if isinstance(step, dict) and isinstance(step.get("run"), str):
             actual_commands.extend(_shell_commands(step["run"]))
+    declared_guards = config["guards_by_profile"][context.profile]
+    permitted = {tuple(shlex.split(guard)) for guard in declared_guards}
+    present = {command.tokens for command in actual_commands}
+    executed = {
+        command.tokens
+        for command in actual_commands
+        if all(guard in permitted for guard in command.guards)
+    }
     required = [
-        shlex.split(command)
+        tuple(shlex.split(command))
         for command in config["commands_by_profile"][context.profile]
     ]
-    missing = [tokens for tokens in required if tokens not in actual_commands]
+    line = document.line("jobs", config["job"], "steps")
+    missing = [tokens for tokens in required if tokens not in present]
     if missing:
         issues.append(
             Issue(
@@ -572,9 +657,23 @@ def _github_workflow_commands(
                 "Quality job is missing complete executable commands: "
                 + ", ".join(shlex.join(tokens) for tokens in missing)
                 + ".",
-                [shlex.join(tokens) for tokens in actual_commands],
+                [shlex.join(command.tokens) for command in actual_commands],
                 [shlex.join(tokens) for tokens in required],
-                document.line("jobs", config["job"], "steps"),
+                line,
+            )
+        )
+    guarded = [
+        tokens for tokens in required if tokens in present and tokens not in executed
+    ]
+    if guarded:
+        issues.append(
+            Issue(
+                config["path"],
+                "Quality job runs required commands only under an undeclared "
+                "guard: " + ", ".join(shlex.join(tokens) for tokens in guarded) + ".",
+                [shlex.join(tokens) for tokens in guarded],
+                list(declared_guards),
+                line,
             )
         )
     return issues
@@ -830,6 +929,15 @@ def _git_remote_url(root: Path) -> str | None:
 def _gh_api(
     context: CheckContext, endpoint: str, *, paginate: bool = False
 ) -> tuple[subprocess.CompletedProcess[str] | None, Issue | None]:
+    """Query the platform once per run, reusing an answer already fetched.
+
+    Several rules read the same branch protection. Repeating the round-trip
+    costs time and lets two rules disagree because one query flaked while the
+    other succeeded.
+    """
+    cached = context._platform_responses.get((endpoint, paginate))
+    if cached is not None:
+        return cached
     command = ["gh", "api"]
     if paginate:
         command.extend(("--paginate", "--slurp"))
@@ -843,16 +951,20 @@ def _gh_api(
             timeout=30,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired) as error:
-        return None, (
+        response: tuple[subprocess.CompletedProcess[str] | None, Issue | None] = (
+            None,
             Issue(
                 ".",
                 f"Platform command unavailable: {error}",
                 None,
                 "GitHub enforcement response",
                 status="indeterminate",
-            )
+            ),
         )
-    return result, None
+    else:
+        response = (result, None)
+    context._platform_responses[(endpoint, paginate)] = response
+    return response
 
 
 def _platform_query_failure(
@@ -1420,7 +1532,7 @@ def _github_workflow_permissions(
 ) -> list[Issue]:
     document, job, errors = _workflow_job(context, config)
     if errors:
-        return []
+        return errors
     assert document is not None
     assert job is not None
     assert isinstance(document.data, dict)

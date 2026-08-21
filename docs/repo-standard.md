@@ -171,7 +171,9 @@ appear. Shapes are declared in `policy/shapes.yaml` and compiled into the
 Every shape is checked as a **subsequence**. A section the shape does not
 declare is legal anywhere and is ignored. A declared section may be absent
 unless it is marked required. What a shape forbids is *reordering*: the
-declared sections a file does carry must appear in the declared order. Markdown
+declared sections a file does carry must appear in the declared order, and each
+of them appears at most once, because a subsequence can only place a section
+where it first occurs. Repeating an undeclared section stays legal. Markdown
 shapes govern level-two headings only, matching RSK002's semantics.
 
 RSK023 (`README.md`), RSK024 (`CHANGELOG.md`), and RSK025 (`pyproject.toml`)

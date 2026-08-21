@@ -181,7 +181,9 @@ remediation. Markdown explains policy but supplies no executable values.
 - GitHub Actions are parsed with safe GitHub-compatible YAML semantics, so
   `on` remains a string. RSK006 inspects only executable
   `jobs.quality.steps[*].run` nodes. Comments, echo, unrelated fields, and
-  shell-wrapper strings do not satisfy commands.
+  shell-wrapper strings do not satisfy commands, and neither does a command
+  reachable only under a condition the policy does not declare for the
+  profile.
 - Pre-commit is parsed structurally. RSK007 matches hook IDs, normalized entry
   and argument tokens, and policy-owned material fields such as filters and
   `pass_filenames`.
