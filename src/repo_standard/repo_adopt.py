@@ -98,7 +98,6 @@ _MANAGED_SURFACES = (
     "CHANGELOG.md",
     ".gitignore",
     "docs/adr",
-    "docs/diagrams",
 )
 _REMOTE_ACTION = re.compile(r"^[^./\s]+/[^@\s]+@(?P<ref>[^\s]+)$")
 _COMMAND_LIST_BLOCK = re.compile(
@@ -547,22 +546,24 @@ def _merge_workflow(
         elif job_name == "compliance" and update_run:
             match["run"] = expected_run
 
+    # Both governed workflows are under a pin rule, and only actions the kit
+    # ships can be repinned from the starter. An action the repository added
+    # needs a SHA nobody but its maintainer can choose, so it is reported.
     conflicts: list[str] = []
-    if job_name == "quality":
-        for step in steps:
-            uses = step.get("uses") if isinstance(step, dict) else None
-            if (
-                not isinstance(uses, str)
-                or uses.startswith("./")
-                or uses.startswith("docker://")
-            ):
-                continue
-            match = _REMOTE_ACTION.match(uses)
-            if match is not None and not is_full_commit_sha(match.group("ref")):
-                conflicts.append(
-                    f"{path.relative_to(path.parents[2]).as_posix()}: remote action "
-                    f"{uses!r} needs a maintainer-selected full commit SHA"
-                )
+    for step in steps:
+        uses = step.get("uses") if isinstance(step, dict) else None
+        if (
+            not isinstance(uses, str)
+            or uses.startswith("./")
+            or uses.startswith("docker://")
+        ):
+            continue
+        match = _REMOTE_ACTION.match(uses)
+        if match is not None and not is_full_commit_sha(match.group("ref")):
+            conflicts.append(
+                f"{path.relative_to(path.parents[2]).as_posix()}: remote action "
+                f"{uses!r} needs a maintainer-selected full commit SHA"
+            )
     return _dump_yaml(current), conflicts
 
 
@@ -842,17 +843,14 @@ def plan_adoption(root: Path, profile: str | None = None) -> AdoptionPlan:
     else:
         generated[".gitignore"] = _read_starter(selected, ".gitignore")
 
-    for directory, starter_file in (
-        ("docs/adr", "docs/adr/0001-template.md"),
-        ("docs/diagrams", "docs/diagrams/README.md"),
-    ):
-        path = root / directory
-        if path.is_dir() and any(path.iterdir()):
-            unchanged.append(directory)
-        else:
-            generated[starter_file] = _render(
-                _read_starter(selected, starter_file), values
-            )
+    # A repository that already keeps decision records keeps its own; the
+    # template is only seeded where there is nothing to overwrite.
+    adr = root / "docs/adr"
+    if adr.is_dir() and any(adr.iterdir()):
+        unchanged.append("docs/adr")
+    else:
+        template = "docs/adr/0001-template.md"
+        generated[template] = _render(_read_starter(selected, template), values)
 
     for relative, content in generated.items():
         change = _planned(root / relative, content, root)

@@ -64,6 +64,25 @@ def _workflow_text(profile: str = "python-single") -> str:
     )
 
 
+def _compliance_workflow_text() -> str:
+    config = POLICY.rule("RSK028").check.config
+    permissions = "\n".join(
+        f"  {scope}: {value}" for scope, value in config["permissions"].items()
+    )
+    return (
+        "name: Compliance\n"
+        "on:\n"
+        "  pull_request:\n"
+        "permissions:\n"
+        f"{permissions}\n"
+        "jobs:\n"
+        f"  {config['job']}:\n"
+        "    runs-on: ubuntu-latest\n"
+        "    steps:\n"
+        "      - run: repo-check .\n"
+    )
+
+
 def _shape(rule_id: str) -> Shape:
     return POLICY.shape(POLICY.rule(rule_id).check.config["shape"])
 
@@ -106,6 +125,9 @@ def _minimal_repo(tmp_path: Path, profile: str = "python-single") -> Path:
     workflow = root / ".github" / "workflows"
     workflow.mkdir(parents=True)
     (workflow / "quality.yml").write_text(_workflow_text(profile), encoding="utf-8")
+    (root / POLICY.rule("RSK027").check.config["path"]).write_text(
+        _compliance_workflow_text(), encoding="utf-8"
+    )
     hooks = [dict(hook) for hook in POLICY.rule("RSK007").check.config["hooks"]]
     for hook in hooks:
         hook["language"] = "system"
@@ -863,7 +885,7 @@ def test_nonminimal_effective_permissions_report_rsk020(
     path.write_text(mutation(path.read_text(encoding="utf-8")), encoding="utf-8")
     finding = next(f for f in check_repo(root, POLICY) if f.rule_id == "RSK020")
     assert finding.message == (
-        "Quality job permissions do not match the least-privilege policy."
+        "The quality job's permissions do not match the least-privilege policy."
     )
     assert finding.actual == actual
     assert finding.expected == {"contents": "read"}
@@ -918,6 +940,76 @@ def test_rsk021_scans_every_job_in_the_quality_workflow(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     assert "RSK021" not in _rule_ids(check_repo(root, POLICY))
+
+
+def test_compliance_workflow_rules_are_scoped_to_the_compliance_workflow() -> None:
+    path = ".github/workflows/compliance.yml"
+    assert POLICY.rule("RSK027").check.config == {"path": path, "path_type": "file"}
+    assert POLICY.rule("RSK028").check.config == {
+        "path": path,
+        "job": "compliance",
+        "permissions": {"contents": "read"},
+    }
+    assert POLICY.rule("RSK029").check.config == {"path": path}
+    assert all(
+        POLICY.rule(rule_id).level == "required"
+        for rule_id in ("RSK027", "RSK028", "RSK029")
+    )
+
+
+def test_a_missing_compliance_workflow_is_reported_by_every_rule_that_reads_it(
+    tmp_path: Path,
+) -> None:
+    root = _minimal_repo(tmp_path)
+    (root / ".github" / "workflows" / "compliance.yml").unlink()
+    assert {"RSK027", "RSK028", "RSK029"} <= _rule_ids(check_repo(root, POLICY))
+
+
+def test_nonminimal_compliance_permissions_report_rsk028(tmp_path: Path) -> None:
+    root = _minimal_repo(tmp_path)
+    path = root / ".github" / "workflows" / "compliance.yml"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            "  contents: read", "  contents: write"
+        ),
+        encoding="utf-8",
+    )
+    finding = next(f for f in check_repo(root, POLICY) if f.rule_id == "RSK028")
+    assert finding.message == (
+        "The compliance job's permissions do not match the least-privilege policy."
+    )
+    assert finding.actual == {"contents": "write"}
+
+
+def test_mutable_remote_action_in_the_compliance_workflow_reports_rsk029(
+    tmp_path: Path,
+) -> None:
+    root = _minimal_repo(tmp_path)
+    path = root / ".github" / "workflows" / "compliance.yml"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            "    steps:\n", "    steps:\n      - uses: actions/checkout@v5\n"
+        ),
+        encoding="utf-8",
+    )
+    finding = next(f for f in check_repo(root, POLICY) if f.rule_id == "RSK029")
+    assert finding.actual == "actions/checkout@v5"
+
+
+@pytest.mark.parametrize("profile", STARTER_KIT_PROFILES)
+def test_shipped_compliance_workflows_satisfy_their_rules(profile: str) -> None:
+    """A required rule no shipped workflow can satisfy would be a release bug."""
+    kit = REPO_ROOT / "src" / "repo_standard" / "starter_kits" / profile
+    for root in (REPO_ROOT, kit):
+        issues = [
+            issue
+            for rule_id in ("RSK027", "RSK028", "RSK029")
+            for issue in CHECK_HANDLERS[POLICY.rule(rule_id).check.kind](
+                checks.CheckContext(root=root, policy=POLICY, profile=profile),
+                POLICY.rule(rule_id).check.config,
+            )
+        ]
+        assert issues == []
 
 
 # --- pre-commit structure -------------------------------------------------

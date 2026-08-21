@@ -189,21 +189,14 @@ def test_existing_documentation_directories_are_not_seeded(tmp_path: Path) -> No
     root = tmp_path / "existing"
     _write_minimal_repo(root, "python-single")
     adr = root / "docs" / "adr"
-    diagrams = root / "docs" / "diagrams"
     adr.mkdir(parents=True)
-    diagrams.mkdir(parents=True)
     (adr / "0001-existing-decision.md").write_text("# Existing ADR\n", encoding="utf-8")
-    (diagrams / "architecture.puml").write_text(
-        "@startuml\n@enduml\n", encoding="utf-8"
-    )
 
     plan = plan_adoption(root, "python-single")
 
     changed = {change.path.as_posix() for change in plan.changes}
     assert "docs/adr/0001-template.md" not in changed
-    assert "docs/diagrams/README.md" not in changed
     assert "docs/adr" in plan.unchanged
-    assert "docs/diagrams" in plan.unchanged
 
 
 def test_quality_gates_prose_before_list_stays_in_place(tmp_path: Path) -> None:
@@ -375,6 +368,29 @@ def test_unpinned_custom_quality_action_is_an_explicit_conflict(
         "on: pull_request\n"
         "jobs:\n"
         "  quality:\n"
+        "    runs-on: ubuntu-latest\n"
+        "    steps:\n"
+        "      - uses: vendor/custom-action@v2\n",
+        encoding="utf-8",
+    )
+
+    plan = plan_adoption(root, "python-single")
+
+    assert any("vendor/custom-action@v2" in conflict for conflict in plan.conflicts)
+
+
+def test_unpinned_custom_compliance_action_is_an_explicit_conflict(
+    tmp_path: Path,
+) -> None:
+    """RSK029 puts the compliance workflow under the same pin rule as quality."""
+    root = tmp_path / "existing"
+    _write_minimal_repo(root, "python-single")
+    workflow = root / ".github" / "workflows" / "compliance.yml"
+    workflow.parent.mkdir(parents=True)
+    workflow.write_text(
+        "on: pull_request\n"
+        "jobs:\n"
+        "  compliance:\n"
         "    runs-on: ubuntu-latest\n"
         "    steps:\n"
         "      - uses: vendor/custom-action@v2\n",
