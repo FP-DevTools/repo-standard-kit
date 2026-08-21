@@ -17,11 +17,16 @@ Use this layout by default for Python repositories:
 - `scripts/`
 - `examples/` when useful
 
-The core operating files above are governed by required rules in the main
-standard. The following layout aids are intentionally **recommended**:
-RSK012 checks `docs/adr/`, RSK017 checks `CHANGELOG.md`, and RSK018 checks
-`LICENSE`. Their absence is reported but is non-blocking unless strict checking
-is requested.
+Of the entries above, `AGENTS.md` and `README.md` are governed by required
+existence rules (RSK001, RSK004). No rule checks that `pyproject.toml` or
+`.pre-commit-config.yaml` exist, but required rules read their contents —
+RSK007, RSK010, and RSK019 — and report the file missing when it is absent.
+`tests/`, `src/<package_name>/`, `docs/diagrams/`, `scripts/`, and
+`examples/` are convention only: no rule checks for them. The following
+layout aids are
+intentionally **recommended**: RSK012 checks `docs/adr/`, RSK017 checks
+`CHANGELOG.md`, and RSK018 checks `LICENSE`. Their absence is reported but is
+non-blocking unless strict checking is requested.
 
 ## Directory Responsibilities
 

@@ -172,11 +172,9 @@ end in a temporary directory, on every platform.
 - `scripts/`: developer scripts, including `generate_policy.py`
 - `tests/`: automated tests
 - `docs/`: normative standards
-- `profiles/`: language-specific profiles
 - `policy/`: canonical machine-enforced policy and profile detection metadata
 - `templates/`: reference documents rendered from the shapes, plus the
   `content/` prose fragments they are rendered from
-  by hand
 
 ## Change Control Notes
 

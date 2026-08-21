@@ -40,7 +40,6 @@ module-name = "repo_standard"
 source-include = [
   "docs/**",
   "policy/**",
-  "profiles/**",
   "templates/**",
 ]
 source-exclude = [

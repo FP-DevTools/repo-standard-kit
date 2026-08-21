@@ -87,7 +87,10 @@ was never written to any prose convention. `md033` (no inline HTML) and
 both false-positive on conventions this standard itself relies on —
 `<angle-bracket>` fill-in-the-blank placeholders in `templates/`, and
 `__DUNDER__`-shaped bootstrap tokens, which are valid Markdown
-strong-emphasis syntax before a starter kit is rendered.
+strong-emphasis syntax before a starter kit is rendered. `md024` (no
+duplicate headings) shall run with `siblings_only` enabled, since documents
+in this repository legitimately repeat headings such as `### Added` under
+different release sections in `CHANGELOG.md`.
 
 ### Recommended tools
 
@@ -236,8 +239,8 @@ uv run pip-audit
 
 Identifies known vulnerabilities in dependencies.
 
-Vulnerability scanning remains optional for v1.0. No machine-enforced rule in
-this release requires `pip-audit` or another vulnerability scanner.
+Vulnerability scanning remains optional. No machine-enforced rule in this
+release requires `pip-audit` or another vulnerability scanner.
 
 ---
 

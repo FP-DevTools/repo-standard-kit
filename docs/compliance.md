@@ -53,17 +53,16 @@ checks execute for the best deterministic profile.
 
 Every finding includes the rule ID, title, canonical level, path and line when
 available, message, actual value, expected value, remediation, and status.
-The JSON `severity` field remains present through v1 for existing consumers:
-`required` derives `shall`, `recommended` derives `should`, and an unavailable
-platform command derives the legacy `platform` value plus
-`status: "indeterminate"`.
+The JSON output also carries a legacy `severity` field: `required` derives
+`shall`, `recommended` derives `should`, and an unavailable platform command
+derives the legacy `platform` value plus `status: "indeterminate"`.
 
 YAML and TOML parse failures report parser locations. Workflow findings report
 the relevant node line when the YAML parser exposes one.
 
 ## Suppressing A Rule
 
-The v1 exception shape remains deliberately small:
+The v2 exception shape remains deliberately small:
 
 ```toml
 [tool.repo-check.ignore]
@@ -72,7 +71,7 @@ RSK005 = "This repository is the standard's own home."
 
 Only a known rule ID with a non-empty string reason suppresses findings. Empty
 reasons, unknown IDs, malformed TOML, and non-string values suppress nothing.
-Owner, expiry, and reference metadata are deferred beyond v1.
+Owner, expiry, and reference metadata remain deferred.
 
 ## Consumption Surfaces
 
@@ -107,7 +106,7 @@ required compliance job; that defense-in-depth duplication is intentional.
 ```yaml
 repos:
   - repo: https://github.com/FP-DevTools/repo-standard-kit
-    rev: v1.2.0
+    rev: v2.0.0
     hooks:
       - id: repo-check
 ```
@@ -124,7 +123,7 @@ jobs:
   compliance:
     uses: FP-DevTools/repo-standard-kit/.github/workflows/compliance.yml@<full-sha>
     with:
-      standard-ref: v1.2.0
+      standard-ref: v2.0.0
 ```
 
 The reusable workflow itself SHALL be pinned to a full commit SHA. That
@@ -132,7 +131,7 @@ immutable `uses:` reference selects the workflow implementation the caller
 trusts. The distinct `standard-ref` input selects the released
 `repo-standard-kit` revision whose packaged checker and compiled policy are
 executed. A commit SHA gives the strongest reproducibility. A human-readable
-release tag such as `v1.2.0` is permitted only when repository governance keeps
+release tag such as `v2.0.0` is permitted only when repository governance keeps
 release tags immutable.
 The workflow passes that input through the environment, validates it against a
 narrow Git-ref character allowlist, and never interpolates caller-controlled
@@ -206,5 +205,5 @@ remediation. Markdown explains policy but supplies no executable values.
 - Whether an exception reason is wise, approved, or still timely.
 - Human-owned release, product, architectural, and security decisions.
 
-Vulnerability scanning remains optional in v1.0. Mandatory scanning, SAST,
-SBOMs, signing, richer exception metadata, and non-Python profiles are deferred.
+Vulnerability scanning remains optional. Mandatory scanning, SAST, SBOMs,
+signing, richer exception metadata, and non-Python profiles are deferred.

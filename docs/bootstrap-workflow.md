@@ -170,15 +170,10 @@ After generation:
 1. Review `AGENTS.md`
 2. Run `uv sync`
 3. Run `uv run pre-commit install`
-4. Run `uv run pre-commit run --all-files`
-5. Run `uv run ruff format --check .`
-6. Run `uv run ruff check .`
-7. Run `uv run ty check`
-8. Run `uv run pytest`
-9. Run `uv build`
-10. Make the initial commit on `main`
-11. Push an initial pull request, then configure branch protection on `main`
-    as specified in `docs/quality-gates.md` so the gates become binding
+4. Run the quality-gate chain stated in `docs/quality-gates.md`
+5. Make the initial commit on `main`
+6. Push an initial pull request, then configure branch protection on `main`
+   as specified in `docs/quality-gates.md` so the gates become binding
 
 ### Golden Path: Workspace
 
