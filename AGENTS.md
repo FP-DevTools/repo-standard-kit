@@ -170,7 +170,8 @@ end in a temporary directory, on every platform.
 - `src/repo_standard/policy/`: strict models and compiled runtime policy
 - `src/repo_standard/compliance/`: the `repo-check` dispatcher and handlers; see
   `docs/compliance.md`
-- `scripts/`: developer scripts, including `generate_policy.py`
+- `scripts/`: developer scripts — `generate_policy.py` compiles the canonical
+  policy, `generate_docs.py` renders every governed Markdown document
 - `tests/`: automated tests
 - `docs/`: normative standards
 - `policy/`: canonical machine-enforced policy and profile detection metadata

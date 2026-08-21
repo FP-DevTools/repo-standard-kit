@@ -110,27 +110,12 @@ Do not clone the standards repository as the base of a product repository.
 
 ## Recommended New Repository Flow
 
-1. Run the initializer directly with `uvx`:
-
-   ```bash
-   uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-init --profile python-single --repo-name widget-service
-   ```
-
-   `uvx` is the short form of `uv tool run`. It installs the bootstrap package
-   from this standards repository into an isolated tool environment, then runs
-   the packaged `repo-init` command.
-
-2. Either create and enter an empty target directory, or run `repo-init` through
-   `uvx` from the parent directory with `--repo-name` so it creates the
-   repository folder for you.
-3. Run `repo-init` with the Python profile and repository metadata.
-4. Review generated `AGENTS.md`, `README.md`, package naming, and CI.
-5. Run the generated repository quality gates.
-6. Make the initial commit on `main`.
-
-If the target directory is not yet a Git repository, `repo-init` initializes
-one automatically on `main` before installing pre-commit hooks. Add or change
-the remote afterward as needed.
+The flow is the golden path for your profile:
+[Golden Path: Single Package](#golden-path-single-package) or
+[Golden Path: Workspace](#golden-path-workspace). Both run the initializer
+directly with `uvx`, the short form of `uv tool run`. It installs the bootstrap
+package from this standards repository into an isolated tool environment, then
+runs the packaged `repo-init` command.
 
 For repeated use, install the tool once:
 
@@ -201,6 +186,9 @@ repo-add-package \
   --description "Service package for widget API behavior"
 ```
 
+Then continue from step 1 of the single-package path above; the steps after
+generation are the same.
+
 If you prefer HTTPS instead of SSH, use the same command shape with the HTTPS
 Git URL for this repository.
 
@@ -223,6 +211,13 @@ Optional:
 - `--no-lock`
 - `--no-install`
 
+By default, `repo-init` infers the repository name from the target directory.
+If you pass `--repo-name` without `--output-dir`, `repo-init` creates
+`./<repo-name>` and bootstraps into that new directory. If you pass both,
+`--output-dir` remains the explicit target and `--repo-name` overrides only the
+rendered repository metadata. Without `--description`, the generated files
+carry a placeholder description to refine later in `README.md`.
+
 `--python-version` sets `requires-python`, and `--author` becomes the
 `authors` entry in `pyproject.toml`; an unnamed author leaves the key out
 rather than shipping it empty.
@@ -241,6 +236,10 @@ constrained environment may permit one operation but not the other. `uv sync`
 writes `uv.lock` when none exists, so `--no-lock` on its own still leaves a
 lock file behind. Whenever bootstrap ends with no `uv.lock`, `repo-init` names
 RSK009 and the `uv lock` command that resolves it.
+
+When the target is not yet a Git repository, `repo-init` initializes one on
+`main` before installing pre-commit hooks, so hook installation works in a
+fresh directory. Add or change the remote afterward as needed.
 
 ## Expected Output
 
@@ -309,30 +308,20 @@ Each later `repo-add-package --package-name widget_api` run adds:
 
 ### What Good Looks Like
 
+Accept the generated repository on what generation itself decided. Everything
+else it must satisfy is the standard, so leave that to `repo-check` and
+[docs/policy-reference.md](policy-reference.md) rather than restating rule
+values here.
+
 - No unresolved placeholders remain in generated files
 - The package directory matches the requested package name
 - `AGENTS.md` is concrete enough to use immediately, with no generic filler
-- The repository passes the full `docs/quality-gates.md` chain, which needs the
-  `uv.lock` the default path produces
-- `[tool.repo-standard]` declares the generated profile and standard major
-- Both workflows grant only `contents: read` and pin remote actions to full
-  commit SHAs; Dependabot is configured to propose GitHub Actions updates
-- Separate `quality` and `compliance` status checks run on pull requests and
-  are suitable for branch-protection enforcement
+- `repo-check .` reports no required findings, and the full
+  `docs/quality-gates.md` chain passes on the `uv.lock` the default path
+  produces
 
 The generated compliance workflow runs the released checker through `uvx` in
 an isolated tool environment. It does not add `repo-standard-kit` to the new
 repository's dependencies or couple compliance to the generated `uv.lock`.
 See [Compliance Checking](compliance.md) for the equivalent reusable-workflow
 caller and its immutable workflow pin.
-
-By default, `repo-init` infers the repository name from the target directory.
-If you pass `--repo-name` without `--output-dir`, `repo-init` creates
-`./<repo-name>` and bootstraps into that new directory. If you pass both,
-`--output-dir` remains the explicit target and `--repo-name` overrides only the
-rendered repository metadata.
-By default, `repo-init` uses a placeholder description that you can refine
-later in `README.md`.
-By default, `repo-init` also initializes Git on `main` when needed so hook
-installation works in a fresh directory. Use `--no-install` if you want
-bootstrap to stop before environment setup and hook installation.

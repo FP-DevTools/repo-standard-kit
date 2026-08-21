@@ -6,7 +6,8 @@
 - `src/repo_standard/`: packaged bootstrap implementation
 - `src/repo_standard/policy/`: strict policy models and compiled runtime policy
 - `src/repo_standard/starter_kits/`: copyable repository skeletons
-- `scripts/`: developer scripts, including `generate_policy.py`
+- `scripts/`: developer scripts — `generate_policy.py` compiles the canonical
+  policy, `generate_docs.py` renders every governed Markdown document
 - `tests/`: automated tests
 
 For the layout the standard prescribes for *your* repository, see
