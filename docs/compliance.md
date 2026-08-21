@@ -195,6 +195,11 @@ remediation. Markdown explains policy but supplies no executable values.
   policy-owned `contents: read` mapping; extra read scopes and all write scopes
   fail. RSK021 requires full SHA pins for remote actions and reusable workflows
   in every job in the quality workflow; local and Docker actions are exempt.
+- RSK027 requires `.github/workflows/compliance.yml` to exist. RSK028 and
+  RSK029 apply the permission and pin obligations above to that workflow and
+  its `compliance` job. No rule reads its `run` steps: the checker has no one
+  invocation to require, so an existing, least-privileged, fully pinned
+  compliance workflow can still execute nothing.
 - RSK014 requires pull request protection, stale approval dismissal, required
   status checks, strict up-to-date branches, conversation resolution, and
   administrator enforcement when platform checks are requested, but permits a

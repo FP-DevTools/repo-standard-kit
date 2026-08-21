@@ -12,8 +12,9 @@ must not survive the tag.
 
 An audit of `chore/release-v2.0.0` found 22 issues the gates do not catch. Two
 further findings (23, 24) surfaced during the work, bringing the total to 24.
-`uv run pytest` passes and `repo-check . --strict` is clean; that is part of
-the finding rather than a reassurance.
+Finding 16 was withdrawn under scrutiny, leaving 23 standing. `uv run pytest`
+passes and `repo-check . --strict` is clean; that is part of the finding
+rather than a reassurance.
 
 ## Decisions
 
@@ -37,11 +38,11 @@ is P3 → P5 → P7; P2, P4 and P8 run alongside it.
 | P1 | Factual corrections | 4, 5, 6, 8, 10, 15, 18 | — | Merged (#49) |
 | P2 | Root documents under the generator | 7 | P1 | Merged (#58) |
 | P3 | Policy schema: `advisory`, drop `severity` | 19, dead weight | — | Merged (#57) |
-| P4 | Checker correctness | 13, 14, 20, 22 | — | In progress (#59) |
-| P5 | Coverage: compliance workflow and shapes | 11, 12, 16, 17 | P3 | Not started |
+| P4 | Checker correctness | 13, 14, 20, 22 | — | Merged (#61) |
+| P5 | Coverage: compliance workflow, shapes, dead weight | 11, 12, 17 | P3 | In progress (#62) |
 | P6 | Bootstrap contract and dead weight | 9, 21 | — | Merged (#53) |
 | P7 | Release finalization | 1, 2, 3 | all | Not started |
-| P8 | Starter `.gitignore`, `repo-adopt` flag docs | 23, 24 | — | In progress (#56) |
+| P8 | Starter `.gitignore`, `repo-adopt` flag docs | 23, 24 | — | Merged (#60) |
 
 P1 precedes P2 so the corrected prose is what gets migrated into fragments,
 rather than migrating the defects and fixing them twice. P8 shares no files
@@ -85,10 +86,14 @@ Numbers are stable identifiers referenced by the phase table and the sub-issues.
 ### Enforceability gaps
 
 - **11.** Nothing structurally checks `.github/workflows/compliance.yml`,
-  though `docs/quality-gates.md:118-122` makes it a SHALL.
+  though `docs/quality-gates.md:118-122` makes it a SHALL. Closed by P5 with
+  RSK027.
 - **12.** RSK020 and RSK021 cover `quality.yml` only — the compliance
   workflow's permissions and pins are unchecked, and it is the workflow that
-  fetches remote code.
+  fetches remote code. Closed by P5 with RSK028 and RSK029. No rule requires
+  the job to *run* the checker: there is no single command to require, and
+  both shipped invocations sit inside conditional branches that P4 made
+  permanently unprovable. The gap is recorded in RSK027's rationale.
 - **13.** RSK006 accepts a command inside a false guard. Verified:
   `if false; then uv build --all-packages; fi` satisfies the rule. The
   workspace starter depends on this, so its build gate never runs.
@@ -96,11 +101,20 @@ Numbers are stable identifiers referenced by the phase table and the sub-issues.
   workflow while RSK021 returns the error.
 - **15.** `docs/repo-layout.md:20-21` — claims required-rule coverage that
   `tests/`, `src/<package_name>/`, `docs/diagrams/` and `scripts/` do not have.
-- **16.** RSK011 knows only `__DUNDER__` tokens; `templates/README.md` ships 27
-  angle-bracket placeholders with no check.
+- **16.** **Withdrawn.** The claim was that RSK011 knows only `__DUNDER__`
+  tokens while the templates ship angle-bracket placeholders with no check.
+  Both halves are wrong. `repo_init.py:19` derives `PLACEHOLDERS` *from*
+  RSK011's config, so policy is already the single source and the two cannot
+  drift. The angle-bracket tokens are documentation notation, not unrendered
+  placeholders: a generated `python-workspace` repository contains exactly one,
+  `packages/<package-slug>/` in `AGENTS.md`, prose describing the naming
+  convention, and zero `__DUNDER__` leftovers. A generic angle-bracket rule
+  would also be actively harmful, since an adopter's prose and markup
+  legitimately contain `<...>`.
 - **17.** `policy/shapes.yaml:105-137` — the pyproject shape omits
   `[project.scripts]` and `[tool.repo-check.ignore]`, both used by this
-  repository.
+  repository. Closed by P5: both are declared `optional` at their canonical
+  positions.
 - **18.** `.pymarkdown.json` relaxes `md024`; `docs/quality-gates.md` §4
   documents only md013, md033 and md036.
 
@@ -122,10 +136,13 @@ Numbers are stable identifiers referenced by the phase table and the sub-issues.
 - The JSON `severity` field, carrying an expired "through v1" promise. Removed
   by P3 (#57).
 - `profiles/**` in `source-include`. Removed by P1 (#49).
-- `docs/diagrams/README.md` — a placeholder shipped into every generated
-  repository that no rule references. **Still present and owned by no phase.**
-  Deleting it is a starter-kit change; leaving it needs a rule that gives it a
-  reason to exist. P7 must not tag with this unresolved.
+- `docs/diagrams/README.md`, a placeholder no rule references. Removed by P5
+  from this repository and both starter kits. Git cannot track an empty
+  directory, so the kit stops scaffolding `docs/diagrams/` at all;
+  `docs/repo-layout.md` keeps it as a convention to follow when the first
+  diagram is written.
+
+Every entry above is resolved; nothing on this list is outstanding.
 
 ### Findings added during the work
 

@@ -148,6 +148,23 @@ workflow is pinned to a full 40-character commit SHA. Local `./` actions and
 `docker://` references are exempt. Keep a version comment next to each SHA so
 Dependabot updates remain understandable.
 
+RSK027 enforces at the **required** level that
+`.github/workflows/compliance.yml` exists. RSK028 and RSK029 place the same two
+obligations on it that RSK020 and RSK021 place on the quality workflow, at the
+same **required** level: the `compliance` job's effective permissions are
+exactly `contents: read`, and every remote action and reusable workflow the
+compliance workflow references is pinned to a full 40-character commit SHA.
+This workflow fetches and executes the checker from outside the repository, so
+it is the reference set least safe to leave mutable.
+
+No rule requires the compliance job to run any particular command. The checker
+is invoked one way against a pinned release and another against the working
+tree, and both forms sit inside conditional branches that the guard semantics
+above leave unproven, so a compliance workflow that exists, is
+least-privileged, and is fully pinned can still execute nothing. Section 10
+enforcement keeps the status check mandatory; whether the job is worth running
+stays a maintainer's judgement.
+
 ### Environment reproducibility
 
 ```bash

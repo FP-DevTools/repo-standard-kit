@@ -1546,7 +1546,8 @@ def _github_workflow_permissions(
     return [
         Issue(
             config["path"],
-            "Quality job permissions do not match the least-privilege policy.",
+            f"The {config['job']} job's permissions do not match the "
+            "least-privilege policy.",
             permissions,
             expected,
             line,

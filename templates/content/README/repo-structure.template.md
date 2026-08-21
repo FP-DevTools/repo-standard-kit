@@ -7,7 +7,6 @@ Pick the block that matches this repo's profile and delete the other.
 ├── src/<package_name>/   # production code
 ├── tests/                # unit and integration tests
 ├── docs/adr/             # architecture decisions
-├── docs/diagrams/        # workflow / architecture diagrams
 ├── scripts/              # dev or operational helpers (not core logic)
 ├── AGENTS.md             # repo operating contract: workflow, gates, standards
 ├── README.md
@@ -22,7 +21,6 @@ Pick the block that matches this repo's profile and delete the other.
 │   ├── src/<package_name>/
 │   └── tests/
 ├── docs/adr/
-├── docs/diagrams/
 ├── AGENTS.md
 ├── README.md
 └── pyproject.toml        # tooling-only root config

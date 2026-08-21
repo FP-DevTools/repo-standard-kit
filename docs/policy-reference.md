@@ -100,6 +100,7 @@ documents are produced by walking it in the order below.
 | Section | Name | Level |
 | --- | --- | --- |
 | `project` | `project` | `required` |
+| `project-scripts` | `project.scripts` | `optional` |
 | `dependency-groups` | `dependency-groups` | `optional` |
 | `build-system` | `build-system` | `optional` |
 | `tool-uv-build-backend` | `tool.uv.build-backend` | `optional` |
@@ -107,6 +108,7 @@ documents are produced by walking it in the order below.
 | `tool-ruff` | `tool.ruff` | `optional` |
 | `tool-ruff-lint` | `tool.ruff.lint` | `optional` |
 | `tool-pytest-ini-options` | `tool.pytest.ini_options` | `optional` |
+| `tool-repo-check-ignore` | `tool.repo-check.ignore` | `optional` |
 | `tool-ty-src` | `tool.ty.src` | `optional` |
 
 ## Rules
@@ -420,6 +422,42 @@ Remediation: State each dial in the Agent Operating Mode section of AGENTS.md, i
 | --- | --- |
 | Verbosity | 2 / 5 |
 | Precision, repeatability, determinism | 4 / 5 |
+
+### RSK027: Compliance workflow exists
+
+- Level: `required`
+- Profiles: `python-single`, `python-workspace`
+- Source: [`docs/quality-gates.md` — 5. CI Pull Request Gates](../docs/quality-gates.md)
+- Enforcement: `structural`
+- Check kind: `path_exists`
+
+Rationale: The compliance job is what stops the rest of the standard from drifting, so its absence has to be a finding of its own. Existence is all this rule claims: no rule requires the job to run a particular command, because the checker is invoked one way against a pinned release and another against the working tree, and both forms sit inside conditional branches that RSK006's guard semantics leave unproven. A compliance workflow that exists, grants only contents: read, and pins every action can still execute nothing.
+
+Remediation: Add .github/workflows/compliance.yml with a compliance job that checks the repository against repo-standard-kit on pull requests.
+
+### RSK028: Compliance workflow uses least-privilege permissions
+
+- Level: `required`
+- Profiles: `python-single`, `python-workspace`
+- Source: [`docs/quality-gates.md` — 5. CI Pull Request Gates](../docs/quality-gates.md)
+- Enforcement: `structural`
+- Check kind: `github_workflow_permissions`
+
+Rationale: The compliance job reads the repository and reports on it. A write scope on the token that runs a checker fetched from outside the repository would let that fetched code change what it is auditing.
+
+Remediation: Set the compliance job's effective permissions to exactly `contents: read`.
+
+### RSK029: Compliance workflow pins remote actions immutably
+
+- Level: `required`
+- Profiles: `python-single`, `python-workspace`
+- Source: [`docs/quality-gates.md` — 5. CI Pull Request Gates](../docs/quality-gates.md)
+- Enforcement: `structural`
+- Check kind: `github_workflow_pins`
+
+Rationale: The compliance workflow already executes code fetched from outside the repository, so a mutable action reference beside it is the widest unpinned surface the standard ships.
+
+Remediation: Pin every remote action and reusable workflow in the compliance workflow to a 40-character SHA.
 
 ## Retired Rule IDs
 

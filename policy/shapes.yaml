@@ -111,6 +111,9 @@ shapes:
       - id: project
         heading: project
         level: required
+      - id: project-scripts
+        heading: project.scripts
+        level: optional
       - id: dependency-groups
         heading: dependency-groups
         level: optional
@@ -131,6 +134,9 @@ shapes:
         level: optional
       - id: tool-pytest-ini-options
         heading: tool.pytest.ini_options
+        level: optional
+      - id: tool-repo-check-ignore
+        heading: tool.repo-check.ignore
         level: optional
       - id: tool-ty-src
         heading: tool.ty.src

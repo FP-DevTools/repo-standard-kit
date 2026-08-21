@@ -526,3 +526,71 @@ rules:
     remediation: >-
       State each dial in the Agent Operating Mode section of AGENTS.md, in the
       declared order and at the declared level.
+
+  - id: RSK027
+    title: Compliance workflow exists
+    level: required
+    profiles: [python-single, python-workspace]
+    source:
+      document: docs/quality-gates.md
+      section: 5. CI Pull Request Gates
+    enforcement: structural
+    check:
+      kind: path_exists
+      config:
+        path: .github/workflows/compliance.yml
+        path_type: file
+    rationale: >-
+      The compliance job is what stops the rest of the standard from drifting,
+      so its absence has to be a finding of its own. Existence is all this rule
+      claims: no rule requires the job to run a particular command, because the
+      checker is invoked one way against a pinned release and another against
+      the working tree, and both forms sit inside conditional branches that
+      RSK006's guard semantics leave unproven. A compliance workflow that
+      exists, grants only contents: read, and pins every action can still
+      execute nothing.
+    remediation: >-
+      Add .github/workflows/compliance.yml with a compliance job that checks the
+      repository against repo-standard-kit on pull requests.
+
+  - id: RSK028
+    title: Compliance workflow uses least-privilege permissions
+    level: required
+    profiles: [python-single, python-workspace]
+    source:
+      document: docs/quality-gates.md
+      section: 5. CI Pull Request Gates
+    enforcement: structural
+    check:
+      kind: github_workflow_permissions
+      config:
+        path: .github/workflows/compliance.yml
+        job: compliance
+        permissions:
+          contents: read
+    rationale: >-
+      The compliance job reads the repository and reports on it. A write scope
+      on the token that runs a checker fetched from outside the repository
+      would let that fetched code change what it is auditing.
+    remediation: >-
+      Set the compliance job's effective permissions to exactly `contents: read`.
+
+  - id: RSK029
+    title: Compliance workflow pins remote actions immutably
+    level: required
+    profiles: [python-single, python-workspace]
+    source:
+      document: docs/quality-gates.md
+      section: 5. CI Pull Request Gates
+    enforcement: structural
+    check:
+      kind: github_workflow_pins
+      config:
+        path: .github/workflows/compliance.yml
+    rationale: >-
+      The compliance workflow already executes code fetched from outside the
+      repository, so a mutable action reference beside it is the widest
+      unpinned surface the standard ships.
+    remediation: >-
+      Pin every remote action and reusable workflow in the compliance workflow
+      to a 40-character SHA.

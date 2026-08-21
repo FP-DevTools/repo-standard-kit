@@ -267,7 +267,6 @@ widget-service/
   pyproject.toml
   uv.lock
   docs/adr/0001-template.md
-  docs/diagrams/README.md
   src/widget_service/__init__.py
   tests/test_smoke.py
 ```
@@ -294,7 +293,6 @@ widget-platform/
   pyproject.toml
   uv.lock
   docs/adr/0001-template.md
-  docs/diagrams/README.md
   packages/.gitkeep
   tests/test_workspace_shell.py
 ```
