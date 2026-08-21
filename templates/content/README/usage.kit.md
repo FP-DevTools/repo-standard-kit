@@ -35,7 +35,7 @@ a real `LICENSE` and declare it in `pyproject.toml`. Without it the repository
 starts with no licence file and a `License` section saying terms have not been
 chosen, which RSK018 keeps reporting as a recommendation until they are.
 
-The golden path in
+The golden path for your profile in
 [docs/bootstrap-workflow.md](docs/bootstrap-workflow.md#recommended-new-repository-flow)
 states what to do after generation, along with the full option reference and
 the expected generated output.
