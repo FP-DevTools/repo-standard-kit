@@ -79,10 +79,6 @@ def load_policy() -> Policy:
     return load_compiled_policy()
 
 
-# Compatibility alias for callers that used the v0.4 name.
-load_rules = load_policy
-
-
 def _read(path: Path) -> str | None:
     try:
         return path.read_text(encoding="utf-8")

@@ -219,6 +219,7 @@ Optional:
 - `--author`
 - `--license`
 - `--output-dir`
+- `--no-lock`
 - `--no-install`
 
 `--python-version` sets `requires-python`, and `--author` becomes the
@@ -230,6 +231,15 @@ licence text to `LICENSE` and declares `license` and `license-files` in
 `pyproject.toml`. Omit it and no `LICENSE` is written: the README's `License`
 section then states that terms have not been selected yet and cites RSK018,
 which stays a visible recommendation until they are.
+
+`repo-init` carries the same lock and install split as `repo-adopt`: the
+default path runs `uv lock` followed by `uv sync`. Use `--no-lock` to leave
+lockfile creation to the maintainer and `--no-install` to skip environment
+synchronization and hook installation. These flags are independent because a
+constrained environment may permit one operation but not the other. `uv sync`
+writes `uv.lock` when none exists, so `--no-lock` on its own still leaves a
+lock file behind. Whenever bootstrap ends with no `uv.lock`, `repo-init` names
+RSK009 and the `uv lock` command that resolves it.
 
 ## Expected Output
 
@@ -253,6 +263,7 @@ widget-service/
   CHANGELOG.md
   README.md
   pyproject.toml
+  uv.lock
   docs/adr/0001-template.md
   docs/diagrams/README.md
   src/widget_service/__init__.py
@@ -278,6 +289,7 @@ widget-platform/
   CHANGELOG.md
   README.md
   pyproject.toml
+  uv.lock
   docs/adr/0001-template.md
   docs/diagrams/README.md
   packages/.gitkeep
@@ -299,7 +311,8 @@ Each later `repo-add-package --package-name widget_api` run adds:
 - No unresolved placeholders remain in generated files
 - The package directory matches the requested package name
 - `AGENTS.md` is concrete enough to use immediately, with no generic filler
-- The repository passes the full `docs/quality-gates.md` chain
+- The repository passes the full `docs/quality-gates.md` chain, which needs the
+  `uv.lock` the default path produces
 - `[tool.repo-standard]` declares the generated profile and standard major
 - The quality workflow grants only `contents: read` and pins remote actions to
   full commit SHAs; Dependabot is configured to propose GitHub Actions updates
