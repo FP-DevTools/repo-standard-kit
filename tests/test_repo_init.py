@@ -546,7 +546,7 @@ def test_root_pyproject_uses_uv_build_backend() -> None:
     pyproject_text = (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(
         encoding="utf-8"
     )
-    assert 'requires = ["uv_build>=0.11.20,<0.12"]' in pyproject_text
+    assert f'requires = ["{DEFAULT_UV_BUILD_REQUIREMENT}"]' in pyproject_text
     assert 'build-backend = "uv_build"' in pyproject_text
     assert 'module-name = "repo_standard"' in pyproject_text
     assert "source-exclude" in pyproject_text
