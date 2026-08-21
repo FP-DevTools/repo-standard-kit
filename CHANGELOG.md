@@ -232,6 +232,9 @@ the changes listed under **Adopters must**.
   than restating them.
 - Both starter kits pinned the same action at two different versions across
   `quality.yml` and `compliance.yml`; the pins now agree.
+- `docs/compliance.md` issued `SHALL` requirements while absent from the
+  companion-document index, so a document declared non-normative was issuing
+  requirements; it is now indexed in `docs/repo-standard.md`.
 
 ### Adopters must
 

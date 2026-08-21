@@ -109,6 +109,7 @@ including its `README.md`, templates, and starter kits, implements them.
 - `docs/git-workflow.md`: branching, collaboration, and history rules
 - `docs/repo-layout.md`: canonical directory layout and scope boundaries
 - `docs/bootstrap-workflow.md`: how new repositories are generated
+- `docs/compliance.md`: how `repo-check` evaluates and reports compliance
 - `docs/policy-reference.md#profiles`: the supported profiles and their
   canonical detection metadata
 
