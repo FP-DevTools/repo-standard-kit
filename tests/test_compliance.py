@@ -37,6 +37,7 @@ from repo_standard.policy.models import (
     LEVELS,
     RATIONALE_MAX_LENGTH,
 )
+from repo_standard.project_metadata import kit_version
 from repo_standard.repo_init import bootstrap_repo
 
 POLICY = load_policy()
@@ -609,6 +610,39 @@ def test_finding_contains_actionable_contract_fields(tmp_path: Path) -> None:
     assert finding.actual == "missing"
     assert finding.expected == "file"
     assert finding.remediation
+
+
+@pytest.mark.parametrize("relative", ["README.md", "AGENTS.md"])
+def test_rsk005_reports_the_document_without_quoting_it(
+    tmp_path: Path, relative: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _minimal_repo(tmp_path)
+    document = root / relative
+    text = document.read_text(encoding="utf-8")
+    reference = POLICY.rule("RSK005").check.config["pattern"]
+    assert reference in text
+    document.write_text(text.replace(reference, "the-kit"), encoding="utf-8")
+
+    [finding] = [f for f in check_repo(root, POLICY) if f.rule_id == "RSK005"]
+    assert finding.path == relative
+    assert finding.expected == reference
+    # The searched text is the whole file; quoting it back is not evidence.
+    assert finding.actual is None
+    assert cli.main([str(root)]) == 1
+    output = capsys.readouterr().out
+    assert "RSK005" in output
+    assert "actual:" not in output
+    assert max(len(line) for line in output.splitlines()) < 120
+
+
+def test_rsk005_leaves_a_missing_document_to_the_rule_that_owns_absence(
+    tmp_path: Path,
+) -> None:
+    root = _minimal_repo(tmp_path)
+    (root / "README.md").unlink()
+    rule_ids = _rule_ids(check_repo(root, POLICY))
+    assert "RSK004" in rule_ids
+    assert "RSK005" not in rule_ids
 
 
 def test_non_uv_build_backend_is_a_strict_only_recommendation(
@@ -1719,12 +1753,16 @@ def test_unsupported_branch_protection_response_is_a_violation(
     assert finding.status == "violation"
 
 
+def _ignore(root: Path, entries: str) -> None:
+    with (root / "pyproject.toml").open("a", encoding="utf-8") as stream:
+        stream.write(f"\n[tool.repo-check.ignore]\n{entries}\n")
+
+
 def test_only_known_nonempty_ignore_reasons_suppress(tmp_path: Path) -> None:
     root = _minimal_repo(tmp_path)
     (root / "README.md").unlink()
     path = root / "pyproject.toml"
-    with path.open("a", encoding="utf-8") as stream:
-        stream.write('\n[tool.repo-check.ignore]\nRSK004 = " "\nRSK999 = "Unknown"\n')
+    _ignore(root, 'RSK004 = " "\nRSK999 = "Unknown"')
     assert "RSK004" in _rule_ids(check_repo(root, POLICY))
     path.write_text(
         path.read_text(encoding="utf-8").replace(
@@ -1733,6 +1771,65 @@ def test_only_known_nonempty_ignore_reasons_suppress(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     assert "RSK004" not in _rule_ids(check_repo(root, POLICY))
+
+
+def test_an_exemption_that_suppressed_nothing_is_reported_but_never_blocks(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _minimal_repo(tmp_path)
+    _ignore(root, 'RSK012 = "Documented reason."')
+
+    [finding] = [f for f in check_repo(root, POLICY) if f.rule_id == "RSK012"]
+    assert finding.status == "unused-exemption"
+    # `level` keeps naming the rule's canonical level; `status` carries what
+    # this line reports, so neither field means two things.
+    assert finding.level == POLICY.rule("RSK012").level
+    assert finding.path == "pyproject.toml"
+    assert finding.remediation != POLICY.rule("RSK012").remediation
+
+    assert cli.main([str(root)]) == 0
+    assert "RSK012 [unused-exemption]" in capsys.readouterr().out
+    # Information, never a failure — not even when the exempted rule is
+    # required and strict checking is requested.
+    assert cli.main([str(root), "--strict", "--format", "json"]) == 0
+    [item] = [
+        item
+        for item in json.loads(capsys.readouterr().out)
+        if item["rule_id"] == "RSK012"
+    ]
+    assert item["status"] == "unused-exemption"
+
+
+def test_an_exemption_that_suppressed_a_finding_is_not_reported(
+    tmp_path: Path,
+) -> None:
+    root = _minimal_repo(tmp_path)
+    (root / "README.md").unlink()
+    _ignore(root, 'RSK004 = "Documented reason."')
+    assert "RSK004" not in _rule_ids(check_repo(root, POLICY))
+
+
+def test_an_exemption_for_a_rule_this_run_never_evaluated_is_not_reported(
+    tmp_path: Path,
+) -> None:
+    root = _minimal_repo(tmp_path)
+    _ignore(root, 'RSK014 = "Documented reason."')
+    assert POLICY.rule("RSK014").enforcement == "platform"
+    # Without --check-enforcement RSK014 never ran, so it had nothing to
+    # suppress and the exemption is not yet demonstrably dead.
+    assert "RSK014" not in _rule_ids(check_repo(root, POLICY))
+
+
+def test_version_reports_the_package_and_the_compiled_standard(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(["--version"])
+    assert exit_info.value.code == 0
+    output = capsys.readouterr().out
+    assert kit_version() in output
+    assert POLICY.standard_version in output
+    assert POLICY.standard_major in output
 
 
 def test_json_output_carries_actionable_fields_and_no_legacy_severity(
@@ -2018,9 +2115,7 @@ def test_unlisted_pyproject_tables_stay_legal_in_any_position(
     tmp_path: Path,
 ) -> None:
     root = _minimal_repo(tmp_path)
-    path = root / "pyproject.toml"
-    with path.open("a", encoding="utf-8") as stream:
-        stream.write('\n[tool.repo-check.ignore]\nRSK012 = "Documented reason."\n')
+    _ignore(root, 'RSK012 = "Documented reason."')
     assert "RSK025" not in _rule_ids(check_repo(root, POLICY))
 
 

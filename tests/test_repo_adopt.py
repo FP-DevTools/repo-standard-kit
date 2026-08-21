@@ -13,11 +13,11 @@ from conftest import REPO_ROOT, dump_yaml, load_yaml
 
 from repo_standard.compliance.checks import Finding, check_repo, load_policy
 from repo_standard.policy.models import LEVEL_ORDER
+from repo_standard.project_metadata import kit_version
 from repo_standard.repo_adopt import (
     AdoptionError,
     AdoptionPlan,
     CommandError,
-    _kit_version,
     _merge_agents,
     _merge_pyproject,
     _merge_readme,
@@ -292,9 +292,7 @@ def test_structurally_compliant_repository_is_a_no_op(tmp_path: Path) -> None:
     assert plan.conflicts == ()
 
 
-def test_dirty_checkout_is_refused_without_writes(tmp_path: Path) -> None:
-    root = tmp_path / "existing"
-    _write_minimal_repo(root, "python-single")
+def _commit_minimal_repo(root: Path) -> None:
     subprocess.run(["git", "init"], cwd=root, check=True, capture_output=True)
     subprocess.run(
         ["git", "config", "user.email", "test@example.com"], cwd=root, check=True
@@ -308,6 +306,12 @@ def test_dirty_checkout_is_refused_without_writes(tmp_path: Path) -> None:
     subprocess.run(
         ["git", "commit", "-m", "initial"], cwd=root, check=True, capture_output=True
     )
+
+
+def test_dirty_checkout_is_refused_without_writes(tmp_path: Path) -> None:
+    root = tmp_path / "existing"
+    _write_minimal_repo(root, "python-single")
+    _commit_minimal_repo(root)
     (root / "README.md").write_text("dirty\n", encoding="utf-8")
 
     assert (
@@ -317,22 +321,29 @@ def test_dirty_checkout_is_refused_without_writes(tmp_path: Path) -> None:
     assert not (root / ".github").exists()
 
 
+def test_an_unused_exemption_is_reported_without_failing_adoption(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = tmp_path / "existing"
+    _write_minimal_repo(root, "python-single")
+    with (root / "pyproject.toml").open("a", encoding="utf-8") as stream:
+        stream.write('\n[tool.repo-check.ignore]\nRSK005 = "Suppresses nothing."\n')
+    _commit_minimal_repo(root)
+
+    result = main(
+        [str(root), "--profile", "python-single", "--no-lock", "--no-install"]
+    )
+
+    # Adoption writes the RSK005 reference, so the exemption is left dead; it
+    # is reported at RSK005's required level and still must not fail the run.
+    assert "RSK005" in capsys.readouterr().out
+    assert result == 0
+
+
 def test_apply_cli_leaves_changes_unstaged_and_uncommitted(tmp_path: Path) -> None:
     root = tmp_path / "existing"
     _write_minimal_repo(root, "python-single")
-    subprocess.run(["git", "init"], cwd=root, check=True, capture_output=True)
-    subprocess.run(
-        ["git", "config", "user.email", "test@example.com"], cwd=root, check=True
-    )
-    subprocess.run(["git", "config", "user.name", "Test"], cwd=root, check=True)
-    subprocess.run(
-        ["git", "add", "pyproject.toml", "uv.lock", "README.md", "AGENTS.md"],
-        cwd=root,
-        check=True,
-    )
-    subprocess.run(
-        ["git", "commit", "-m", "initial"], cwd=root, check=True, capture_output=True
-    )
+    _commit_minimal_repo(root)
 
     result = main(
         [str(root), "--profile", "python-single", "--no-lock", "--no-install"]
@@ -427,7 +438,7 @@ def test_recognized_older_compliance_step_is_updated_in_place(tmp_path: Path) ->
         step for step in steps if step.get("name") == "Check repository compliance"
     ]
     assert len(compliance_steps) == 1
-    assert f"@v{_kit_version()}" in compliance_steps[0]["run"]
+    assert f"@v{kit_version()}" in compliance_steps[0]["run"]
 
 
 def test_a_compliance_job_that_invokes_nothing_gains_the_invocation(

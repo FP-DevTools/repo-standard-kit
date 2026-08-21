@@ -2,10 +2,28 @@
 
 from __future__ import annotations
 
+import importlib.metadata
+import tomllib
 from pathlib import Path
 
 import tomlkit
 from tomlkit.exceptions import ParseError
+
+
+def kit_version() -> str:
+    """Return the running `repo-standard-kit` version.
+
+    Installed metadata is the source: a wheel ships no `pyproject.toml`, so
+    reading that file is only the fallback for a source checkout that has not
+    been installed.
+    """
+    try:
+        return importlib.metadata.version("repo-standard-kit")
+    except importlib.metadata.PackageNotFoundError:
+        pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
+        return str(
+            tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["version"]
+        )
 
 
 def validate_package_name(package_name: str) -> None:

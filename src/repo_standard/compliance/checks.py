@@ -432,6 +432,15 @@ def _agents_operating_dials(
 
 
 def _text_pattern_each(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
+    """Report each declared path whose text does not match the pattern.
+
+    A **missing** path yields no issue: the path's own existence rule owns
+    absence, and every path this kind reads is covered by one — RSK001 and
+    RSK004 today. Reporting absence here too would name one fact twice.
+
+    `actual` stays `None` deliberately. The searched text is the whole file,
+    and the message and `expected` already carry everything actionable.
+    """
     pattern = re.compile(config["pattern"])
     issues = []
     for relative in config["paths"]:
@@ -441,8 +450,7 @@ def _text_pattern_each(context: CheckContext, config: dict[str, Any]) -> list[Is
                 Issue(
                     relative,
                     f"{relative} does not match {pattern.pattern!r}.",
-                    text,
-                    pattern.pattern,
+                    expected=pattern.pattern,
                 )
             )
     return issues
@@ -1737,6 +1745,30 @@ def _load_ignore_config(root: Path, policy: Policy) -> dict[str, str]:
     }
 
 
+def _unused_exemption(rule: Rule) -> Finding:
+    """Report a declared exemption that suppressed nothing this run.
+
+    `level` stays the rule's canonical level, because that is the one thing
+    `level` names anywhere else; `status` carries what this line reports. The
+    status keeps it out of the exit code, so a dead exemption is visible
+    without becoming a failure.
+    """
+    return Finding(
+        rule.id,
+        rule.title,
+        rule.level,
+        "pyproject.toml",
+        None,
+        f"{rule.id} is exempted in [tool.repo-check.ignore] but suppressed no "
+        "finding this run.",
+        None,
+        None,
+        f"Delete the {rule.id} entry from [tool.repo-check.ignore], or keep it "
+        "only with a reason that says why it must outlive what it suppressed.",
+        "unused-exemption",
+    )
+
+
 def check_repo(
     root: Path,
     policy: Policy,
@@ -1748,14 +1780,22 @@ def check_repo(
     resolved_profile = resolve_profile(root, policy, profile)
     context = CheckContext(root=root, policy=policy, profile=resolved_profile)
     findings: list[Finding] = []
+    evaluated: set[str] = set()
     for rule in policy.rules:
         if resolved_profile not in rule.profiles:
             continue
         if rule.enforcement == "platform" and not include_platform:
             continue
+        evaluated.add(rule.id)
         handler = CHECK_HANDLERS[rule.check.kind]
         findings.extend(
             _finding(rule, issue) for issue in handler(context, rule.check.config)
         )
     ignored = _load_ignore_config(root, policy)
-    return [finding for finding in findings if finding.rule_id not in ignored]
+    kept = [finding for finding in findings if finding.rule_id not in ignored]
+    # Only a rule this run actually evaluated can be reported as suppressing
+    # nothing: a rule the profile excludes, or a platform rule nobody asked
+    # for, had no finding to suppress in the first place.
+    unused = (evaluated & set(ignored)) - {finding.rule_id for finding in findings}
+    kept.extend(_unused_exemption(policy.rule(rule_id)) for rule_id in sorted(unused))
+    return kept

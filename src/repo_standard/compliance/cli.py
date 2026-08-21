@@ -10,6 +10,7 @@ from pathlib import Path
 
 from repo_standard.compliance.checks import Finding, check_repo, load_policy
 from repo_standard.policy.models import DEFAULT_LEVELS, STRICT_LEVELS
+from repo_standard.project_metadata import kit_version
 
 _POSITIVE = "\033[38;2;35;209;111m"
 _RESET = "\033[0m"
@@ -42,6 +43,17 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Treat recommended findings as failures too. Advisory never fails.",
     )
+    parser.add_argument(
+        "--version",
+        action="version",
+        # Adopters pin by Git ref, so a disputed finding starts with which
+        # checker ran and which compiled policy it carried.
+        version=(
+            f"repo-check {kit_version()} (standard {policy.standard_version}, "
+            f"standard major {policy.standard_major})"
+        ),
+        help="Print the checker and compiled standard versions, then exit.",
+    )
     return parser
 
 
@@ -67,8 +79,12 @@ def _format_text(findings: list[Finding], *, color: bool) -> str:
         location = finding.path + (
             f":{finding.line}" if finding.line is not None else ""
         )
+        # The level column names how binding the rule is; a status other than
+        # `violation` means this line is not the rule failing, so say so
+        # rather than let the column read as a failure.
+        status = "" if finding.status == "violation" else f" [{finding.status}]"
         lines.append(
-            f"{finding.level.upper():11} {finding.rule_id}  {location}  "
+            f"{finding.level.upper():11} {finding.rule_id}{status}  {location}  "
             f"{finding.title}: {finding.message}"
         )
         if finding.actual is not None:
@@ -127,9 +143,14 @@ def main(argv: list[str] | None = None) -> int:
     if any(finding.status == "indeterminate" for finding in findings):
         return 2
     # `advisory` belongs to neither set: those findings are always printed
-    # above and never reach the exit code, not even under `--strict`.
+    # above and never reach the exit code, not even under `--strict`. Only a
+    # `violation` can fail a run at all — an `unused-exemption` is a report
+    # about the configuration, not a rule the repository broke.
     levels = STRICT_LEVELS if args.strict else DEFAULT_LEVELS
-    if any(finding.level in levels for finding in findings):
+    if any(
+        finding.level in levels and finding.status == "violation"
+        for finding in findings
+    ):
         return 1
     return 0
 

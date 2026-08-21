@@ -19,11 +19,16 @@ Options:
   active rulesets for RSK014.
 - `--strict` promotes recommended findings to failures. It does not promote
   advisory findings.
+- `--version` prints the running `repo-check` package version and the
+  `standard_version` and standard major compiled into its policy, then exits.
+  Adopters pin the checker by Git ref, so this is how a disputed finding is
+  attributed to a revision.
 
 Exit code `0` means no blocking findings. Exit code `1` means a required rule
 failed, or a recommended rule failed under `--strict`. Exit code `2` is a
 usage or indeterminate command error, including an explicitly requested
-platform check whose evidence could not be obtained.
+platform check whose evidence could not be obtained. Only a finding whose
+`status` is `violation` can produce exit code `1`.
 
 Required findings fail by default. Recommended findings are always visible but
 fail only under `--strict`. Advisory findings are always visible and never
@@ -55,11 +60,27 @@ checks execute for the best deterministic profile.
 
 Every finding includes the rule ID, title, canonical level, path and line when
 available, message, actual value, expected value, remediation, and status.
-`level` is the sole name for how binding a finding is, and `status` reports
-`violation` or, for an unavailable platform command, `indeterminate`. The
-legacy `severity` field that restated `level` as `shall` or `should`, and an
-unavailable platform command as `platform`, is removed in v2; read `level` and
-`status` instead.
+`level` is the sole name for how binding the *rule* is, and `status` reports
+what *this* finding is:
+
+- `violation` — the rule failed. The only status that can reach exit code `1`.
+- `indeterminate` — an explicitly requested platform command produced no
+  usable evidence. Exit code `2`.
+- `unused-exemption` — the rule passed while an exemption for it was declared.
+  Reported below, and never blocking.
+
+`level` never changes to express one of these; a finding for a required rule
+reports `required` whatever its status. The legacy `severity` field that
+restated `level` as `shall` or `should`, and an unavailable platform command
+as `platform`, is removed in v2; read `level` and `status` instead.
+
+Text output prints the status beside the rule ID as `RSK012
+[unused-exemption]` whenever it is not `violation`, so the level column is
+never read as a failure that did not happen.
+
+`actual` is omitted where quoting it is not evidence: a rule that searches a
+whole document for a pattern reports the pattern it wanted, not the document
+it read.
 
 YAML and TOML parse failures report parser locations. Workflow findings report
 the relevant node line when the YAML parser exposes one.
@@ -70,12 +91,27 @@ The v2 exception shape remains deliberately small:
 
 ```toml
 [tool.repo-check.ignore]
-RSK005 = "This repository is the standard's own home."
+RSK012 = "This repository records decisions in its own decision log."
 ```
 
 Only a known rule ID with a non-empty string reason suppresses findings. Empty
 reasons, unknown IDs, malformed TOML, and non-string values suppress nothing.
 Owner, expiry, and reference metadata remain deferred.
+
+An exemption that suppressed nothing is reported. When a rule this run
+evaluated produced no finding and an exemption for it is declared, `repo-check`
+emits a finding against `pyproject.toml` with status `unused-exemption`, at the
+rule's own level, remediating to deleting the entry. It never affects the exit
+code: a dead exemption is information about the configuration, not a rule the
+repository broke. A rule the resolved profile excludes, and a platform rule
+under a run without `--check-enforcement`, are not evaluated and so are never
+reported this way.
+
+The report exists because an exemption is a claim, and a claim nothing
+exercises stops being reviewed. The `Single Source Of Truth` section every
+`AGENTS.md` carries requires one home per fact and treats deleting the stale
+copy as part of the change: an exemption that outlives the finding it was
+written for is a second, silently wrong statement about the repository.
 
 ## Consumption Surfaces
 
