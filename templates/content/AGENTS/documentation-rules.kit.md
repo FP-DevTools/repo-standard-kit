@@ -1,0 +1,3 @@
+- Changes to standards must update the corresponding document in `docs/`
+- Changes to templates or starter kits must stay consistent with each other
+- New operating rules belong in docs before they appear in starter assets
