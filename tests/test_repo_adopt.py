@@ -62,6 +62,22 @@ def _write_minimal_repo(root: Path, profile: str) -> None:
         (root / "packages").mkdir()
 
 
+def _accept_recommended_ruff_families(root: Path) -> None:
+    """Select the families adoption leaves to the maintainer.
+
+    Adoption only repairs `required` rules, so a repository it has finished
+    with still carries the recommended ones. A test that needs a repository
+    with no findings at all makes that choice itself.
+    """
+    path = root / "pyproject.toml"
+    document = tomlkit.parse(path.read_text(encoding="utf-8"))
+    select = document["tool"]["ruff"]["lint"]["select"]
+    for family in load_policy().rule("RSK016").check.config["values"]:
+        if family not in select:
+            select.append(family)
+    path.write_text(tomlkit.dumps(document), encoding="utf-8")
+
+
 @pytest.mark.parametrize("profile", ["python-single", "python-workspace"])
 def test_adoption_reaches_zero_required_findings_and_is_idempotent(
     tmp_path: Path, profile: str
@@ -261,6 +277,7 @@ def test_fully_compliant_repository_still_gets_a_missing_gitignore(
     _write_minimal_repo(root, "python-single")
     apply_plan(plan_adoption(root, "python-single"))
     (root / "LICENSE").write_text("Approved license terms.\n", encoding="utf-8")
+    _accept_recommended_ruff_families(root)
     assert check_repo(root, load_policy(), profile="python-single") == []
     (root / ".gitignore").unlink()
 
@@ -276,6 +293,7 @@ def test_structurally_compliant_repository_is_a_no_op(tmp_path: Path) -> None:
     _write_minimal_repo(root, "python-single")
     apply_plan(plan_adoption(root, "python-single"))
     (root / "LICENSE").write_text("Approved license terms.\n", encoding="utf-8")
+    _accept_recommended_ruff_families(root)
 
     pre_commit = root / ".pre-commit-config.yaml"
     hooks = load_yaml(pre_commit.read_text(encoding="utf-8"))
@@ -793,3 +811,225 @@ def test_repinning_carries_the_starters_version_comment_across(
     # replaced comment token carried is still where it was.
     assert "v4.2.2" not in written
     assert "\n\n      - uses: astral-sh/setup-uv@" in written
+
+
+def _v1_compliance_caller(root: Path, uses: str, inputs: str) -> Path:
+    """The compliance workflow shape `docs/compliance.md` publishes as supported."""
+    workflow = root / ".github" / "workflows" / "compliance.yml"
+    workflow.parent.mkdir(parents=True, exist_ok=True)
+    workflow.write_text(
+        "name: Compliance\n"
+        "on:\n"
+        "  pull_request:\n"
+        "permissions:\n"
+        "  contents: read\n"
+        "jobs:\n"
+        f"  compliance:\n    uses: {uses}\n    with:\n{inputs}",
+        encoding="utf-8",
+    )
+    return workflow
+
+
+def test_a_reusable_workflow_call_is_reconciled_and_never_gains_steps(
+    tmp_path: Path,
+) -> None:
+    """A job declaring both `uses:` and `steps:` is one GitHub refuses to run."""
+    root = tmp_path / "existing"
+    _write_minimal_repo(root, "python-workspace")
+    workflow = _v1_compliance_caller(
+        root,
+        "FP-DevTools/repo-standard-kit/.github/workflows/compliance.yml@v1.2.0",
+        "      standard-ref: v1.2.0\n      strict: true\n",
+    )
+
+    plan = plan_adoption(root, "python-workspace")
+    apply_plan(plan)
+
+    job = load_yaml(workflow.read_text(encoding="utf-8"))["jobs"]["compliance"]
+    assert "steps" not in job
+    assert job["uses"] == (
+        "FP-DevTools/repo-standard-kit/.github/workflows/"
+        f"compliance-reusable.yml@v{kit_version()}"
+    )
+    assert job["with"] == {"standard-ref": f"v{kit_version()}"}
+    assert any("full commit SHA" in conflict for conflict in plan.conflicts)
+    assert any("strict" in conflict for conflict in plan.conflicts)
+
+
+def test_a_reusable_workflow_this_kit_does_not_publish_is_left_alone(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "existing"
+    _write_minimal_repo(root, "python-workspace")
+    uses = "vendor/ci/.github/workflows/compliance.yml@v3"
+    workflow = _v1_compliance_caller(root, uses, "      mode: strict\n")
+
+    plan = plan_adoption(root, "python-workspace")
+    apply_plan(plan)
+
+    job = load_yaml(workflow.read_text(encoding="utf-8"))["jobs"]["compliance"]
+    assert job == {"uses": uses, "with": {"mode": "strict"}}
+    assert any(uses in conflict for conflict in plan.conflicts)
+
+
+def test_hook_args_the_starter_does_not_model_are_kept_and_reported(
+    tmp_path: Path,
+) -> None:
+    """Dropping `--baseline` turned a clean gate into 98 detect-secrets findings."""
+    root = tmp_path / "existing"
+    _write_minimal_repo(root, "python-single")
+    (root / ".pre-commit-config.yaml").write_text(
+        "repos:\n"
+        "  - repo: local\n"
+        "    hooks:\n"
+        "      - id: detect-secrets\n"
+        "        name: detect secrets\n"
+        "        entry: uv run detect-secrets-hook\n"
+        "        args: ['--baseline', '.secrets.baseline']\n"
+        "        language: system\n"
+        "        types: [text]\n",
+        encoding="utf-8",
+    )
+
+    plan = plan_adoption(root, "python-single")
+    apply_plan(plan)
+
+    hook = next(
+        item
+        for repository in load_yaml(
+            (root / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+        )["repos"]
+        for item in repository.get("hooks", [])
+        if item.get("id") == "detect-secrets"
+    )
+    assert hook["args"] == ["--baseline", ".secrets.baseline"]
+    assert any("detect-secrets" in conflict for conflict in plan.conflicts)
+
+
+def test_a_recommended_lint_family_is_left_to_the_maintainer(tmp_path: Path) -> None:
+    """Selecting `PT` unasked turned a clean `ruff check` into seven errors."""
+    root = tmp_path / "existing"
+    _write_minimal_repo(root, "python-single")
+
+    apply_plan(plan_adoption(root, "python-single"))
+
+    policy = load_policy()
+    document = tomlkit.parse((root / "pyproject.toml").read_text(encoding="utf-8"))
+    select = set(document["tool"]["ruff"]["lint"]["select"])
+    assert set(policy.rule("RSK010").check.config["required_select"]) <= select
+    assert not set(policy.rule("RSK016").check.config["values"]) & select
+
+
+def test_a_stale_standard_major_adopts_without_an_explicit_profile(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The state every earlier-major adopter is in is what adoption repairs."""
+    root = tmp_path / "existing"
+    _write_minimal_repo(root, "python-single")
+    with (root / "pyproject.toml").open("a", encoding="utf-8") as stream:
+        stream.write(
+            '\n[tool.repo-standard]\nprofile = "python-single"\nstandard = "1"\n'
+        )
+    _commit_minimal_repo(root)
+
+    assert main([str(root), "--no-lock", "--no-install"]) == 0
+
+    major = load_policy().standard_major
+    output = capsys.readouterr().out
+    assert "standard '1'" in output
+    assert f"standard {major!r}" in output
+    document = tomlkit.parse((root / "pyproject.toml").read_text(encoding="utf-8"))
+    assert document["tool"]["repo-standard"]["standard"] == major
+
+
+def test_an_unknown_profile_still_asks_for_an_explicit_one(tmp_path: Path) -> None:
+    root = tmp_path / "existing"
+    _write_minimal_repo(root, "python-single")
+    with (root / "pyproject.toml").open("a", encoding="utf-8") as stream:
+        stream.write('\n[tool.repo-standard]\nprofile = "python-elixir"\n')
+
+    with pytest.raises(AdoptionError, match="python-elixir"):
+        plan_adoption(root)
+
+
+def test_adoption_leaves_pyproject_in_canonical_table_order(tmp_path: Path) -> None:
+    """`updated: pyproject.toml` must not also mean `still failing RSK025`."""
+    root = tmp_path / "existing"
+    _write_minimal_repo(root, "python-single")
+    pyproject = root / "pyproject.toml"
+    pyproject.write_text(
+        pyproject.read_text(encoding="utf-8")
+        + '\n[tool.repo-standard]\nprofile = "python-single"\nstandard = "1"\n'
+        '\n[tool.ty.src]\nroot = "src"\n'
+        "\n[dependency-groups]\ndev = []\n"
+        '\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n',
+        encoding="utf-8",
+    )
+
+    apply_plan(plan_adoption(root))
+
+    policy = load_policy()
+    shape = policy.shape(policy.rule("RSK025").check.config["shape"])
+    tables = re.findall(
+        r"^\[\[?\s*([^\]\s]+)\s*\]\]?$",
+        pyproject.read_text(encoding="utf-8"),
+        re.MULTILINE,
+    )
+    assert _is_subsequence(tables, shape.headings), f"table order is wrong: {tables}"
+    assert not [
+        finding
+        for finding in check_repo(root, policy, profile="python-single")
+        if finding.rule_id == "RSK025"
+    ]
+
+
+def test_an_equivalent_step_is_matched_rather_than_appended_again(
+    tmp_path: Path,
+) -> None:
+    """The starter guards the build; the adopter runs it plainly. One step."""
+    root = tmp_path / "existing"
+    _write_minimal_repo(root, "python-workspace")
+    workflow = root / ".github" / "workflows" / "quality.yml"
+    workflow.parent.mkdir(parents=True)
+    workflow.write_text(
+        "name: CI\n"
+        "on: pull_request\n"
+        "jobs:\n"
+        "  quality:\n"
+        "    runs-on: ubuntu-latest\n"
+        "    steps:\n"
+        "      - name: Build packages\n"
+        "        run: uv build --all-packages\n",
+        encoding="utf-8",
+    )
+
+    apply_plan(plan_adoption(root, "python-workspace"))
+
+    steps = load_yaml(workflow.read_text(encoding="utf-8"))["jobs"]["quality"]["steps"]
+    names = [step["name"] for step in steps if "name" in step]
+    assert len(names) == len(set(names)), f"duplicate step names: {names}"
+    assert [step for step in steps if step.get("name") == "Build packages"] == [
+        {"name": "Build packages", "run": "uv build --all-packages"}
+    ]
+
+
+def test_an_inserted_readme_section_states_the_gap(tmp_path: Path) -> None:
+    """The starter's prose describes a repository `repo-init` has just generated."""
+    root = tmp_path / "existing"
+    _write_minimal_repo(root, "python-workspace")
+
+    apply_plan(plan_adoption(root, "python-workspace"))
+
+    policy = load_policy()
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    shape = policy.shape(policy.rule("RSK023").check.config["shape"])
+    assert "repo-add-package" not in readme
+    assert "Replace this section" not in readme
+    assert readme.count("it has no content yet.") == len(
+        [section for section in shape.sections if section.level == "required"]
+    )
+    assert not [
+        finding
+        for finding in check_repo(root, policy, profile="python-workspace")
+        if finding.rule_id == "RSK023"
+    ]

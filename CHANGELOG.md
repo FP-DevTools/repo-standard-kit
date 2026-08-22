@@ -221,6 +221,26 @@ the changes listed under **Adopters must**.
 - `repo-adopt` places new `pyproject.toml` tables in the order RSK025 declares
   rather than appending them, so `[dependency-groups]` no longer lands after
   `[build-system]` and `[tool.repo-standard]` no longer splits the Ruff tables.
+  Tables the repository already had are reordered too, so the manifest adoption
+  rewrites is not handed back failing a required rule.
+- **`repo-adopt` upgrades a repository adopted under standard 1 rather than
+  refusing it.** A stale `standard` major is reported, naming both majors, and
+  the run continues; only a profile this kit does not publish still asks for an
+  explicit `--profile`.
+- **`repo-adopt` reconciles a compliance job that calls a reusable workflow**
+  instead of appending steps beside its `uses:`, which produced a job GitHub
+  refuses to schedule. The call moves to `compliance-reusable.yml` at this
+  release and to the inputs that still exist; the SHA pin RSK029 wants stays
+  the maintainer's choice and is reported.
+- **`repo-adopt` selects only the lint families a `required` rule demands.**
+  Applying a `recommended` family unasked broke a passing `ruff check`, and
+  which recommendations to take is the maintainer's call.
+- `repo-adopt` keeps pre-commit hook arguments the hook shape does not model —
+  a `detect-secrets` baseline among them — and reports the difference instead
+  of silently deleting a load-bearing option.
+- A `README.md` section `repo-adopt` inserts states that it is empty. It used
+  to carry the starter's prose, which describes a repository `repo-init` has
+  just generated and leaves an established one text to delete.
 - `templates/README.md` states that its section order comes from RSK023 and is
   checked by `repo-check`, replacing the claim that adopters should keep their
   README aligned with `templates/` — a path no tooling reads. The same
