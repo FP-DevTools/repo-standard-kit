@@ -95,7 +95,8 @@ the changes listed under **Adopters must**.
   execute nothing. The rule requires the workflow to trigger on
   `pull_request` — the other three pass on one no pull request ever starts —
   and requires one executed command in `jobs.compliance.steps[*].run` to carry
-  `repo-check` in its argument list.
+  `repo-check` in its argument list, or the job to call this repository's
+  `compliance-reusable.yml`, which runs the checker in the caller's place.
   Policy owns the token, and the match is containment rather than an exact
   command, because an adopter runs a released checker with `uvx` while this
   repository runs its own working tree with `uv run` — both correct. The claim
@@ -343,6 +344,20 @@ the changes listed under **Adopters must**.
   this repository's own RSK011 entry lists twenty-one of them, which put a
   1,400-character line in front of a reader who needed the count.
   `--format json` still emits the full list.
+- **RSK030 rejected the reusable-workflow form this kit publishes.** A
+  `compliance` job whose `uses:` calls
+  `FP-DevTools/repo-standard-kit/.github/workflows/compliance-reusable.yml`
+  declares no steps of its own, so the rule found no `run:` body to read and
+  reported `Job 'compliance' has no executable steps` — a required finding
+  against the shape `docs/compliance.md` §Alternative publishes as supported,
+  and against the same document's claim that the status does not depend on
+  whether the adopter calls a reusable workflow. The rule now resolves the
+  invocation through that call, because the called workflow is the invocation.
+  Recognition reads `owner/repo/path` only and never the ref, so the SHA RSK029
+  requires is free to change; another repository's reusable workflow, and a job
+  with neither steps nor such a call, still fail. The published caller example
+  gained the `permissions: contents: read` block RSK028 requires of it, which
+  it had been missing.
 - **`repo-adopt` left a stale version comment beside a SHA it had just
   changed.** Repinning `uses: actions/checkout@v4 # v4.2.2` wrote the starter's
   v7.0.1 SHA and kept `# v4.2.2` next to it, which Dependabot reads as the
@@ -394,11 +409,13 @@ to see what is left; the list below is what that repairs and what it cannot.
   repaired. `docs/quality-gates.md` §5 already required this job; only the
   structural checks are new.
 - Make sure that job actually runs the checker, on pull requests. **RSK030**
-  requires the workflow to trigger on `pull_request` and one executed command
-  in `jobs.compliance.steps[*].run` to contain `repo-check`, so a workflow
-  reachable only by `workflow_dispatch`, a job that only checks out the
-  repository, or an invocation guarded by a shell conditional inside the
-  `run:` body each report a required finding. A step's Actions-level `if:` is
+  requires the workflow to trigger on `pull_request` and either one executed
+  command in `jobs.compliance.steps[*].run` containing `repo-check` or a job
+  calling this repository's `compliance-reusable.yml`, so a workflow reachable
+  only by `workflow_dispatch`, a job that only checks out the repository, a job
+  that declares neither steps nor such a call, a job calling some other
+  repository's reusable workflow, or an invocation guarded by a shell
+  conditional inside the `run:` body each report a required finding. A step's Actions-level `if:` is
   not one of them: the checker reads `run:` bodies and nothing else, so a
   `repo-check` step carrying `if: false` or `continue-on-error: true` still
   satisfies RSK030. The prescribed form is the

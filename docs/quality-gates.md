@@ -174,7 +174,13 @@ checker on pull requests: the workflow shall trigger on `pull_request`, and
 some command in `jobs.compliance.steps[*].run` shall carry `repo-check` in its
 argument list. The trigger belongs to this rule because the other three are
 satisfied by a workflow no pull request ever starts, which leaves the SHALL
-above unmet. The match is containment rather than an
+above unmet. A job calling the reusable workflow `repo-standard-kit` publishes
+at `.github/workflows/compliance-reusable.yml` satisfies the second half
+instead, because that workflow runs the checker and leaves the caller no steps
+to read; the rule recognises it by `owner/repo/path` and not by the ref, which
+is RSK029's subject. No other repository's reusable workflow counts, and a job
+that declares neither steps nor such a call fails. The match is containment
+rather than an
 exact command, because an adopter runs a released checker with `uvx` while this
 standards repository runs its own working tree with `uv run`, and both are
 correct. The guard semantics above apply unchanged, and no profile declares a

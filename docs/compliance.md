@@ -232,12 +232,26 @@ name: Compliance
 on:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   compliance:
     uses: FP-DevTools/repo-standard-kit/.github/workflows/compliance-reusable.yml@<full-sha>
     with:
       standard-ref: v2.0.0
 ```
+
+RSK030 requires the `compliance` job to run the checker, and a job that calls a
+reusable workflow declares no steps of its own to read. It resolves through the
+`uses:` instead: a job calling this repository's `compliance-reusable.yml` runs
+the checker, because that is what the called workflow does. Recognition is by
+`owner/repo/path` only, so the SHA RSK029 requires — or an immutable tag — is
+free to change without touching the rule. Nothing else counts: a `compliance`
+job that declares no steps and calls no such workflow still fails RSK030, and
+so does one calling some other repository's reusable workflow, which is no
+evidence the checker ever runs. The permissions block above is the caller's own
+RSK028 obligation; the called workflow declares its own least privilege too.
 
 This form is shorter and the runner is maintained centrally, at the cost of
 running exactly one command with no options. `standard-ref` is the sole input,

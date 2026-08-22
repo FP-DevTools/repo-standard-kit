@@ -56,7 +56,14 @@ CHECK_SCHEMAS: dict[str, tuple[set[str], set[str]]] = {
         set(),
     ),
     "github_workflow_invocation": (
-        {"path", "job", "trigger", "token", "guards_by_profile"},
+        {
+            "path",
+            "job",
+            "trigger",
+            "token",
+            "reusable_workflow",
+            "guards_by_profile",
+        },
         set(),
     ),
     "pre_commit_hooks": ({"path", "hooks"}, set()),
@@ -400,6 +407,7 @@ def _validate_check_config(kind: str, config: dict[str, Any], location: str) -> 
         "shape",
         "section",
         "token",
+        "reusable_workflow",
     ):
         if key in config:
             _string(config[key], f"{location}.{key}")
