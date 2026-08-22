@@ -34,11 +34,18 @@ from repo_standard.policy.models import LEVEL_ORDER
 from repo_standard.project_metadata import kit_version
 from repo_standard.repo_init import (
     PLACEHOLDERS,
-    UNLICENSED_NOTICE,
     resolve_starter_dir,
 )
 
 ADOPTED_LICENSE_NOTICE = "See [`LICENSE`](LICENSE) for the terms that apply."
+# `repo_init.UNLICENSED_NOTICE` sends the reader to `repo-init --license`,
+# which is not a command an existing repository can run. Adoption states the
+# same fact and names what it can actually do about it.
+ADOPTION_UNLICENSED_NOTICE = (
+    "Licence terms have not been selected for this repository yet, so no "
+    "`LICENSE` file is present. RSK018 recommends adding one: add the terms "
+    "your organisation has approved before sharing this repository."
+)
 
 _KIT_REPOSITORY = "FP-DevTools/repo-standard-kit"
 _STANDARDS_LINK = f"[repo-standard-kit]: https://github.com/{_KIT_REPOSITORY}"
@@ -233,7 +240,7 @@ def _project_values(root: Path, document: Any) -> dict[str, str]:
         "license_notice": (
             ADOPTED_LICENSE_NOTICE
             if (root / "LICENSE").is_file()
-            else UNLICENSED_NOTICE
+            else ADOPTION_UNLICENSED_NOTICE
         ),
     }
 
@@ -927,21 +934,30 @@ def _merge_agents(path: Path, profile: str, values: dict[str, str]) -> str:
 
 
 _README_GAP = "`repo-adopt` added this required heading; it has no content yet."
+# Sections whose body adoption can state as fact, keyed by the value that
+# carries it. Everything else describes what the repository is for, which only
+# the maintainer knows.
+_README_BODIES = {"license": "license_notice"}
 
 
-def _fill_missing_readme_sections(text: str, shape: Shape) -> str:
-    """Add every required README section as a stated gap.
+def _fill_missing_readme_sections(
+    text: str, shape: Shape, values: dict[str, str]
+) -> str:
+    """Add every required README section, as fact where there is one.
 
     The starter's bodies describe a repository `repo-init` has just generated
     -- add the first package, replace this section -- which is false of a
     repository that already exists and leaves the reader prose to delete. An
-    inserted section says it is empty and stops there.
+    inserted section says it is empty and stops there, unless adoption can read
+    the answer off the repository, as it can for the licence terms.
     """
     for section in shape.sections:
         if section.level != "required" or _section(text, section.heading) is not None:
             continue
+        value = _README_BODIES.get(section.id)
+        body = values[value] if value is not None else _README_GAP
         text = _insert_section(
-            text, shape, section.heading, f"## {section.heading}\n\n{_README_GAP}\n"
+            text, shape, section.heading, f"## {section.heading}\n\n{body}\n"
         )
     return text
 
@@ -951,7 +967,7 @@ def _merge_readme(path: Path, profile: str, values: dict[str, str]) -> str:
     if text is None:
         return _render(_read_starter(profile, "README.md"), values)
     shape = _shape_for("RSK023")
-    text = _fill_missing_readme_sections(text, shape)
+    text = _fill_missing_readme_sections(text, shape, values)
     return _ensure_standards_reference(text, shape)
 
 

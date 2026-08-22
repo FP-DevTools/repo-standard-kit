@@ -15,6 +15,8 @@ from repo_standard.compliance.checks import Finding, check_repo, load_policy
 from repo_standard.policy.models import LEVEL_ORDER
 from repo_standard.project_metadata import kit_version
 from repo_standard.repo_adopt import (
+    ADOPTED_LICENSE_NOTICE,
+    ADOPTION_UNLICENSED_NOTICE,
     AdoptionError,
     AdoptionPlan,
     CommandError,
@@ -1025,11 +1027,41 @@ def test_an_inserted_readme_section_states_the_gap(tmp_path: Path) -> None:
     shape = policy.shape(policy.rule("RSK023").check.config["shape"])
     assert "repo-add-package" not in readme
     assert "Replace this section" not in readme
+    # Every required section but `License`, whose body adoption reads off the
+    # repository rather than leaving to the maintainer.
     assert readme.count("it has no content yet.") == len(
-        [section for section in shape.sections if section.level == "required"]
+        [
+            section
+            for section in shape.sections
+            if section.level == "required" and section.id != "license"
+        ]
     )
     assert not [
         finding
         for finding in check_repo(root, policy, profile="python-workspace")
         if finding.rule_id == "RSK023"
     ]
+
+
+@pytest.mark.parametrize(
+    ("licensed", "expected"),
+    [
+        (True, ADOPTED_LICENSE_NOTICE),
+        (False, ADOPTION_UNLICENSED_NOTICE),
+    ],
+)
+def test_an_inserted_license_section_states_the_terms(
+    tmp_path: Path, licensed: bool, expected: str
+) -> None:
+    """`License` is the one section adoption can answer from the repository."""
+    root = tmp_path / "existing"
+    _write_minimal_repo(root, "python-workspace")
+    if licensed:
+        (root / "LICENSE").write_text("Approved license terms.\n", encoding="utf-8")
+
+    apply_plan(plan_adoption(root, "python-workspace"))
+
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    assert f"## License\n\n{expected}\n" in readme
+    # `repo-init --license` is not a command an existing repository can run.
+    assert "rerun `repo-init`" not in readme

@@ -238,9 +238,11 @@ the changes listed under **Adopters must**.
 - `repo-adopt` keeps pre-commit hook arguments the hook shape does not model —
   a `detect-secrets` baseline among them — and reports the difference instead
   of silently deleting a load-bearing option.
-- A `README.md` section `repo-adopt` inserts states that it is empty. It used
-  to carry the starter's prose, which describes a repository `repo-init` has
-  just generated and leaves an established one text to delete.
+- A `README.md` section `repo-adopt` inserts states that it is empty, except
+  `License`, whose body adoption reads off the repository: the terms if a
+  `LICENSE` file states them, and what RSK018 asks for if none does. The
+  sections used to carry the starter's prose, which describes a repository
+  `repo-init` has just generated and leaves an established one text to delete.
 - `templates/README.md` states that its section order comes from RSK023 and is
   checked by `repo-check`, replacing the claim that adopters should keep their
   README aligned with `templates/` — a path no tooling reads. The same
