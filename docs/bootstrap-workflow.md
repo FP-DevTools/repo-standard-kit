@@ -15,10 +15,12 @@ uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" \
 ```
 
 Use `python-workspace` for a workspace root. When `--profile` is omitted,
-`repo-adopt` first uses valid `[tool.repo-standard]` metadata and then the
-canonical policy detection markers. It stops and requests an explicit profile
-if metadata is invalid or multiple profiles match; it never guesses through an
-ambiguity.
+`repo-adopt` first uses the profile named in `[tool.repo-standard]` and then
+the canonical policy detection markers. It stops and requests an explicit
+profile if that profile is not one this kit publishes or if multiple profiles
+match; it never guesses through an ambiguity. A `standard` major from an
+earlier release is what adoption exists to upgrade, not a reason to refuse: it
+is reported, naming both majors, and the run continues.
 
 After reviewing the preview, apply the reconciliation from a clean checkout:
 
@@ -47,14 +49,30 @@ the checkout:
   untouched; it is never merged with the starter's.
 - `pyproject.toml`, `.pre-commit-config.yaml`, and the quality workflow are
   structurally merged. Existing project dependencies, build settings,
-  services, custom hooks, and additional steps remain in place.
+  services, custom hooks, and additional steps remain in place. A workflow step
+  is matched by the commands it executes, so a gate the repository already runs
+  is reconciled rather than appended a second time under the same name. Hook
+  arguments the standard's hook shape does not model are load-bearing: they are
+  kept and reported, never dropped.
+- Lint families are selected only where a `required` rule demands one. A
+  `recommended` family is a judgement call that stays with the maintainer, so
+  adoption never turns a passing `ruff check` red to satisfy a recommendation.
+- Declared `pyproject.toml` tables are left in the order RSK025 declares, so
+  the manifest adoption rewrites does not come back as a required finding.
 - Mutable refs on known standard workflow actions are replaced by the immutable
   pins shipped by the selected kit; existing full-SHA pins remain intact. The
   isolated `repo-check` hook moves to the selected kit version. Unknown remote
   Actions without immutable pins are reported for a maintainer-selected SHA.
+- A job that declares `uses:` is a reusable-workflow call and never gains
+  steps, which would produce a job GitHub refuses to schedule. A call to this
+  kit's own reusable compliance workflow is reconciled to the released file and
+  the inputs it still accepts; one this kit does not publish is reported and
+  left untouched.
 - `README.md` and `AGENTS.md` remain project-owned. The adopter appends the
   standard reference and missing required sections, and reconciles the exact
-  policy-owned Quality Gates command list without replacing other prose.
+  policy-owned Quality Gates command list without replacing other prose. An
+  inserted `README.md` section states that it is empty rather than carrying
+  starter prose about a repository that does not exist.
 - A non-`uv_build` package backend is preserved and remains visible as the
   recommended RSK008 finding under strict checking. Unsupported standard
   metadata, malformed configuration, or another merge that changes project
