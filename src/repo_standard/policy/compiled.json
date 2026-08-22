@@ -855,6 +855,7 @@
           },
           "job": "compliance",
           "path": ".github/workflows/compliance.yml",
+          "reusable_workflow": "FP-DevTools/repo-standard-kit/.github/workflows/compliance-reusable.yml",
           "token": "repo-check",
           "trigger": "pull_request"
         },
@@ -868,7 +869,7 @@
         "python-workspace"
       ],
       "rationale": "An existing, least-privileged, fully pinned compliance workflow can still execute nothing. This rule requires the compliance job to run the checker on pull requests.",
-      "remediation": "Trigger the compliance workflow on pull_request, and run repo-check from a step of its compliance job, unguarded or under a condition policy declares for the profile.",
+      "remediation": "Trigger the compliance workflow on pull_request, then either run repo-check from a step of its compliance job \u2014 unguarded or under a condition policy declares for the profile \u2014 or have that job call the reusable workflow this kit publishes, which runs the checker for it.",
       "source": {
         "document": "docs/quality-gates.md",
         "section": "5. CI Pull Request Gates"

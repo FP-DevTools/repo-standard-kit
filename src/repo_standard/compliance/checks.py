@@ -631,6 +631,20 @@ def _job_shell_commands(
     return commands, None
 
 
+def _calls_workflow(job: dict[str, Any], workflow: str) -> bool:
+    """Whether the job delegates to `workflow`, at whatever ref it is pinned to.
+
+    The ref is deliberately not part of the identity: RSK029 already requires a
+    SHA and the standard also permits an immutable tag, so reading it here
+    would answer a different question from the one asked. GitHub resolves owner
+    and repository case-insensitively, so the comparison folds case.
+    """
+    uses = job.get("uses")
+    if not isinstance(uses, str):
+        return False
+    return uses.split("@", 1)[0].strip().casefold() == workflow.casefold()
+
+
 def _permitted_guards(declared: list[str]) -> set[tuple[str, ...]]:
     return {tuple(shlex.split(guard)) for guard in declared}
 
@@ -718,6 +732,12 @@ def _github_workflow_invocation(
     Containment can, at the cost of a weaker claim: the job satisfies the rule
     when an executed command's argument list contains the token, whatever else
     that command does.
+
+    A job may also delegate the whole invocation to the reusable workflow
+    policy names, which runs the checker itself and therefore leaves the caller
+    no steps to inspect. That call is the invocation, so it resolves the rule;
+    another repository's reusable workflow is no evidence of anything and does
+    not.
     """
     document, job, errors = _workflow_job(context, config)
     if errors:
@@ -738,11 +758,23 @@ def _github_workflow_invocation(
                 document.line("on"),
             )
         )
-    commands, error = _job_shell_commands(document, job, config)
-    if error is not None:
-        issues.append(error)
+    reusable = config["reusable_workflow"]
+    if _calls_workflow(job, reusable):
         return issues
     token = config["token"]
+    commands, error = _job_shell_commands(document, job, config)
+    if error is not None:
+        issues.append(
+            Issue(
+                config["path"],
+                f"Job {config['job']!r} has no executable steps and does not "
+                f"call {reusable}.",
+                job.get("uses", job.get("steps")),
+                [f"a step running {token}", f"uses: {reusable}"],
+                document.line("jobs", config["job"]),
+            )
+        )
+        return issues
     declared_guards = config["guards_by_profile"][context.profile]
     permitted = _permitted_guards(declared_guards)
     invocations = [command for command in commands if token in command.tokens]

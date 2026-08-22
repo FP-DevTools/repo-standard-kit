@@ -1083,11 +1083,14 @@ def test_rsk030_owns_the_invocation_token_and_declares_every_guard() -> None:
         "job": "compliance",
         "trigger": "pull_request",
         "token": "repo-check",
+        "reusable_workflow": (
+            "FP-DevTools/repo-standard-kit/.github/workflows/compliance-reusable.yml"
+        ),
         "guards_by_profile": {"python-single": [], "python-workspace": []},
     }
-    assert rule.check.config["token"] not in inspect.getsource(
-        CHECK_HANDLERS[rule.check.kind]
-    )
+    source = inspect.getsource(CHECK_HANDLERS[rule.check.kind])
+    assert rule.check.config["token"] not in source
+    assert rule.check.config["reusable_workflow"] not in source
 
 
 def _rewrite_compliance_step(root: Path, run: str) -> None:
@@ -1177,6 +1180,71 @@ def test_rsk030_accepts_a_command_that_only_mentions_the_token(
     root = _minimal_repo(tmp_path)
     _rewrite_compliance_step(root, "      - run: echo repo-check\n")
     assert "RSK030" not in _rule_ids(check_repo(root, POLICY))
+
+
+def _write_reusable_call(root: Path, uses: str) -> None:
+    """Write the caller form docs/compliance.md publishes, pinned at `uses`."""
+    path = root / POLICY.rule("RSK030").check.config["path"]
+    path.write_text(
+        "name: Compliance\n"
+        "on:\n"
+        "  pull_request:\n"
+        "permissions:\n"
+        "  contents: read\n"
+        "jobs:\n"
+        "  compliance:\n"
+        f"    uses: {uses}\n"
+        "    with:\n"
+        "      standard-ref: v2.0.0\n",
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.parametrize("ref", ["a" * 40, "v2.0.0"], ids=["sha", "tag"])
+def test_the_published_reusable_workflow_call_satisfies_rsk030(
+    tmp_path: Path, ref: str
+) -> None:
+    """The called workflow runs the checker, so the call is the invocation, and
+    which ref pins it is RSK029's question rather than this rule's."""
+    root = _minimal_repo(tmp_path)
+    workflow = POLICY.rule("RSK030").check.config["reusable_workflow"]
+    _write_reusable_call(root, f"{workflow}@{ref}")
+    assert "RSK030" not in _rule_ids(check_repo(root, POLICY))
+
+
+def _no_steps_message() -> str:
+    return (
+        "Job 'compliance' has no executable steps and does not call "
+        + POLICY.rule("RSK030").check.config["reusable_workflow"]
+        + "."
+    )
+
+
+def test_a_compliance_job_calling_a_foreign_reusable_workflow_reports_rsk030(
+    tmp_path: Path,
+) -> None:
+    """Another repository's reusable workflow is no evidence the checker runs."""
+    root = _minimal_repo(tmp_path)
+    uses = "other-org/other-kit/.github/workflows/compliance-reusable.yml@" + "a" * 40
+    _write_reusable_call(root, uses)
+    [finding] = [f for f in check_repo(root, POLICY) if f.rule_id == "RSK030"]
+    assert finding.message == _no_steps_message()
+    assert finding.actual == uses
+
+
+def test_a_compliance_job_that_runs_nothing_at_all_reports_rsk030(
+    tmp_path: Path,
+) -> None:
+    root = _minimal_repo(tmp_path)
+    path = root / POLICY.rule("RSK030").check.config["path"]
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            "    steps:\n      - run: repo-check .\n", ""
+        ),
+        encoding="utf-8",
+    )
+    [finding] = [f for f in check_repo(root, POLICY) if f.rule_id == "RSK030"]
+    assert finding.message == _no_steps_message()
 
 
 def test_the_reusable_compliance_workflow_is_pinned_and_least_privileged() -> None:

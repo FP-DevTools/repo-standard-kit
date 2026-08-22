@@ -469,7 +469,7 @@ Remediation: Pin every remote action and reusable workflow in the compliance wor
 
 Rationale: An existing, least-privileged, fully pinned compliance workflow can still execute nothing. This rule requires the compliance job to run the checker on pull requests.
 
-Remediation: Trigger the compliance workflow on pull_request, and run repo-check from a step of its compliance job, unguarded or under a condition policy declares for the profile.
+Remediation: Trigger the compliance workflow on pull_request, then either run repo-check from a step of its compliance job — unguarded or under a condition policy declares for the profile — or have that job call the reusable workflow this kit publishes, which runs the checker for it.
 
 | Profile | Permitted guard |
 | --- | --- |
