@@ -180,10 +180,9 @@ instead, because that workflow runs the checker and leaves the caller no steps
 to read; the rule recognises it by `owner/repo/path` and not by the ref, which
 is RSK029's subject. No other repository's reusable workflow counts, and a job
 that declares neither steps nor such a call fails. The match is containment
-rather than an
-exact command, because an adopter runs a released checker with `uvx` while this
-standards repository runs its own working tree with `uv run`, and both are
-correct. The guard semantics above apply unchanged, and no profile declares a
+rather than an exact command, because an adopter runs a released checker with
+`uvx` while this standards repository runs its own working tree with `uv run`,
+and both are correct. The guard semantics above apply unchanged, and no profile declares a
 permitted guard for this rule, so the invocation shall be unguarded. What
 containment buys is honest but limited: it cannot tell a real compliance run
 from a command that merely names the token, and it establishes only that the
