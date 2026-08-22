@@ -219,23 +219,52 @@ class Profile:
 
 @dataclass(frozen=True)
 class ShapeSection:
-    """One ordered, addressable part of a governed document."""
+    """One ordered, addressable part of a governed document.
+
+    `allow_missing_profiles` relaxes presence, not position: a profile named
+    there may omit the section and is still held to the declared order when it
+    carries one. It mirrors the key of the same name on `uv_build_backend`, so
+    a layout a profile cannot express stays a property of the section it is
+    about rather than becoming a second rule about the same file.
+    """
 
     id: str
     heading: str
     level: str
+    allow_missing_profiles: tuple[str, ...] = ()
+
+    def is_required_for(self, profile: str) -> bool:
+        return self.level == "required" and profile not in self.allow_missing_profiles
 
     @classmethod
     def from_data(cls, value: Any, location: str) -> ShapeSection:
         data = _mapping(value, location)
-        _keys(data, location, required={"id", "heading", "level"})
+        _keys(
+            data,
+            location,
+            required={"id", "heading", "level"},
+            optional={"allow_missing_profiles"},
+        )
         level = _string(data["level"], f"{location}.level")
         if level not in SECTION_LEVELS:
             _fail(f"{location}.level", f"unknown section level {level!r}")
+        allowed = _strings(
+            data.get("allow_missing_profiles", []),
+            f"{location}.allow_missing_profiles",
+            non_empty=False,
+        )
+        # An optional section may already be omitted by every profile, so a
+        # relaxation on one names a requirement that is not there to relax.
+        if allowed and level != "required":
+            _fail(
+                f"{location}.allow_missing_profiles",
+                f"unsupported for a {level!r} section",
+            )
         return cls(
             id=_string(data["id"], f"{location}.id"),
             heading=_string(data["heading"], f"{location}.heading"),
             level=level,
+            allow_missing_profiles=allowed,
         )
 
 
@@ -260,11 +289,12 @@ class Shape:
     def headings(self) -> tuple[str, ...]:
         return tuple(section.heading for section in self.sections)
 
-    @property
-    def required(self) -> tuple[str, ...]:
-        """Headings a conforming document must carry, in canonical order."""
+    def required_for(self, profile: str) -> tuple[str, ...]:
+        """Headings a conforming `profile` document must carry, in order."""
         return tuple(
-            section.heading for section in self.sections if section.level == "required"
+            section.heading
+            for section in self.sections
+            if section.is_required_for(profile)
         )
 
     @property
@@ -741,8 +771,19 @@ class Policy:
             shape_location = f"{location}.shapes.{shape.id}.rule"
             if shape.rule not in set(rule_ids):
                 _fail(shape_location, f"unknown rule {shape.rule!r}")
-            if self.rule(shape.rule).check.config.get("shape") != shape.id:
+            rule = self.rule(shape.rule)
+            if rule.check.config.get("shape") != shape.id:
                 _fail(shape_location, f"rule {shape.rule} does not enforce this shape")
+            # A section may only be relaxed for a profile its rule is checked
+            # against; anywhere else the relaxation would never be consulted.
+            for section in shape.sections:
+                out_of_scope = set(section.allow_missing_profiles) - set(rule.profiles)
+                if out_of_scope:
+                    _fail(
+                        f"{location}.shapes.{shape.id}.sections.{section.id}"
+                        ".allow_missing_profiles",
+                        f"profiles {shape.rule} does not check: {sorted(out_of_scope)}",
+                    )
 
 
 def _safe_yaml(path: Path) -> Any:

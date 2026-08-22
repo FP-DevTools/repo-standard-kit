@@ -39,20 +39,20 @@ documents are produced by walking it in the order below.
 - Undeclared sections: allowed
 - Heading level: `2`
 
-| Section | Name | Level |
-| --- | --- | --- |
-| `repository-purpose` | `Repository Purpose` | `required` |
-| `repository-context` | `Repository Context` | `required` |
-| `human-and-agent-responsibilities` | `Human And Agent Responsibilities` | `required` |
-| `agent-operating-mode` | `Agent Operating Mode` | `required` |
-| `single-source-of-truth` | `Single Source Of Truth` | `required` |
-| `workflow` | `Workflow` | `required` |
-| `quality-gates` | `Quality Gates` | `required` |
-| `coding-standards` | `Coding Standards` | `required` |
-| `testing-policy` | `Testing Policy` | `required` |
-| `documentation-rules` | `Documentation Rules` | `required` |
-| `repository-layout` | `Repository Layout` | `required` |
-| `change-control-notes` | `Change Control Notes` | `required` |
+| Section | Name | Level | May be absent in |
+| --- | --- | --- | --- |
+| `repository-purpose` | `Repository Purpose` | `required` | - |
+| `repository-context` | `Repository Context` | `required` | - |
+| `human-and-agent-responsibilities` | `Human And Agent Responsibilities` | `required` | - |
+| `agent-operating-mode` | `Agent Operating Mode` | `required` | - |
+| `single-source-of-truth` | `Single Source Of Truth` | `required` | - |
+| `workflow` | `Workflow` | `required` | - |
+| `quality-gates` | `Quality Gates` | `required` | - |
+| `coding-standards` | `Coding Standards` | `required` | - |
+| `testing-policy` | `Testing Policy` | `required` | - |
+| `documentation-rules` | `Documentation Rules` | `required` | - |
+| `repository-layout` | `Repository Layout` | `required` | - |
+| `change-control-notes` | `Change Control Notes` | `required` | - |
 
 ### readme
 
@@ -62,20 +62,20 @@ documents are produced by walking it in the order below.
 - Undeclared sections: allowed
 - Heading level: `2`
 
-| Section | Name | Level |
-| --- | --- | --- |
-| `at-a-glance` | `At A Glance` | `optional` |
-| `overview` | `Overview` | `required` |
-| `install` | `Install` | `required` |
-| `first-10-minutes` | `First 10 Minutes` | `optional` |
-| `configuration` | `Configuration` | `optional` |
-| `usage` | `Usage` | `required` |
-| `repo-structure` | `Repo Structure` | `optional` |
-| `development` | `Development` | `required` |
-| `deployment` | `Deployment` | `optional` |
-| `compatibility-and-versioning` | `Compatibility And Versioning` | `optional` |
-| `maintainers-and-support` | `Maintainers And Support` | `optional` |
-| `license` | `License` | `required` |
+| Section | Name | Level | May be absent in |
+| --- | --- | --- | --- |
+| `at-a-glance` | `At A Glance` | `optional` | - |
+| `overview` | `Overview` | `required` | - |
+| `install` | `Install` | `required` | - |
+| `first-10-minutes` | `First 10 Minutes` | `optional` | - |
+| `configuration` | `Configuration` | `optional` | - |
+| `usage` | `Usage` | `required` | - |
+| `repo-structure` | `Repo Structure` | `optional` | - |
+| `development` | `Development` | `required` | - |
+| `deployment` | `Deployment` | `optional` | - |
+| `compatibility-and-versioning` | `Compatibility And Versioning` | `optional` | - |
+| `maintainers-and-support` | `Maintainers And Support` | `optional` | - |
+| `license` | `License` | `required` | - |
 
 ### changelog
 
@@ -85,10 +85,10 @@ documents are produced by walking it in the order below.
 - Undeclared sections: allowed
 - Heading level: `2`
 
-| Section | Name | Level |
-| --- | --- | --- |
-| `compatibility-policy` | `Compatibility Policy` | `optional` |
-| `unreleased` | `[Unreleased]` | `required` |
+| Section | Name | Level | May be absent in |
+| --- | --- | --- | --- |
+| `compatibility-policy` | `Compatibility Policy` | `optional` | - |
+| `unreleased` | `[Unreleased]` | `required` | - |
 
 ### pyproject
 
@@ -97,19 +97,19 @@ documents are produced by walking it in the order below.
 - Enforced by: `RSK025`
 - Undeclared sections: allowed
 
-| Section | Name | Level |
-| --- | --- | --- |
-| `project` | `project` | `required` |
-| `project-scripts` | `project.scripts` | `optional` |
-| `dependency-groups` | `dependency-groups` | `optional` |
-| `build-system` | `build-system` | `optional` |
-| `tool-uv-build-backend` | `tool.uv.build-backend` | `optional` |
-| `tool-repo-standard` | `tool.repo-standard` | `optional` |
-| `tool-ruff` | `tool.ruff` | `optional` |
-| `tool-ruff-lint` | `tool.ruff.lint` | `optional` |
-| `tool-pytest-ini-options` | `tool.pytest.ini_options` | `optional` |
-| `tool-repo-check-ignore` | `tool.repo-check.ignore` | `optional` |
-| `tool-ty-src` | `tool.ty.src` | `optional` |
+| Section | Name | Level | May be absent in |
+| --- | --- | --- | --- |
+| `project` | `project` | `required` | `python-workspace` |
+| `project-scripts` | `project.scripts` | `optional` | - |
+| `dependency-groups` | `dependency-groups` | `optional` | - |
+| `build-system` | `build-system` | `optional` | - |
+| `tool-uv-build-backend` | `tool.uv.build-backend` | `optional` | - |
+| `tool-repo-standard` | `tool.repo-standard` | `optional` | - |
+| `tool-ruff` | `tool.ruff` | `optional` | - |
+| `tool-ruff-lint` | `tool.ruff.lint` | `optional` | - |
+| `tool-pytest-ini-options` | `tool.pytest.ini_options` | `optional` | - |
+| `tool-repo-check-ignore` | `tool.repo-check.ignore` | `optional` | - |
+| `tool-ty-src` | `tool.ty.src` | `optional` | - |
 
 ## Rules
 

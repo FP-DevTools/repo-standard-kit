@@ -111,6 +111,10 @@ shapes:
       - id: project
         heading: project
         level: required
+        # A uv virtual workspace root is a container for its members, not a
+        # distribution, so it declares no [project]. A workspace root that is
+        # itself a distribution still declares one, in this position.
+        allow_missing_profiles: [python-workspace]
       - id: project-scripts
         heading: project.scripts
         level: optional

@@ -219,25 +219,29 @@ def _path_exists(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
     return [Issue(config["path"], f"Required {kind} is missing.", "missing", kind)]
 
 
-def _shape_issues(shape: Shape, path: str, actual: list[str]) -> list[Issue]:
+def _shape_issues(
+    shape: Shape, path: str, actual: list[str], profile: str
+) -> list[Issue]:
     """Compare observed section names against one canonical shape.
 
-    Presence is checked for required sections only. Order is checked as a
-    subsequence: sections the shape does not list are ignored entirely, and a
-    listed section that is absent simply drops out of the comparison. A
-    declared section that appears more than once is reported in its own right,
-    because the subsequence comparison keeps only the first occurrence and
-    would otherwise accept a repeat sitting anywhere in the document.
+    Presence is checked for the sections required of `profile` only. Order is
+    checked as a subsequence: sections the shape does not list are ignored
+    entirely, and a listed section that is absent simply drops out of the
+    comparison. A declared section that appears more than once is reported in
+    its own right, because the subsequence comparison keeps only the first
+    occurrence and would otherwise accept a repeat sitting anywhere in the
+    document.
     """
     issues: list[Issue] = []
-    missing = [heading for heading in shape.required if heading not in actual]
+    required = shape.required_for(profile)
+    missing = [heading for heading in required if heading not in actual]
     if missing:
         issues.append(
             Issue(
                 path,
                 f"Missing required sections: {', '.join(missing)}.",
                 actual,
-                list(shape.required),
+                list(required),
             )
         )
     listed = set(shape.headings)
@@ -291,7 +295,7 @@ def _markdown_shape(context: CheckContext, config: dict[str, Any]) -> list[Issue
         return []
     marks = "#" * (shape.heading_level or 2)
     actual = re.findall(rf"^{marks}\s+(.+?)\s*$", text, re.MULTILINE)
-    return _shape_issues(shape, shape.path, actual)
+    return _shape_issues(shape, shape.path, actual, context.profile)
 
 
 def _toml_table_names(text: str) -> list[str]:
@@ -324,7 +328,7 @@ def _toml_table_order(context: CheckContext, config: dict[str, Any]) -> list[Iss
     _data, error = _load_toml(path)
     if error is not None:
         return [error]
-    return _shape_issues(shape, shape.path, _toml_table_names(text))
+    return _shape_issues(shape, shape.path, _toml_table_names(text), context.profile)
 
 
 def _text_contains_all(context: CheckContext, config: dict[str, Any]) -> list[Issue]:

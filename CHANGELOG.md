@@ -37,7 +37,14 @@ the changes listed under **Adopters must**.
   (`pyproject.toml` table order), all three **required**. Every shape is
   checked as a subsequence: sections the shape does not declare stay legal
   anywhere, optional sections may be absent, and what a shape forbids is
-  reordering. Markdown shapes govern level-two headings only.
+  reordering. Markdown shapes govern level-two headings only. A required
+  section may name the profiles it is relaxed for, listed in the shape table's
+  *May be absent in* column; the relaxation covers presence only, so a
+  repository that carries the section is still held to the declared order.
+  `pyproject.toml`'s `project` table is relaxed for `python-workspace`, because
+  a uv virtual workspace root is a container for its members rather than a
+  distribution of its own, and RSK025 would otherwise be unsatisfiable for a
+  layout uv documents.
 - `repo-init --license {proprietary,mit,apache-2.0}` writes the full licence
   text to `LICENSE` and declares `license` and `license-files` in
   `pyproject.toml`. Omitted, no `LICENSE` is written and the README's `License`

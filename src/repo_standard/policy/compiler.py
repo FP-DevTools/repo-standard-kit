@@ -4,11 +4,18 @@ from __future__ import annotations
 
 import json
 
-from repo_standard.policy.models import Policy
+from repo_standard.policy.models import Policy, ShapeSection
 
 
 def render_compiled(policy: Policy) -> str:
     return json.dumps(policy.to_data(), indent=2, sort_keys=True) + "\n"
+
+
+def _absent_in(section: ShapeSection) -> str:
+    """Name the profiles a required section is relaxed for, if any."""
+    if not section.allow_missing_profiles:
+        return "-"
+    return ", ".join(f"`{profile}`" for profile in section.allow_missing_profiles)
 
 
 def render_reference(policy: Policy) -> str:
@@ -72,9 +79,16 @@ def render_reference(policy: Policy) -> str:
         )
         if shape.heading_level is not None:
             lines.append(f"- Heading level: `{shape.heading_level}`")
-        lines.extend(["", "| Section | Name | Level |", "| --- | --- | --- |"])
         lines.extend(
-            f"| `{section.id}` | `{section.heading}` | `{section.level}` |"
+            [
+                "",
+                "| Section | Name | Level | May be absent in |",
+                "| --- | --- | --- | --- |",
+            ]
+        )
+        lines.extend(
+            f"| `{section.id}` | `{section.heading}` | `{section.level}` | "
+            f"{_absent_in(section)} |"
             for section in shape.sections
         )
         lines.append("")
