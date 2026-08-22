@@ -611,8 +611,9 @@ def _reconcile_reusable_call(path: Path, job: Any, called: str) -> list[str]:
             "exist and were removed; own the command to keep what they asked for"
         )
     conflicts.append(
-        f"{relative}: the job calls the reusable workflow, so it runs repo-check "
-        "from the called workflow and no step of its own; RSK030 reports that"
+        f"{relative}: the job calls the reusable workflow, so repo-check runs "
+        "there and this file declares no step of its own; own the command "
+        "instead to control how the checker is invoked"
     )
     return conflicts
 
