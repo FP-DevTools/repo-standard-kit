@@ -38,9 +38,20 @@ uv add <package-name>
 pip install <package-name>
 ```
 
-## Quick Start
+## First 10 Minutes
 
-### Configuration
+<A checklist a new contributor can finish in one sitting. Keep it to commands
+that verify the checkout is healthy, and delete any that do not apply.>
+
+1. Read `AGENTS.md` and confirm this repo's scope and constraints.
+2. Run `uv sync --locked`.
+3. Run `uv run pre-commit install`.
+4. Run `uv run pre-commit run --all-files` to confirm a clean baseline.
+5. Run `uv run pytest`.
+6. Run `<the repo's primary entry point>` against `<sample or local input>`.
+7. Skim `.github/workflows/quality.yml` to see what CI enforces.
+
+## Configuration
 
 <List required configuration: environment variables, config files, secrets,
 credentials for data sources. Copy `.env.example` to `.env` if applicable.>
@@ -50,7 +61,7 @@ credentials for data sources. Copy `.env.example` to `.env` if applicable.>
 | `<VAR_NAME>` | Yes | — | `<what it controls>` |
 | `<VAR_NAME>` | No | `<default>` | `<what it controls>` |
 
-### Common Commands
+## Usage
 
 | Command | Purpose |
 |---|---|
@@ -74,7 +85,6 @@ Pick the block that matches this repo's profile and delete the other.
 ├── src/<package_name>/   # production code
 ├── tests/                # unit and integration tests
 ├── docs/adr/             # architecture decisions
-├── docs/diagrams/        # workflow / architecture diagrams
 ├── scripts/              # dev or operational helpers (not core logic)
 ├── AGENTS.md             # repo operating contract: workflow, gates, standards
 ├── README.md
@@ -89,7 +99,6 @@ Pick the block that matches this repo's profile and delete the other.
 │   ├── src/<package_name>/
 │   └── tests/
 ├── docs/adr/
-├── docs/diagrams/
 ├── AGENTS.md
 ├── README.md
 └── pyproject.toml        # tooling-only root config
@@ -107,17 +116,19 @@ This repository declares its machine-enforced standard contract in
 ```toml
 [tool.repo-standard]
 profile = "<python-single or python-workspace>"
-standard = "1"
+standard = "2"
 ```
 
 See `AGENTS.md` for the full repo-level contract (human/agent
 responsibilities, workflow rules, coding standards). This section covers what
 a new contributor needs first.
 
-This README's structure follows the [repo-standard-kit] standard — see its
-[README template][readme-template]. Keep this file's shape aligned with it
-when you update it, and check this repository against it periodically for
-standards drift.
+This README's section order is not a convention to remember: it is RSK023,
+whose canonical section list lives in the kit's `policy/shapes.yaml` and is
+published in the [policy reference][policy-reference]. Run `repo-check .` after
+editing this file and it names any section that is missing or out of order;
+`repo-adopt .` inserts the required ones. This file is a rendering of that
+shape, not the source of it.
 
 ### Set Up Your Dev Environment
 
@@ -168,7 +179,7 @@ justification in the PR and maintainer approval, and must stay time-limited.
 - Workspace repos: each package under `packages/<slug>/` declares its own
   dependencies; the root `pyproject.toml` is tooling-only.
 
-### Deployment
+## Deployment
 
 <Describe how and where this repo ships: package registry, container image,
 deployment target, and what triggers a release (tag push, manual dispatch,
@@ -177,7 +188,7 @@ merge to `main`, etc.). Include rollback steps if non-obvious.>
 - Cut releases from `main` with tags: `git tag vX.Y.Z && git push --tags`.
 - `<CI/CD pipeline name and what it does on tag push>`
 
-### Compatibility And Versioning
+## Compatibility And Versioning
 
 - Supported Python: `<version range>` (see `requires-python` in
   `pyproject.toml`).
@@ -187,16 +198,16 @@ merge to `main`, etc.). Include rollback steps if non-obvious.>
   require explicit human approval.
 - `<Link to CHANGELOG.md or release notes, if maintained.>`
 
-### Maintainers And Support
+## Maintainers And Support
 
 - Maintainers: `<names / team, @github-handles>`
 - Questions: `<Slack channel, mailing list, or discussion board>`
 - Bugs and feature requests: `<issue tracker link>`
 
-### License
+## License
 
 Licensed under `<license-name>`. See [LICENSE](LICENSE).
 
 [repo-standard-kit]: https://github.com/FP-DevTools/repo-standard-kit
 [quality-gates]: https://github.com/FP-DevTools/repo-standard-kit/blob/main/docs/quality-gates.md
-[readme-template]: https://github.com/FP-DevTools/repo-standard-kit/blob/main/templates/README.md
+[policy-reference]: https://github.com/FP-DevTools/repo-standard-kit/blob/main/docs/policy-reference.md

@@ -7,6 +7,7 @@ import subprocess
 import tarfile
 import tomllib
 import zipfile
+from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,10 @@ from conftest import (
     ruff_config_of,
 )
 
+from repo_standard.bootstrap_defaults import (
+    DEFAULT_PYTHON_VERSION,
+    DEFAULT_UV_BUILD_REQUIREMENT,
+)
 from repo_standard.policy import load_compiled_policy
 from repo_standard.repo_init import (
     bootstrap_repo,
@@ -53,11 +58,42 @@ MANDATORY_PRE_COMMIT_ENTRIES = [
 
 STARTER_KIT_PROFILES = ("python-single", "python-workspace")
 
+REUSABLE_COMPLIANCE_WORKFLOW = (
+    REPO_ROOT / ".github" / "workflows" / "compliance-reusable.yml"
+)
+
 STARTER_KIT_ROOT = Path("src") / "repo_standard" / "starter_kits"
+
+ACTION_PIN = re.compile(r"uses: ([^@\s]+)@([0-9a-f]{40})")
 
 
 def starter_kit_dir(profile: str) -> Path:
     return Path(__file__).resolve().parents[1] / STARTER_KIT_ROOT / profile
+
+
+def starter_workflow_dir(profile: str) -> Path:
+    return starter_kit_dir(profile) / ".github" / "workflows"
+
+
+GOVERNED_WORKFLOWS = (
+    REPO_ROOT / ".github" / "workflows" / "quality.yml",
+    REPO_ROOT / ".github" / "workflows" / "compliance.yml",
+    REUSABLE_COMPLIANCE_WORKFLOW,
+    *(
+        starter_workflow_dir(profile) / name
+        for profile in STARTER_KIT_PROFILES
+        for name in ("quality.yml", "compliance.yml")
+    ),
+)
+
+
+def action_pins(paths: Iterable[Path]) -> dict[str, set[str]]:
+    """Map each pinned remote action to every SHA the given workflows pin it to."""
+    pins: dict[str, set[str]] = {}
+    for path in paths:
+        for action, sha in ACTION_PIN.findall(path.read_text(encoding="utf-8")):
+            pins.setdefault(action, set()).add(sha)
+    return pins
 
 
 def test_bootstrap_repo_renders_python_single_starter(tmp_path: Path) -> None:
@@ -71,7 +107,9 @@ def test_bootstrap_repo_renders_python_single_starter(tmp_path: Path) -> None:
         repo_type="service",
         python_version="3.12",
         author="",
+        license_id=None,
         output_dir=output_dir,
+        no_lock=True,
         no_install=True,
     )
 
@@ -97,7 +135,7 @@ def test_bootstrap_repo_renders_python_single_starter(tmp_path: Path) -> None:
     assert (output_dir / ".github" / "dependabot.yml").exists()
     assert pyproject_text.count("[tool.repo-standard]") == 1
     assert 'profile = "python-single"' in pyproject_text
-    assert 'standard = "1"' in pyproject_text
+    assert f'standard = "{POLICY.standard_major}"' in pyproject_text
     for command in mandatory_ci_commands("python-single"):
         assert command in agents_text
         assert command in workflow_text
@@ -106,6 +144,9 @@ def test_bootstrap_repo_renders_python_single_starter(tmp_path: Path) -> None:
     assert not (output_dir / ".ruff_cache").exists()
     assert (output_dir / "src" / "demo_service" / "__init__.py").exists()
     assert not (output_dir / "src" / "package_name").exists()
+    gitignore_text = (output_dir / ".gitignore").read_text(encoding="utf-8")
+    for entry in (".venv/", "__pycache__/", ".pytest_cache/", ".ruff_cache/", "dist/"):
+        assert entry in gitignore_text
 
 
 def test_bootstrap_repo_infers_package_name_for_python_single(tmp_path: Path) -> None:
@@ -119,7 +160,9 @@ def test_bootstrap_repo_infers_package_name_for_python_single(tmp_path: Path) ->
         repo_type="service",
         python_version="3.12",
         author="",
+        license_id=None,
         output_dir=output_dir,
+        no_lock=True,
         no_install=True,
     )
 
@@ -137,7 +180,9 @@ def test_bootstrap_repo_renders_python_workspace_starter(tmp_path: Path) -> None
         repo_type="service",
         python_version="3.12",
         author="",
+        license_id=None,
         output_dir=output_dir,
+        no_lock=True,
         no_install=True,
     )
 
@@ -159,7 +204,7 @@ def test_bootstrap_repo_renders_python_workspace_starter(tmp_path: Path) -> None
     assert (output_dir / ".github" / "dependabot.yml").exists()
     assert pyproject_data["tool"]["repo-standard"] == {
         "profile": "python-workspace",
-        "standard": "1",
+        "standard": POLICY.standard_major,
     }
     for command in mandatory_ci_commands("python-workspace"):
         assert command in agents_text
@@ -169,6 +214,9 @@ def test_bootstrap_repo_renders_python_workspace_starter(tmp_path: Path) -> None
     assert not (output_dir / ".ruff_cache").exists()
     assert (output_dir / "packages" / ".gitkeep").exists()
     assert not (output_dir / "src").exists()
+    gitignore_text = (output_dir / ".gitignore").read_text(encoding="utf-8")
+    for entry in (".venv/", "__pycache__/", ".pytest_cache/", ".ruff_cache/", "dist/"):
+        assert entry in gitignore_text
 
     # M1: pytest must not exit 5 (empty collection) before any package exists.
     assert (output_dir / "tests" / "test_workspace_shell.py").exists()
@@ -303,30 +351,88 @@ def test_bootstrap_repo_uses_uv_build_backend_for_python_single(
         repo_type="service",
         python_version="3.12",
         author="",
+        license_id=None,
         output_dir=output_dir,
+        no_lock=True,
         no_install=True,
     )
 
     pyproject_text = (output_dir / "pyproject.toml").read_text(encoding="utf-8")
-    assert 'requires = ["uv_build>=0.11.20,<0.12"]' in pyproject_text
+    assert f'requires = ["{DEFAULT_UV_BUILD_REQUIREMENT}"]' in pyproject_text
     assert 'build-backend = "uv_build"' in pyproject_text
     assert 'module-name = "demo_service"' in pyproject_text
 
 
-def test_quality_workflows_use_mandatory_ci_gate_set() -> None:
-    repo_root = Path(__file__).resolve().parents[1]
-    workflow_paths = [
-        repo_root / ".github" / "workflows" / "quality.yml",
-        *(
-            starter_kit_dir(profile) / ".github" / "workflows" / "quality.yml"
-            for profile in STARTER_KIT_PROFILES
-        ),
-    ]
+@pytest.mark.parametrize("profile", STARTER_KIT_PROFILES)
+def test_starter_python_requirement_matches_bootstrap_default(profile: str) -> None:
+    data = tomllib.loads(
+        (starter_kit_dir(profile) / "pyproject.toml").read_text(encoding="utf-8")
+    )
+    assert data["project"]["requires-python"] == f">={DEFAULT_PYTHON_VERSION}"
 
-    for workflow_path in workflow_paths:
+
+def test_python_single_starter_build_requirement_matches_bootstrap_default() -> None:
+    data = tomllib.loads(
+        (starter_kit_dir("python-single") / "pyproject.toml").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert data["build-system"]["requires"] == [DEFAULT_UV_BUILD_REQUIREMENT]
+
+
+QUALITY_WORKFLOWS = (
+    REPO_ROOT / ".github" / "workflows" / "quality.yml",
+    *(
+        starter_workflow_dir(profile) / "quality.yml"
+        for profile in STARTER_KIT_PROFILES
+    ),
+)
+
+
+def test_quality_workflows_use_mandatory_ci_gate_set() -> None:
+    for workflow_path in QUALITY_WORKFLOWS:
         workflow_text = workflow_path.read_text(encoding="utf-8")
         for command in MANDATORY_CI_COMMANDS:
             assert command in workflow_text
+
+
+def test_quality_workflows_leave_repo_check_to_the_compliance_status() -> None:
+    """Two required statuses failing on one defect cannot say which failed."""
+    for workflow_path in QUALITY_WORKFLOWS:
+        workflow = load_yaml(workflow_path.read_text(encoding="utf-8"))
+        step = next(
+            step
+            for step in workflow["jobs"]["quality"]["steps"]
+            if "pre-commit run" in str(step.get("run", ""))
+        )
+        assert step.get("env") == {"SKIP": "repo-check"}, workflow_path
+
+
+def test_governed_workflows_pin_each_action_to_a_single_sha() -> None:
+    """A bump to one workflow must not leave a sibling on the old pin."""
+    drifted = {
+        action: sorted(shas)
+        for action, shas in action_pins(GOVERNED_WORKFLOWS).items()
+        if len(shas) > 1
+    }
+
+    assert not drifted, f"action pins disagree across governed workflows: {drifted}"
+
+
+def test_dependabot_watches_every_workflow_directory_the_kit_ships() -> None:
+    """`directory: /` only expands to the root `.github/workflows`."""
+    config = load_yaml((REPO_ROOT / ".github" / "dependabot.yml").read_text("utf-8"))
+    watched = {
+        update["directory"]
+        for update in config["updates"]
+        if update["package-ecosystem"] == "github-actions"
+    }
+
+    expected = {"/"} | {
+        "/" + starter_workflow_dir(profile).relative_to(REPO_ROOT).as_posix()
+        for profile in STARTER_KIT_PROFILES
+    }
+    assert watched == expected
 
 
 def test_compliance_workflows_emit_an_independent_required_status() -> None:
@@ -339,41 +445,61 @@ def test_compliance_workflows_emit_an_independent_required_status() -> None:
         ),
     ]
 
-    checkout_refs: set[str] = set()
-    setup_uv_refs: set[str] = set()
     for workflow_path in workflow_paths:
         assert workflow_path.name == "compliance.yml"
         workflow_text = workflow_path.read_text(encoding="utf-8")
         assert "  pull_request:\n" in workflow_text
         assert "permissions:\n  contents: read\n" in workflow_text
         assert "  compliance:\n    name: compliance\n" in workflow_text
-        checkout_match = re.search(
-            r"uses: (actions/checkout@[0-9a-f]{40})", workflow_text
-        )
-        setup_uv_match = re.search(
-            r"uses: (astral-sh/setup-uv@[0-9a-f]{40})", workflow_text
-        )
-        assert checkout_match
-        assert setup_uv_match
-        checkout_refs.add(checkout_match.group(1))
-        setup_uv_refs.add(setup_uv_match.group(1))
-
-    assert len(checkout_refs) == 1
-    assert len(setup_uv_refs) == 1
+        # Agreement between files is a separate claim, made across every
+        # governed workflow rather than only these three.
+        assert set(action_pins([workflow_path])) == {
+            "actions/checkout",
+            "astral-sh/setup-uv",
+        }
 
     root_workflow = workflow_paths[0].read_text(encoding="utf-8")
-    assert "  workflow_call:\n" in root_workflow
+    assert "  workflow_call:\n" not in root_workflow
     assert "uv run --locked --no-dev repo-check ." in root_workflow
-    assert "uvx \\" in root_workflow
+    version = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
+        "project"
+    ]["version"]
     for workflow_path in workflow_paths[1:]:
-        assert "repo-standard-kit.git@v1.2.0" in workflow_path.read_text(
+        assert f"repo-standard-kit.git@v{version}" in workflow_path.read_text(
             encoding="utf-8"
         )
 
 
+@pytest.mark.parametrize("profile", STARTER_KIT_PROFILES)
+def test_documented_required_workflow_is_the_shape_the_kits_ship(profile: str) -> None:
+    """The prescribed shape and the shipped starter must not drift apart."""
+    starter = (
+        starter_kit_dir(profile) / ".github" / "workflows" / "compliance.yml"
+    ).read_text(encoding="utf-8")
+    documented = re.findall(
+        r"```yaml\n(.*?)```",
+        (REPO_ROOT / "docs" / "compliance.md").read_text(encoding="utf-8"),
+        re.DOTALL,
+    )
+
+    assert starter in documented
+
+
+def test_reusable_compliance_workflow_is_the_only_workflow_call_surface() -> None:
+    workflow_text = REUSABLE_COMPLIANCE_WORKFLOW.read_text(encoding="utf-8")
+    workflow = load_yaml(workflow_text)
+
+    assert set(workflow["on"]) == {"workflow_call"}
+    # The one input selects which checker runs. Tuning what it checks is the
+    # uvx-direct form's job, which is why that form is the prescribed one.
+    assert set(workflow["on"]["workflow_call"]["inputs"]) == {"standard-ref"}
+    assert workflow["permissions"] == {"contents": "read"}
+    assert "  compliance:\n    name: compliance\n" in workflow_text
+    assert "uvx \\" in workflow_text
+
+
 def test_reusable_compliance_workflow_keeps_inputs_out_of_shell_source() -> None:
-    workflow_path = REPO_ROOT / ".github" / "workflows" / "compliance.yml"
-    workflow_text = workflow_path.read_text(encoding="utf-8")
+    workflow_text = REUSABLE_COMPLIANCE_WORKFLOW.read_text(encoding="utf-8")
     workflow = load_yaml(workflow_text)
     run_step = next(
         step
@@ -381,41 +507,27 @@ def test_reusable_compliance_workflow_keeps_inputs_out_of_shell_source() -> None
         if step.get("name") == "Run repo-check"
     )
 
-    assert run_step["env"] == {
-        "REPO_STANDARD_REF": "${{ inputs.standard-ref }}",
-        "STRICT": "${{ inputs.strict }}",
-        "CHECK_ENFORCEMENT": "${{ inputs.check-enforcement }}",
-    }
+    assert run_step["env"] == {"REPO_STANDARD_REF": "${{ inputs.standard-ref }}"}
     run = run_step["run"]
     assert "${{ inputs." not in run
     assert "$REPO_STANDARD_REF" in run
-    assert '$STRICT" = "true' in run
-    assert '$CHECK_ENFORCEMENT" = "true' in run
 
 
-def test_reusable_compliance_workflow_validates_standard_ref() -> None:
-    workflow_text = (REPO_ROOT / ".github" / "workflows" / "compliance.yml").read_text(
-        encoding="utf-8"
+def test_reusable_compliance_workflow_step_holds_no_conditional() -> None:
+    """One input that only selects a ref leaves nothing for the step to decide."""
+    workflow = load_yaml(REUSABLE_COMPLIANCE_WORKFLOW.read_text(encoding="utf-8"))
+    run = next(
+        step["run"]
+        for step in workflow["jobs"]["compliance"]["steps"]
+        if step.get("name") == "Run repo-check"
     )
 
-    assert '[[ ! "$REPO_STANDARD_REF" =~ ^[A-Za-z0-9._/-]+$ ]]' in workflow_text
-    assert 'echo "Invalid repo-standard-kit ref" >&2' in workflow_text
-    assert "exit 2" in workflow_text
-    assert "repo-standard-kit.git@$REPO_STANDARD_REF" in workflow_text
+    assert not re.search(r"\b(if|elif|else|fi|case|esac|for|while)\b", run)
 
 
-@pytest.mark.parametrize(
-    ("standard_ref", "expected_returncode"),
-    [("v1.2.0", 42), ("", 41)],
-    ids=["adopter-pull-request", "direct-pull-request"],
-)
-def test_reusable_compliance_workflow_selects_the_correct_checker_environment(
-    tmp_path: Path,
-    standard_ref: str,
-    expected_returncode: int,
-) -> None:
-    workflow_path = REPO_ROOT / ".github" / "workflows" / "compliance.yml"
-    workflow = load_yaml(workflow_path.read_text(encoding="utf-8"))
+def _reusable_workflow_argv(tmp_path: Path, standard_ref: str) -> tuple[str, ...]:
+    """Execute the reusable workflow's step against a uvx stub, returning argv."""
+    workflow = load_yaml(REUSABLE_COMPLIANCE_WORKFLOW.read_text(encoding="utf-8"))
     run = next(
         step["run"]
         for step in workflow["jobs"]["compliance"]["steps"]
@@ -434,35 +546,65 @@ def test_reusable_compliance_workflow_selects_the_correct_checker_environment(
 
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    for command, returncode in (("uv", 41), ("uvx", 42)):
-        stub = bin_dir / command
-        stub.write_text(
-            f"#!/usr/bin/env bash\nexit {returncode}\n",
-            encoding="utf-8",
-            newline="\n",
-        )
-        stub.chmod(0o755)
+    stub = bin_dir / "uvx"
+    stub.write_text(
+        '#!/usr/bin/env bash\nfor a in "$@"; do printf "%s\\n" "$a"; done\n',
+        encoding="utf-8",
+        newline="\n",
+    )
+    stub.chmod(0o755)
 
     env = os.environ.copy()
     env.update(
         {
             "PATH": os.pathsep.join((str(bin_dir), env["PATH"])),
-            "GITHUB_EVENT_NAME": "pull_request",
             "REPO_STANDARD_REF": standard_ref,
-            "STRICT": "false",
-            "CHECK_ENFORCEMENT": "false",
         }
     )
-    result = subprocess.run([bash, "-c", run], cwd=REPO_ROOT, env=env, check=False)
+    result = subprocess.run(
+        [bash, "-c", run],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return tuple(result.stdout.splitlines())
 
-    assert result.returncode == expected_returncode
+
+def test_reusable_compliance_workflow_runs_one_fixed_command(tmp_path: Path) -> None:
+    """The ref is the only thing a caller can move; the argv is otherwise fixed."""
+    assert _reusable_workflow_argv(tmp_path, "v1.2.0") == (
+        "--from",
+        "git+https://github.com/FP-DevTools/repo-standard-kit.git@v1.2.0",
+        "repo-check",
+        ".",
+    )
+
+
+def test_reusable_compliance_workflow_cannot_be_escaped_by_a_hostile_ref(
+    tmp_path: Path,
+) -> None:
+    """A ref is quoted into one argument, so shell metacharacters stay inert.
+
+    This is why the step needs no character allowlist of its own: nothing a
+    caller supplies is ever parsed as Bash, so there is no escape to reject.
+    """
+    argv = _reusable_workflow_argv(tmp_path, "v1.2.0; rm -rf /")
+
+    assert argv == (
+        "--from",
+        "git+https://github.com/FP-DevTools/repo-standard-kit.git@v1.2.0; rm -rf /",
+        "repo-check",
+        ".",
+    )
 
 
 def test_root_pyproject_uses_uv_build_backend() -> None:
     pyproject_text = (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(
         encoding="utf-8"
     )
-    assert 'requires = ["uv_build>=0.11.20,<0.12"]' in pyproject_text
+    assert f'requires = ["{DEFAULT_UV_BUILD_REQUIREMENT}"]' in pyproject_text
     assert 'build-backend = "uv_build"' in pyproject_text
     assert 'module-name = "repo_standard"' in pyproject_text
     assert "source-exclude" in pyproject_text
@@ -636,6 +778,7 @@ def test_main_bootstraps_into_current_working_directory(
         [
             "--profile",
             "python-single",
+            "--no-lock",
             "--no-install",
         ]
     )
@@ -657,6 +800,7 @@ def test_main_infers_repo_name_from_output_dir(tmp_path: Path) -> None:
             "python-single",
             "--output-dir",
             str(output_dir),
+            "--no-lock",
             "--no-install",
         ]
     )
@@ -679,6 +823,7 @@ def test_main_creates_repo_named_directory_when_repo_name_is_provided(
             "python-single",
             "--repo-name",
             "demo-service",
+            "--no-lock",
             "--no-install",
         ]
     )
@@ -704,6 +849,7 @@ def test_main_uses_explicit_output_dir_when_repo_name_is_also_provided(
             "demo-service",
             "--output-dir",
             str(output_dir),
+            "--no-lock",
             "--no-install",
         ]
     )
@@ -727,6 +873,7 @@ def test_main_rejects_path_like_repo_name(
                 "python-single",
                 "--repo-name",
                 "foo/bar",
+                "--no-lock",
                 "--no-install",
             ]
         )
@@ -743,6 +890,7 @@ def test_main_infers_workspace_repo_name_from_current_directory(
         [
             "--profile",
             "python-workspace",
+            "--no-lock",
             "--no-install",
         ]
     )
@@ -792,7 +940,9 @@ def test_generated_agents_files_carry_every_required_section(
         repo_type="service",
         python_version="3.12",
         author="",
+        license_id=None,
         output_dir=output_dir,
+        no_lock=True,
         no_install=True,
     )
     headings = _headings(output_dir / "AGENTS.md")
@@ -813,15 +963,9 @@ def test_gate_chain_is_defined_by_the_normative_document() -> None:
         assert len(commands) == len(set(commands)), "duplicate gate in the spec"
 
 
-def test_profiles_neither_add_nor_relax_gates() -> None:
-    """Both profiles claim to defer to the spec; hold them to it."""
-    for profile in STARTER_KIT_PROFILES:
-        text = (REPO_ROOT / "profiles" / f"{profile}.md").read_text(encoding="utf-8")
-        assert "docs/quality-gates.md" in text
-        restated = [c for c in mandatory_ci_commands() if c in text]
-        assert not restated, (
-            f"profiles/{profile}.md restates gates instead of deferring: {restated}"
-        )
+def test_starter_kit_profiles_are_declared_by_canonical_policy() -> None:
+    """Profile identity lives in policy, not an unconsumed Markdown mirror."""
+    assert STARTER_KIT_PROFILES == POLICY.profile_ids
 
 
 @pytest.mark.parametrize(
@@ -974,3 +1118,302 @@ def test_ruff_config_matches_the_documented_baseline(pyproject_path: Path) -> No
         f"{pyproject_path} drops recommended rule families: "
         f"{sorted(missing_recommended)}"
     )
+
+
+# --- optional bootstrap metadata: python version, author, licence ---------
+
+
+def _bootstrap(tmp_path: Path, **overrides: object) -> Path:
+    output_dir = tmp_path / "generated"
+    arguments: dict[str, object] = {
+        "profile": "python-single",
+        "repo_name": "generated",
+        "package_name": None,
+        "description": "Generated repo",
+        "repo_type": "service",
+        "python_version": "3.12",
+        "author": "",
+        "license_id": None,
+        "output_dir": output_dir,
+        "no_lock": True,
+        "no_install": True,
+    }
+    arguments.update(overrides)
+    bootstrap_repo(**arguments)  # type: ignore[arg-type]
+    return output_dir
+
+
+@pytest.mark.parametrize("profile", STARTER_KIT_PROFILES)
+def test_python_version_flows_through_the_declared_placeholder(
+    profile: str, tmp_path: Path
+) -> None:
+    """--python-version must drive both surfaces that state the requirement.
+
+    `requires-python` is set structurally so the starter manifest stays a
+    parseable pyproject.toml, and the README states the same value through the
+    declared RSK011 token, which no shipped file used to contain.
+    """
+    starter_readme = (starter_kit_dir(profile) / "README.md").read_text(
+        encoding="utf-8"
+    )
+    assert "__PYTHON_VERSION__" in starter_readme
+
+    output_dir = _bootstrap(tmp_path, profile=profile, python_version="3.13")
+    data = tomllib.loads((output_dir / "pyproject.toml").read_text(encoding="utf-8"))
+    assert data["project"]["requires-python"] == ">=3.13"
+    assert "Python `3.13` or newer" in (output_dir / "README.md").read_text(
+        encoding="utf-8"
+    )
+
+
+def test_bootstrap_serializes_special_project_metadata(tmp_path: Path) -> None:
+    output_dir = _bootstrap(
+        tmp_path,
+        description='A "quoted" service\nwith Unicode: é.',
+        author='Ada "A" Lovelace',
+    )
+
+    data = tomllib.loads((output_dir / "pyproject.toml").read_text(encoding="utf-8"))
+    assert data["project"]["description"] == 'A "quoted" service\nwith Unicode: é.'
+    assert data["project"]["authors"] == [{"name": 'Ada "A" Lovelace'}]
+
+
+def test_author_is_rendered_into_project_metadata(tmp_path: Path) -> None:
+    output_dir = _bootstrap(tmp_path, author="Ada Lovelace")
+    data = tomllib.loads((output_dir / "pyproject.toml").read_text(encoding="utf-8"))
+    assert data["project"]["authors"] == [{"name": "Ada Lovelace"}]
+
+
+def test_unnamed_author_leaves_no_empty_metadata(tmp_path: Path) -> None:
+    output_dir = _bootstrap(tmp_path, author="")
+    data = tomllib.loads((output_dir / "pyproject.toml").read_text(encoding="utf-8"))
+    assert "authors" not in data["project"]
+
+
+@pytest.mark.parametrize(
+    ("license_id", "expression", "marker"),
+    [
+        ("proprietary", "LicenseRef-Proprietary", "All rights reserved"),
+        ("mit", "MIT", "MIT License"),
+        ("apache-2.0", "Apache-2.0", "Apache License"),
+    ],
+)
+def test_selected_license_is_written_and_declared(
+    tmp_path: Path, license_id: str, expression: str, marker: str
+) -> None:
+    output_dir = _bootstrap(tmp_path, license_id=license_id, author="Ada Lovelace")
+
+    license_text = (output_dir / "LICENSE").read_text(encoding="utf-8")
+    assert marker in license_text
+    assert "__COPYRIGHT_HOLDER__" not in license_text
+    assert "__COPYRIGHT_YEAR__" not in license_text
+
+    data = tomllib.loads((output_dir / "pyproject.toml").read_text(encoding="utf-8"))
+    assert data["project"]["license"] == expression
+    assert data["project"]["license-files"] == ["LICENSE"]
+    assert "See [`LICENSE`](LICENSE)" in (output_dir / "README.md").read_text(
+        encoding="utf-8"
+    )
+
+
+def test_omitted_license_states_terms_are_unselected_and_cites_rsk018(
+    tmp_path: Path,
+) -> None:
+    """No placeholder token is left behind, so RSK011 stays satisfied."""
+    output_dir = _bootstrap(tmp_path, license_id=None)
+
+    assert not (output_dir / "LICENSE").exists()
+    data = tomllib.loads((output_dir / "pyproject.toml").read_text(encoding="utf-8"))
+    assert "license" not in data["project"]
+
+    section = (output_dir / "README.md").read_text(encoding="utf-8").split("## License")
+    assert len(section) == 2
+    assert "RSK018" in section[1]
+    assert "__" not in section[1].split("[repo-standard-kit]:")[0]
+
+
+# --- lock file contract: --no-lock and --no-install are independent -------
+
+
+def _record_bootstrap_commands(
+    monkeypatch: pytest.MonkeyPatch,
+    output_dir: Path,
+    *,
+    uv_failure: Exception | None = None,
+) -> list[list[str]]:
+    """Record the commands bootstrap would run without executing any of them.
+
+    `uv lock` and `uv sync` both resolve dependencies over the network, so the
+    stub stands in for them and writes the lock file they would leave behind.
+    """
+    commands: list[list[str]] = []
+
+    def fake_run(command: list[str], *, cwd: Path, check: bool) -> None:
+        assert check is True
+        assert cwd == output_dir
+        commands.append(command)
+        if uv_failure is not None and command[0] == "uv":
+            raise uv_failure
+        if command[:2] in (["uv", "lock"], ["uv", "sync"]):
+            (output_dir / "uv.lock").write_text("", encoding="utf-8")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    return commands
+
+
+def test_no_install_alone_still_produces_a_lock_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """RSK009 requires uv.lock, so skipping installation must not skip locking."""
+    commands = _record_bootstrap_commands(monkeypatch, tmp_path / "generated")
+
+    output_dir = _bootstrap(tmp_path, no_lock=False, no_install=True)
+
+    assert commands == [["uv", "lock"]]
+    assert (output_dir / "uv.lock").is_file()
+    assert "RSK009" not in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("no_lock", "no_install", "expected"),
+    [
+        (
+            False,
+            False,
+            [
+                ["uv", "lock"],
+                ["uv", "sync"],
+                ["git", "init", "--initial-branch=main"],
+                ["uv", "run", "pre-commit", "install"],
+            ],
+        ),
+        (False, True, [["uv", "lock"]]),
+        (
+            True,
+            False,
+            [
+                ["uv", "sync"],
+                ["git", "init", "--initial-branch=main"],
+                ["uv", "run", "pre-commit", "install"],
+            ],
+        ),
+        (True, True, []),
+    ],
+    ids=["default", "no-install", "no-lock", "both"],
+)
+def test_lock_and_install_flags_are_independent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    no_lock: bool,
+    no_install: bool,
+    expected: list[list[str]],
+) -> None:
+    commands = _record_bootstrap_commands(monkeypatch, tmp_path / "generated")
+
+    _bootstrap(tmp_path, no_lock=no_lock, no_install=no_install)
+
+    assert commands == expected
+
+
+def test_skipping_both_steps_reports_the_rsk009_next_step(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _record_bootstrap_commands(monkeypatch, tmp_path / "generated")
+
+    output_dir = _bootstrap(tmp_path, no_lock=True, no_install=True)
+
+    error = capsys.readouterr().err
+    assert not (output_dir / "uv.lock").exists()
+    assert "RSK009" in error
+    assert "uv lock" in error
+
+
+@pytest.mark.parametrize(
+    ("uv_failure", "expected_notice"),
+    [
+        (
+            FileNotFoundError("uv"),
+            "Skipped uv lock because the executable was not found.",
+        ),
+        (
+            subprocess.CalledProcessError(2, ["uv", "lock"]),
+            "uv lock failed with exit status 2.",
+        ),
+    ],
+    ids=["uv-missing", "uv-lock-failed"],
+)
+def test_a_failed_lock_step_reports_the_rsk009_next_step(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    uv_failure: Exception,
+    expected_notice: str,
+) -> None:
+    """The warning covers every path that ends without a lock file, not the flags."""
+    _record_bootstrap_commands(
+        monkeypatch, tmp_path / "generated", uv_failure=uv_failure
+    )
+
+    output_dir = _bootstrap(tmp_path, no_lock=False, no_install=True)
+
+    error = capsys.readouterr().err
+    assert not (output_dir / "uv.lock").exists()
+    assert expected_notice in error
+    assert "RSK009" in error
+
+
+@pytest.mark.parametrize(
+    ("failure", "expected_notice"),
+    [
+        (
+            FileNotFoundError("uv"),
+            "Skipped uv sync because the executable was not found.",
+        ),
+        (
+            subprocess.CalledProcessError(2, ["uv", "sync"]),
+            "uv sync failed with exit status 2.",
+        ),
+    ],
+    ids=["uv-missing", "uv-sync-failed"],
+)
+def test_a_failed_install_step_is_reported_like_a_failed_lock_step(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    failure: Exception,
+    expected_notice: str,
+) -> None:
+    """Both optional steps fail alike: stderr keeps the reason, nothing aborts."""
+
+    def fake_run(command: list[str], *, cwd: Path, check: bool) -> None:
+        raise failure
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    assert run_optional_installs(tmp_path) is False
+    assert expected_notice in capsys.readouterr().err
+
+
+def test_main_exits_non_zero_when_an_optional_step_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A generated repository whose lock or sync failed must not report success."""
+
+    def fake_run(command: list[str], *, cwd: Path, check: bool) -> None:
+        raise subprocess.CalledProcessError(2, command)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    exit_code = main(
+        [
+            "--profile",
+            "python-single",
+            "--repo-name",
+            "demo-service",
+            "--output-dir",
+            str(tmp_path / "demo-service"),
+            "--no-install",
+        ]
+    )
+
+    assert exit_code == 1

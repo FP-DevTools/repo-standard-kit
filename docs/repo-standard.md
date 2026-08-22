@@ -19,6 +19,11 @@ recommended policy level whose finding is non-blocking unless strict checking
 is requested; MAY identifies an optional choice. Plain imperatives carry the
 same level made explicit by their surrounding section or policy reference.
 
+A rule may also carry the **advisory** level. It states a preference for a
+decision this standard leaves to the repository: the finding is always
+reported and never blocks, not even under strict checking. Prose that declares
+a choice free and still names a preferred value is advisory, not SHOULD.
+
 `policy/base.yaml` and `policy/profiles/` are the sole source of executable
 values, applicability, and check configuration for machine-enforced rules.
 Normative Markdown explains those rules and human-review-only guidance but is
@@ -65,7 +70,7 @@ this explicit repository metadata:
 ```toml
 [tool.repo-standard]
 profile = "python-single" # or "python-workspace"
-standard = "1"
+standard = "2"
 ```
 
 The declaration wins over filesystem heuristics. A missing or invalid
@@ -104,8 +109,9 @@ including its `README.md`, templates, and starter kits, implements them.
 - `docs/git-workflow.md`: branching, collaboration, and history rules
 - `docs/repo-layout.md`: canonical directory layout and scope boundaries
 - `docs/bootstrap-workflow.md`: how new repositories are generated
-- `profiles/python-single.md`: single-package Python repositories
-- `profiles/python-workspace.md`: Python monorepos with `packages/`
+- `docs/compliance.md`: how `repo-check` evaluates and reports compliance
+- `docs/policy-reference.md#profiles`: the supported profiles and their
+  canonical detection metadata
 
 Where a companion document conflicts with this one, this document governs.
 
@@ -115,23 +121,71 @@ every other indexed document.
 
 ## Required `AGENTS.md` Sections
 
-Every target repository must include:
-
-1. Repository Purpose
-2. Repository Context
-3. Human And Agent Responsibilities
-4. Workflow
-5. Quality Gates
-6. Coding Standards
-7. Testing Policy
-8. Documentation Rules
-9. Repository Layout
-10. Change Control Notes
+Every target repository must carry the required sections and order declared by
+the [`agents` shape in the generated policy reference](policy-reference.md#agents).
 
 Committed copies must not contain placeholders or generic filler text.
 
-RSK002 enforces the listed headings at the **required** level. RSK003 enforces
-at the **required** level that the `## Quality Gates` section in `AGENTS.md`
-states the exact ordered command chain defined by policy for the resolved
-profile. Commands elsewhere in the document do not count. These checks do not
-attempt subjective scoring of the section prose.
+RSK002 enforces those headings at the **required** level in the declared order;
+sections the standard does not name may appear anywhere. RSK003 enforces at the
+**required** level that the `## Quality Gates` section in `AGENTS.md` states the
+exact ordered command chain defined by policy for the resolved profile. Commands
+elsewhere in the document do not count. These checks do not attempt subjective
+scoring of the section prose.
+
+## Agent Operating Mode
+
+Agent behaviour left to model defaults varies between runs and between
+repositories, which is the opposite of what a standard is for. The standard
+therefore calibrates two dials — *verbosity*, and *precision, repeatability,
+and determinism* — and calibrates them the way it calibrates the gate chain: as
+policy values a check reports drift from, not as prose an adopter silently
+rewrites.
+
+*Low verbosity* means answering what was asked, reporting outcomes rather than
+narrating steps, preferring a diff or a `path:line` reference to prose
+describing it, and spending words on decisions, risks, and failures.
+
+*High precision, repeatability, and determinism* mean verifying against the
+repository before asserting, reusing the pattern already in the file, making
+the smallest change that satisfies the requirement, running the documented
+gates in order and reporting their real output, pinning what can be pinned,
+stating assumptions where the repository does not settle a choice, and reaching
+the same result when the same task runs again.
+
+RSK026 enforces at the **required** level that the `## Agent Operating Mode`
+section of `AGENTS.md` states every dial, in the declared order, at the level
+`policy/base.yaml` declares. The level of each dial is published in
+[`docs/policy-reference.md`](policy-reference.md#rsk026-agentsmd-states-the-calibrated-agent-operating-dials)
+and stated nowhere by hand: the generator renders it into every reference
+document from the rule, `repo-check` reports a document that has drifted, and
+`repo-adopt` restores it. The surrounding prose is the repository's own — the
+check reads the dial lines and nothing else.
+
+## File Shapes
+
+A *shape* is the canonical section list for one governed file: which sections
+exist, what they are called, which are mandatory, and in what order they
+appear. Shapes are declared in `policy/shapes.yaml` and compiled into the
+[policy reference's authoritative section tables](policy-reference.md#file-shapes).
+
+Every shape is checked as a **subsequence**. A section the shape does not
+declare is legal anywhere and is ignored. A declared section may be absent
+unless it is marked required. What a shape forbids is *reordering*: the
+declared sections a file does carry must appear in the declared order, and each
+of them appears at most once, because a subsequence can only place a section
+where it first occurs. Repeating an undeclared section stays legal. Markdown
+shapes govern level-two headings only, matching RSK002's semantics.
+
+RSK023 (`README.md`), RSK024 (`CHANGELOG.md`), and RSK025 (`pyproject.toml`)
+each refer to their generated shape table. The tables distinguish required from
+optional sections; undeclared sections and tables stay legal in any position.
+RSK023, RSK024, and RSK025 enforce their respective shapes at the **required**
+level.
+
+A required section may be relaxed for named profiles, listed in the shape
+table's *May be absent in* column. The relaxation covers presence only: a
+repository on such a profile may omit the section, and one that carries it is
+still held to the declared order. `pyproject.toml`'s `project` table is relaxed
+for `python-workspace`, because a uv virtual workspace root is a container for
+its members rather than a distribution of its own.

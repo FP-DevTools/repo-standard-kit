@@ -24,6 +24,476 @@ the changes listed under **Adopters must**.
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-08-21
+
+### Added
+
+- **File shapes.** `policy/shapes.yaml` declares one canonical section list per
+  governed file — which sections exist, what they are called, which are
+  mandatory, and in what order. Shapes compile into `compiled.json` and
+  `docs/policy-reference.md` alongside profiles and rules, and a shape and the
+  rule enforcing it must name each other, so neither can drift from the other.
+- RSK023 (`README.md` spine), RSK024 (`CHANGELOG.md` sections), and RSK025
+  (`pyproject.toml` table order), all three **required**. Every shape is
+  checked as a subsequence: sections the shape does not declare stay legal
+  anywhere, optional sections may be absent, and what a shape forbids is
+  reordering. Markdown shapes govern level-two headings only. A required
+  section may name the profiles it is relaxed for, listed in the shape table's
+  *May be absent in* column; the relaxation covers presence only, so a
+  repository that carries the section is still held to the declared order.
+  `pyproject.toml`'s `project` table is relaxed for `python-workspace`, because
+  a uv virtual workspace root is a container for its members rather than a
+  distribution of its own, and RSK025 would otherwise be unsatisfiable for a
+  layout uv documents.
+- `repo-init --license {proprietary,mit,apache-2.0}` writes the full licence
+  text to `LICENSE` and declares `license` and `license-files` in
+  `pyproject.toml`. Omitted, no `LICENSE` is written and the README's `License`
+  section states that terms have not been selected yet and cites RSK018.
+- A `File Shapes` section in `docs/repo-standard.md` stating the contract each
+  new rule enforces.
+- **The shape produces the documents rather than only constraining them.**
+  `scripts/generate_docs.py` walks a shape's ordered section list and renders
+  this repository's own `README.md` and `AGENTS.md`,
+  `templates/{README,AGENTS}.md`, and both starter kits'
+  `{README,AGENTS,CHANGELOG}.md`. Prose lives in
+  `templates/content/<DOC>/<section-id>.<variant>.md` fragments keyed by section
+  id and carrying no ordering of their own; a section the shape does not declare
+  cannot be emitted, and reordering a document means editing
+  `policy/shapes.yaml`. Fragment resolution falls back from the variant to
+  `shared`, so a section identical across profiles is written once. A staleness
+  test fails when a committed document differs from a fresh render, mirroring
+  the existing policy-regeneration gate.
+- `First 10 Minutes` joins the README spine as an optional section between
+  `Install` and `Configuration`. The starter READMEs already shipped it, so the
+  shape could not render what the kit itself publishes without it.
+- A self-adoption gate: `repo-adopt .` against this repository must plan zero
+  changes, and the individual merges must agree with the committed files rather
+  than relying on the no-findings short-circuit.
+- **Agent Operating Mode.** A new required `AGENTS.md` section, and RSK026
+  (**required**) enforcing what it states. Agent behaviour was previously left
+  to model defaults, so the same task produced materially different work in two
+  repositories adopting the same standard. The standard now calibrates two
+  dials — verbosity at 2/5, and precision, repeatability, and determinism at
+  4/5 — and calibrates them the way it calibrates the gate chain: as values in
+  `policy/base.yaml` that the generator renders into every reference document,
+  `repo-check` reports drift from, and `repo-adopt` restores. The check reads
+  the dial lines and nothing else, so the prose around them stays the
+  repository's own. `docs/policy-reference.md` publishes the levels, so no
+  prose document keeps a copy that can drift.
+- **Single Source Of Truth.** A new required `AGENTS.md` section stating the
+  rule that anything recorded twice drifts: one home per fact, derive rather
+  than copy, reference rather than restate, extend an existing definition
+  rather than adding a parallel one, make unavoidable duplication fail through
+  a check, and delete the stale copy as part of the change that staled it. It
+  applies to code, configuration, documentation, fixtures, and data alike. The
+  section is shared across profiles rather than varied per profile, because a
+  profile variant replaces the shared fragment outright and would have to
+  restate it.
+- **The compliance workflow is now governed.** `docs/quality-gates.md` has made
+  an independent compliance job a SHALL since v1.0.0, but RSK020 and RSK021
+  named `quality.yml` only, so the workflow that fetches and executes remote
+  code was the unchecked one. RSK027 (**required**) requires
+  `.github/workflows/compliance.yml` to exist, RSK028 (**required**) requires
+  its `compliance` job's effective permissions to be exactly `contents: read`,
+  and RSK029 (**required**) requires every remote action and reusable workflow
+  in it to carry a 40-character commit SHA.
+- **RSK030 (required): the compliance job has to invoke the checker.** An
+  existing, least-privileged, fully pinned compliance workflow could still
+  execute nothing. The rule requires the workflow to trigger on
+  `pull_request` — the other three pass on one no pull request ever starts —
+  and requires one executed command in `jobs.compliance.steps[*].run` to carry
+  `repo-check` in its argument list, or the job to call this repository's
+  `compliance-reusable.yml`, which runs the checker in the caller's place.
+  Policy owns the token, and the match is containment rather than an exact
+  command, because an adopter runs a released checker with `uvx` while this
+  repository runs its own working tree with `uv run` — both correct. The claim
+  is correspondingly modest and section 5 of `docs/quality-gates.md` says so: a
+  contrived command naming the token passes. Reusing RSK006's guard machinery,
+  an invocation reachable only under a condition policy does not declare does
+  not count, and neither profile declares one.
+- **The `advisory` policy level**, below `recommended`: always reported, never
+  blocking, not even under `--strict`. It exists for a rule that names a
+  preferred value for a decision the normative prose leaves to the repository.
+- Both starter kits ship a `.gitignore`, so a freshly bootstrapped repository
+  no longer starts with `.venv/`, `__pycache__/`, and other build and cache
+  paths committable.
+- **`repo-check --version`** prints the running package version and the
+  `standard_version` and standard major compiled into its policy. Adopters pin
+  the checker by Git ref, so the first question about a disputed finding —
+  which checker produced it — now has an answer.
+- **An exemption that suppressed nothing is reported.** A declared
+  `[tool.repo-check.ignore]` entry whose rule this run evaluated and passed
+  emits a finding against `pyproject.toml` with the new `status`
+  `unused-exemption`, at the rule's own level. `level` keeps naming how binding
+  the rule is and `status` names what the finding is, so neither field means
+  two things; only a `violation` can reach exit code `1`, which leaves a dead
+  exemption visible and never blocking. Text output now prints the status
+  beside the rule ID whenever it is not `violation`, so an `indeterminate`
+  platform finding is also no longer read as a plain failure. A rule the
+  profile excludes, or a platform rule under a run without
+  `--check-enforcement`, is not evaluated and is never reported this way.
+  `repo-adopt` reports the same finding and applies the same rule to its own
+  exit code.
+- **An exemption that suppressed something is reported too.** Every
+  `[tool.repo-check.ignore]` entry that silenced a finding emits one report
+  against `pyproject.toml` with the new `status` `suppressed`, at the rule's
+  own level, carrying the declared reason, how many findings it hid, and their
+  paths in `actual`. Before this, a suppressed required rule left no trace in
+  text or `--format json`, so a green `compliance` status was not evidence the
+  standard was met and no reviewer could tell the difference. The status keeps
+  it out of the exit code — silencing the failure is what the exemption is for
+  — and the last line of text output counts the rules an exemption silenced,
+  the way `pytest` counts skips. `repo-adopt`'s summary counts them on a line
+  of its own, apart from the findings it left unfixed, and its
+  clean-repository short circuit keys off the same `violation` rule, so a
+  report about the exemption configuration never makes adoption start
+  rewriting a repository that is clean by every rule.
+
+### Changed
+
+- **The shipped `uv_build` pin widens from `>=0.11.20,<0.12` to `>=0.12,<0.13`**
+  so `uv build` no longer warns against current `uv` releases; this reaches
+  every repository `repo-init` creates and every package `repo-add-package`
+  adds. The floor accepts any `0.12` backend rather than the newest patch
+  `uv init` would generate, so an adopter a few patches behind builds without
+  a warning too. The upper bound stays: `uv` documents it as what "ensures
+  that your package continues to build correctly as new versions are
+  released", and the backend follows `uv`'s own versioning policy, so a
+  `0.13` backend may read `[tool.uv.build-backend]` differently.
+- **The standard major moves to `2`.** Every adopting repository must declare
+  `standard = "2"` under `[tool.repo-standard]`; `standard = "1"` is now an
+  RSK019 required finding.
+- RSK002 is re-expressed on the shared shape record, and now enforces **order**
+  as well as presence — a repository whose `AGENTS.md` carried every heading in
+  the wrong sequence used to pass, and now reports a required finding. Its
+  required set also grows from ten sections to twelve, with `Agent Operating
+  Mode` and `Single Source Of Truth` added above.
+- **The prescribed compliance workflow is now the uvx-direct form**, the one
+  both starter kits already ship: the adopter's own `compliance` job running
+  `uvx --from "git+…@<ref>" repo-check .`. `docs/compliance.md` prescribed the
+  reusable-workflow form instead, so the required section and the generated
+  repository disagreed. Owning the command means an option the checker accepts
+  is an edit to that line rather than a request for a workflow input.
+- **The reusable workflow moves to
+  `.github/workflows/compliance-reusable.yml`** and remains supported as an
+  alternative, documented with its trade-off. `compliance.yml` in this
+  repository is now this repository's own `pull_request` gate and nothing else:
+  one file per trigger, so neither workflow branches on the event name or on
+  whether a ref input was supplied.
+- **The reusable workflow drops its `strict` and `check-enforcement` inputs**
+  and now runs one fixed command, leaving `standard-ref` as its sole input.
+  Both flags are reasons to own the command, which the prescribed form above
+  exists to make easy; keeping them as inputs was the whole of what remained
+  conditional in the step.
+- **RSK015 moves from `recommended` to `advisory`.** Section 13 of
+  `docs/quality-gates.md` declares `line-length = 88` a per-repository decision
+  that needs no exemption, so a rule firing at `recommended` was failing
+  `--strict` for a choice the prose leaves free. RSK016 stays `recommended`,
+  because the `PT` family is a real lint improvement rather than a free choice.
+- `repo-init` gains `repo-adopt`'s lock and install split. Locking is its own
+  step with its own `--no-lock` flag, and `--no-install` now skips only
+  environment synchronization and hook installation. `uv.lock` was previously
+  a side effect of `uv sync`, so `--no-install` shipped a repository that
+  failed the standard's own required RSK009 check. Every optional bootstrap
+  step now fails the same way — reported on stderr, with a non-zero exit — so
+  a failed bootstrap is visible to a script instead of reported as success.
+- `repo-adopt` writes a `.gitignore` when the repository has none, never
+  merging into an existing one.
+- **`docs/diagrams/` is no longer scaffolded.** Its `README.md` was a
+  placeholder no rule references, and Git cannot track an empty directory, so
+  the starter kits and `repo-adopt` stop creating the directory at all.
+  `docs/repo-layout.md` keeps it as the name to use when the first diagram is
+  written.
+- `repo-init --python-version` now sets `requires-python` structurally through
+  `tomlkit` instead of string-replacing a literal `>=3.12` in the starter
+  manifest, so any requested version takes effect. The starter manifest keeps a
+  real version rather than the `__PYTHON_VERSION__` token, because Ruff resolves
+  configuration by walking up the tree and rejects a placeholder there; the
+  token is rendered into the starter README's `Install` line instead.
+- `repo-init --author` now reaches the generated `pyproject.toml` as an
+  `authors` entry; it was previously threaded into the render values and
+  silently discarded. An unnamed author leaves the key out rather than
+  shipping it empty.
+- Starter `pyproject.toml` files declare their tables in the canonical order,
+  so `[tool.repo-standard]` no longer splits `[tool.ruff]` from
+  `[tool.ruff.lint]`. This repository's own manifest is reordered to match.
+- Starter `README.md` files follow the README spine and carry a `License`
+  section; starter `CHANGELOG.md` files declare Keep a Changelog and Semantic
+  Versioning and carry a `Compatibility Policy` section.
+- **`repo-adopt` repairs documents in shape order.** A missing required section
+  used to be appended to the end of `AGENTS.md`, which was safe only while
+  RSK002 checked presence alone; it now lands where the shape says it belongs,
+  and the same insertion drives `README.md`. `repo-adopt` no longer invents a
+  `Repository Standards` heading no shape declares — the RSK005 reference goes
+  into `Repository Context` and `Development`, which the shapes already require.
+- `repo-adopt` places new `pyproject.toml` tables in the order RSK025 declares
+  rather than appending them, so `[dependency-groups]` no longer lands after
+  `[build-system]` and `[tool.repo-standard]` no longer splits the Ruff tables.
+  Tables the repository already had are reordered too, so the manifest adoption
+  rewrites is not handed back failing a required rule.
+- **`repo-adopt` upgrades a repository adopted under standard 1 rather than
+  refusing it.** A stale `standard` major is reported, naming both majors, and
+  the run continues; only a profile this kit does not publish still asks for an
+  explicit `--profile`.
+- **`repo-adopt` reconciles a compliance job that calls a reusable workflow**
+  instead of appending steps beside its `uses:`, which produced a job GitHub
+  refuses to schedule. The call moves to `compliance-reusable.yml` at this
+  release and to the inputs that still exist; the SHA pin RSK029 wants stays
+  the maintainer's choice and is reported.
+- **`repo-adopt` selects only the lint families a `required` rule demands.**
+  Applying a `recommended` family unasked broke a passing `ruff check`, and
+  which recommendations to take is the maintainer's call.
+- `repo-adopt` keeps pre-commit hook arguments the hook shape does not model —
+  a `detect-secrets` baseline among them — and reports the difference instead
+  of silently deleting a load-bearing option.
+- A `README.md` section `repo-adopt` inserts states that it is empty, except
+  `License`, whose body adoption reads off the repository: the terms if a
+  `LICENSE` file states them, and what RSK018 asks for if none does. The
+  sections used to carry the starter's prose, which describes a repository
+  `repo-init` has just generated and leaves an established one text to delete.
+- `templates/README.md` states that its section order comes from RSK023 and is
+  checked by `repo-check`, replacing the claim that adopters should keep their
+  README aligned with `templates/` — a path no tooling reads. The same
+  correction lands in the starter READMEs.
+- This repository's own `README.md` and `AGENTS.md` are generated from the
+  shape like every other governed document, so a hand edit to either fails the
+  staleness test rather than drifting quietly.
+- Branch protection is queried once per run and cached on the check context,
+  rather than once per rule, so two rules can no longer disagree because one
+  round-trip flaked.
+- **A rule's `rationale` is now capped at 200 characters** by the policy
+  schema, so a policy author who writes an essay into `policy/base.yaml` gets a
+  `PolicyError` instead of a review comment. Every word of the field is
+  reproduced into `docs/policy-reference.md`, a catalogue meant to be scanned;
+  RSK026 through RSK030 are trimmed back to the one-or-two-sentence register
+  the other twenty-four rules already keep, and the limitation analysis RSK030
+  carried was already stated in section 5 of `docs/quality-gates.md`, which is
+  where it stays.
+- **Action pins are now compared across every governed workflow.** The
+  agreement check applied to the three `compliance.yml` files only, so a
+  Dependabot bump to the root `quality.yml` could leave both starter kits'
+  `quality.yml` on the previous SHA with the suite still green. One helper now
+  collects the pins from all five files — root `quality`, root `compliance`,
+  `compliance-reusable`, and both kits' pair — and every remote action must
+  resolve to a single SHA across them. `.github/dependabot.yml` also registers
+  each starter kit's workflow directory, because `directory: /` is the only
+  value Dependabot expands into `.github/workflows`; every other value is
+  scanned as given, so the kits' pins were never being offered updates at all.
+- **`repo-check` runs once in CI, in `compliance`.** It previously ran twice in
+  an adopting repository: inside `quality` through
+  `uv run pre-commit run --all-files`, and again in `compliance`. One
+  structural defect turned both required statuses red, and neither said which
+  of the two it had failed on. The starter quality workflows now set
+  `SKIP: repo-check` on the pre-commit step. Nothing is weakened — `compliance`
+  is an independently required status, so the defect still blocks the merge,
+  from one place. The hook itself stays in both kits, for the local feedback it
+  was always the better tool for, and `docs/compliance.md` describes it that
+  way instead of calling the duplication intentional.
+- This repository configures the hook too, as a `repo: local` hook running
+  `uv run repo-check .` — the invocation its own compliance workflow uses.
+  Pinning a `rev:` would have checked the working tree against a published
+  release rather than against itself, which is why the kit shipped a hook its
+  own home did not run. Its `quality.yml` sets the same `SKIP: repo-check`, so
+  the rule the standard states holds here as well.
+
+### Removed
+
+- **The JSON `severity` field.** `repo-check --format json` no longer emits it.
+  It was a second name for `level`, and the new `advisory` level would have
+  needed an invented `shall`/`should` value. The `indeterminate` signal
+  `severity` also carried survives in the separately emitted `status` field.
+- `load_rules`, the compatibility alias for the v0.4 name of `load_policy`.
+- `docs/diagrams/README.md` from both starter kits.
+- The per-profile Markdown mirrors of the rule catalogue, in favour of the
+  canonical generated `docs/policy-reference.md`.
+
+### Fixed
+
+- **RSK006 is now guard-aware.** A required command was accepted inside any
+  conditional block, so a guard that never fires still satisfied the gate
+  chain. Policy owns the permitted guard per profile, and an undeclared guard,
+  an `else` or `elif` branch, a loop body, and a `case` arm all now leave the
+  command unproven.
+- **RSK020 no longer passes silently on an unusable workflow.** It discarded
+  the workflow errors its two siblings report, so a missing or unparseable
+  `quality.yml` was named by RSK006 and RSK021 while RSK020 reported nothing.
+  Its finding message also names the job it actually read.
+- A declared section repeated out of canonical order was invisible: the
+  subsequence comparison deduplicated before comparing and kept the first
+  occurrence. Repeats of a declared section are reported in their own right,
+  while unlisted sections stay legal anywhere and any number of times.
+- `repo-adopt`'s summary filtered findings by two literal level names, so an
+  `advisory` finding printed nowhere. It now walks the declared level order,
+  and a level the policy declares cannot go unreported.
+- Bootstrap commands serialize user-controlled TOML metadata structurally, so
+  quoted or multiline descriptions and author names remain valid.
+- `repo-add-package` derives a new workspace package's Python requirement from
+  the workspace root instead of carrying an independent default.
+- Bootstrap defaults, Git commit-SHA validation, and document shapes each have
+  one canonical owner; copied starter metadata is freshness-tested, and
+  normative prose links to generated shape tables rather than restating them.
+- Generated `AGENTS.md` files project the companion operating documents rather
+  than restating them.
+- Both starter kits pinned the same action at two different versions across
+  `quality.yml` and `compliance.yml`; the pins now agree.
+- `docs/compliance.md` issued `SHALL` requirements while absent from the
+  companion-document index, so a document declared non-normative was issuing
+  requirements; it is now indexed in `docs/repo-standard.md`.
+- **A failing RSK005 printed the whole document it read.** The handler passed
+  the searched text as the finding's `actual`, so a `README.md` missing its
+  standard reference arrived as one repr'd line thousands of characters long —
+  the clarity attribute breaking exactly where it fires. The pattern it wanted
+  is the evidence, and the finding now carries only that. RSK005 also gained
+  the negative-path coverage it never had, including the deliberate silence on
+  a missing document, which RSK001 and RSK004 own.
+- This repository's own `RSK005` exemption suppressed nothing — both
+  `README.md` and `AGENTS.md` name `repo-standard-kit` — and is deleted. The
+  `RSK011` exemption stays; the kit really does ship the placeholder tokens it
+  tests.
+- **The guard notes above promised more than the checker delivers.** They said
+  a required command behind "your own `if`" reports a finding, but in a
+  workflow that phrase reads as the step's `if:`, and the checker never sees
+  it: RSK006 and RSK030 collect `steps[*].run` bodies and model conditionals
+  found inside them. `if: false` on every gate step and on the `repo-check`
+  step leaves `repo-check . --strict` reporting `All checks passed!` at exit
+  0. The behaviour is unchanged and accepted — the kit is for internal
+  development, and the threat model does not cover an adopter disabling their
+  own workflow — but the notes are corrected and the limit is now stated in
+  `docs/quality-gates.md` §5 and `docs/compliance.md` §Structural Boundaries.
+- The `python-workspace` `AGENTS.md` called gate 4 "a documented no-op before
+  the workspace contains its first package". It is not: on a freshly generated
+  shell the build gate exits 2 with `Workspace does not contain any buildable
+  packages`. The gate chain is what policy declares
+  and does not change; the prose now says the gate fails until
+  `repo-add-package` adds the first package, and notes that CI guards the same
+  command with `compgen -G`. `docs/bootstrap-workflow.md` carried the same
+  claim and is corrected with it.
+- Text output truncates a list-valued `actual` after four entries and counts
+  the rest. The active-exemption report above carries every silenced path, and
+  this repository's own RSK011 entry lists twenty-one of them, which put a
+  1,400-character line in front of a reader who needed the count.
+  `--format json` still emits the full list.
+- **RSK030 rejected the reusable-workflow form this kit publishes.** A
+  `compliance` job whose `uses:` calls
+  `FP-DevTools/repo-standard-kit/.github/workflows/compliance-reusable.yml`
+  declares no steps of its own, so the rule found no `run:` body to read and
+  reported `Job 'compliance' has no executable steps` — a required finding
+  against the shape `docs/compliance.md` §Alternative publishes as supported,
+  and against the same document's claim that the status does not depend on
+  whether the adopter calls a reusable workflow. The rule now resolves the
+  invocation through that call, because the called workflow is the invocation.
+  Recognition reads `owner/repo/path` only and never the ref, so the SHA RSK029
+  requires is free to change; another repository's reusable workflow, and a job
+  with neither steps nor such a call, still fail. The published caller example
+  gained the `permissions: contents: read` block RSK028 requires of it, which
+  it had been missing.
+- **`repo-adopt` left a stale version comment beside a SHA it had just
+  changed.** Repinning `uses: actions/checkout@v4 # v4.2.2` wrote the starter's
+  v7.0.1 SHA and kept `# v4.2.2` next to it, which Dependabot reads as the
+  pinned version, and where the adopter had no comment it added none — so the
+  version comment `docs/quality-gates.md` requires was missing or wrong either
+  way. A pin taken from the kit's own starter workflow now carries that
+  workflow's version comment with it. An action the kit does not pin is
+  reported as a conflict as before, and a SHA the repository chose itself
+  keeps its own comment untouched.
+
+### Adopters must
+
+Eight new required rules and four behaviour changes land here. Run
+`repo-adopt .` to have most of it done for you, then `repo-check . --strict`
+to see what is left; the list below is what that repairs and what it cannot.
+
+- Set `standard = "2"` under `[tool.repo-standard]` in `pyproject.toml`.
+  `repo-adopt` writes the value from policy, so re-running it does this for
+  you; otherwise edit the two-line table by hand. RSK019 reports the old value
+  as a required finding.
+- Confirm `AGENTS.md` lists its required sections in the order
+  `docs/repo-standard.md` states. RSK002 already required every section; it now
+  also requires their order, so a repository that ordered them differently
+  moves from passing to a required finding. `repo-check .` names the sections
+  it found out of order.
+- Add `## Agent Operating Mode` and `## Single Source Of Truth` to `AGENTS.md`,
+  in that order between `Human And Agent Responsibilities` and `Workflow`.
+  RSK002 reports either missing section as a required finding, and **RSK026**
+  reports dial levels that are missing or have drifted from the ones
+  `docs/policy-reference.md` publishes. `repo-adopt` writes both sections and
+  restores the levels, keeping any prose you add around them.
+- Bring `README.md` onto the **RSK023** shape: add its required `Overview`,
+  `Install`, `Usage`, `Development`, and `License` headings and keep every
+  declared heading in the canonical order. `repo-adopt` repairs it.
+- Bring `CHANGELOG.md` onto the **RSK024** shape: add `## [Unreleased]` and
+  keep it after an optional `## Compatibility Policy` heading. `repo-adopt`
+  repairs it.
+- Bring `pyproject.toml` onto the **RSK025** table order declared in
+  `docs/repo-standard.md`. `repo-adopt` reorders the declared tables while
+  retaining unlisted tables. RSK023, RSK024, and RSK025 report each shape
+  violation as a required finding.
+- Add `.github/workflows/compliance.yml` with a `compliance` job that checks
+  the repository against `repo-standard-kit` on pull requests. **RSK027**
+  reports its absence, **RSK028** requires that job's effective permissions to
+  be exactly `contents: read`, and **RSK029** requires every remote action and
+  reusable workflow in it to be pinned to a 40-character commit SHA.
+  `repo-adopt` writes the workflow when it is missing but cannot choose a SHA
+  on your behalf, so an unpinned action you added there is reported, not
+  repaired. `docs/quality-gates.md` §5 already required this job; only the
+  structural checks are new.
+- Make sure that job actually runs the checker, on pull requests. **RSK030**
+  requires the workflow to trigger on `pull_request` and either one executed
+  command in `jobs.compliance.steps[*].run` containing `repo-check` or a job
+  calling this repository's `compliance-reusable.yml`, so a workflow reachable
+  only by `workflow_dispatch`, a job that only checks out the repository, a job
+  that declares neither steps nor such a call, a job calling some other
+  repository's reusable workflow, or an invocation guarded by a shell
+  conditional inside the `run:` body each report a required finding. A step's Actions-level `if:` is
+  not one of them: the checker reads `run:` bodies and nothing else, so a
+  `repo-check` step carrying `if: false` or `continue-on-error: true` still
+  satisfies RSK030. The prescribed form is the
+  one in `docs/compliance.md` §Required CI workflow, which the starter kits
+  ship; `repo-adopt` appends the starter's invocation step when it finds none.
+- Move any caller of this repository's reusable workflow from
+  `…/.github/workflows/compliance.yml@<sha>` to
+  `…/.github/workflows/compliance-reusable.yml@<sha>`. The old path is now a
+  `pull_request` workflow of this repository's own and is no longer callable;
+  a caller left on it fails to resolve the workflow. `standard-ref` is now its
+  sole input: the `strict` and `check-enforcement` booleans are gone, and a
+  `with:` block still passing either fails the call. Move such a caller to the
+  uvx-direct form, where the flag goes in the command it owns. Consider that
+  form regardless: the reusable form is supported, but a called workflow's job
+  may report its status check under a concatenated name rather than as
+  `compliance`, which **RSK014** requires verbatim. `docs/compliance.md`
+  records what is and is not known about that.
+- Re-check every shell conditional in `.github/workflows/quality.yml`. RSK006
+  no longer accepts a required command that is reachable only under a shell
+  condition policy does not declare, so a gate-chain command behind an
+  undeclared shell `if`, an `else` or `elif` branch, a loop, or a `case` arm
+  is now unproven and reports a required finding. The permitted guard per
+  profile is published in `docs/policy-reference.md`; `python-single` permits
+  none, and `python-workspace` permits only the packages-present guard. This
+  reaches inside `run:` bodies only. A step's Actions-level `if:` and
+  `continue-on-error:` are unread, so a gate step disabled that way still
+  passes RSK006.
+- Expect a new RSK020 finding if you have no `quality.yml` or it does not
+  parse. The rule previously discarded that error and passed silently, so a
+  repository in that state gains a required finding it did not have.
+- Stop reading `severity` from `repo-check --format json`. The field is gone.
+  Read `level` for how binding a finding is, and `status` for `indeterminate`
+  results. `status` now also carries `unused-exemption`, so treat it as an
+  open set rather than matching two literals; a consumer that keys the exit
+  decision off it should act on `violation` alone.
+- Stop importing `load_rules` from `repo_standard.compliance.checks`. The v0.4
+  compatibility alias is gone; call `load_policy`.
+- Nothing for RSK015. It moved to the new `advisory` level, so a
+  `line-length` other than `88` is still reported but no longer contributes to
+  the exit code, not even under `--strict`. A repository that failed
+  `--strict` on this alone starts passing.
+- Nothing for `docs/diagrams/`. The starter kits and `repo-adopt` no longer
+  create it; an existing directory is untouched and no rule references it.
+- Optionally add `env: {SKIP: repo-check}` to the pre-commit step of your
+  `.github/workflows/quality.yml`, so a structural defect fails `compliance`
+  alone rather than both required statuses. No rule requires it, and
+  `repo-adopt` leaves a pre-commit step it already matches untouched, so this
+  one is a hand edit.
+
 ## [1.2.0] - 2026-08-20
 
 ### Added
@@ -495,7 +965,8 @@ the changes listed under **Adopters must**.
 Initial standard, Python starter kits, and the `repo-init` and
 `repo-add-package` bootstrap tools.
 
-[Unreleased]: https://github.com/FP-DevTools/repo-standard-kit/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/FP-DevTools/repo-standard-kit/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/FP-DevTools/repo-standard-kit/compare/v1.2.0...v2.0.0
 [1.2.0]: https://github.com/FP-DevTools/repo-standard-kit/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/FP-DevTools/repo-standard-kit/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/FP-DevTools/repo-standard-kit/compare/v0.4.0...v1.0.0

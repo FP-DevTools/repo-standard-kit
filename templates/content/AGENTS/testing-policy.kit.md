@@ -1,0 +1,3 @@
+- Changes to bootstrap behavior require automated tests in `tests/`
+- Bug fixes require regression coverage
+- Generated starter output must be validated when the starter changes

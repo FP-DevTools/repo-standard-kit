@@ -8,7 +8,7 @@ import shlex
 import subprocess
 import tomllib
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +17,8 @@ from repo_standard.compliance.yaml_support import (
     YamlParseError,
     load_github_yaml,
 )
-from repo_standard.policy import Policy, Rule, load_compiled_policy
+from repo_standard.github_references import is_full_commit_sha
+from repo_standard.policy import Policy, Rule, Shape, load_compiled_policy
 
 _IGNORED_DIR_PARTS = {
     ".git",
@@ -34,7 +35,6 @@ _IGNORED_DIR_PARTS = {
 _GITHUB_REMOTE_PATTERN = re.compile(
     r"github\.com[:/](?P<owner_repo>[^/]+/[^/]+?)(?:\.git)?/?$"
 )
-_FULL_SHA = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
 @dataclass(frozen=True)
@@ -44,7 +44,6 @@ class Finding:
     rule_id: str
     title: str
     level: str
-    severity: str
     path: str
     line: int | None
     message: str
@@ -69,6 +68,13 @@ class CheckContext:
     root: Path
     policy: Policy
     profile: str
+    # Platform answers already fetched during this run, keyed by query. Scoped
+    # to the context so one run sees one consistent view and the next run
+    # starts from the platform again.
+    _platform_responses: dict[
+        tuple[str, bool],
+        tuple[subprocess.CompletedProcess[str] | None, Issue | None],
+    ] = field(default_factory=dict, compare=False, repr=False)
 
 
 CheckHandler = Callable[[CheckContext, dict[str, Any]], list[Issue]]
@@ -77,10 +83,6 @@ CheckHandler = Callable[[CheckContext, dict[str, Any]], list[Issue]]
 def load_policy() -> Policy:
     """Load the packaged deterministic policy artifact."""
     return load_compiled_policy()
-
-
-# Compatibility alias for callers that used the v0.4 name.
-load_rules = load_policy
 
 
 def _read(path: Path) -> str | None:
@@ -217,22 +219,116 @@ def _path_exists(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
     return [Issue(config["path"], f"Required {kind} is missing.", "missing", kind)]
 
 
-def _markdown_headings(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
-    text = _read(context.root / config["path"])
+def _shape_issues(
+    shape: Shape, path: str, actual: list[str], profile: str
+) -> list[Issue]:
+    """Compare observed section names against one canonical shape.
+
+    Presence is checked for the sections required of `profile` only. Order is
+    checked as a subsequence: sections the shape does not list are ignored
+    entirely, and a listed section that is absent simply drops out of the
+    comparison. A declared section that appears more than once is reported in
+    its own right, because the subsequence comparison keeps only the first
+    occurrence and would otherwise accept a repeat sitting anywhere in the
+    document.
+    """
+    issues: list[Issue] = []
+    required = shape.required_for(profile)
+    missing = [heading for heading in required if heading not in actual]
+    if missing:
+        issues.append(
+            Issue(
+                path,
+                f"Missing required sections: {', '.join(missing)}.",
+                actual,
+                list(required),
+            )
+        )
+    listed = set(shape.headings)
+    observed: list[str] = []
+    repeated: list[str] = []
+    for heading in actual:
+        if heading not in listed:
+            continue
+        if heading in observed:
+            if heading not in repeated:
+                repeated.append(heading)
+            continue
+        observed.append(heading)
+    if repeated:
+        issues.append(
+            Issue(
+                path,
+                f"Declared sections appear more than once: {', '.join(repeated)}.",
+                actual,
+                list(shape.headings),
+            )
+        )
+    expected = [heading for heading in shape.headings if heading in observed]
+    if observed != expected:
+        issues.append(
+            Issue(
+                path,
+                "Declared sections are out of canonical order.",
+                observed,
+                expected,
+            )
+        )
+    if not shape.allow_unlisted:
+        unlisted = [heading for heading in actual if heading not in listed]
+        if unlisted:
+            issues.append(
+                Issue(
+                    path,
+                    f"Sections the shape does not declare: {', '.join(unlisted)}.",
+                    unlisted,
+                    list(shape.headings),
+                )
+            )
+    return issues
+
+
+def _markdown_shape(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
+    shape = context.policy.shape(config["shape"])
+    text = _read(context.root / shape.path)
     if text is None:
         return []
-    actual = re.findall(r"^##\s+(.+?)\s*$", text, re.MULTILINE)
-    missing = [heading for heading in config["headings"] if heading not in actual]
-    if not missing:
+    marks = "#" * (shape.heading_level or 2)
+    actual = re.findall(rf"^{marks}\s+(.+?)\s*$", text, re.MULTILINE)
+    return _shape_issues(shape, shape.path, actual, context.profile)
+
+
+def _toml_table_names(text: str) -> list[str]:
+    """Return table headers in document order, ignoring multi-line strings."""
+    names: list[str] = []
+    delimiter: str | None = None
+    for line in text.splitlines():
+        if delimiter is not None:
+            if delimiter in line:
+                delimiter = None
+            continue
+        stripped = line.strip()
+        match = re.fullmatch(r"\[\[?\s*(?P<name>[^\[\]]+?)\s*\]\]?", stripped)
+        if match is not None:
+            names.append(match.group("name"))
+            continue
+        for candidate in ('"""', "'''"):
+            if line.count(candidate) % 2 == 1:
+                delimiter = candidate
+                break
+    return names
+
+
+def _toml_table_order(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
+    shape = context.policy.shape(config["shape"])
+    path = context.root / shape.path
+    text = _read(path)
+    if text is None:
         return []
-    return [
-        Issue(
-            config["path"],
-            f"Missing required headings: {', '.join(missing)}.",
-            actual,
-            config["headings"],
-        )
-    ]
+    _data, error = _load_toml(path)
+    if error is not None:
+        return [error]
+    return _shape_issues(shape, shape.path, _toml_table_names(text), context.profile)
 
 
 def _text_contains_all(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
@@ -252,24 +348,30 @@ def _text_contains_all(context: CheckContext, config: dict[str, Any]) -> list[Is
     ]
 
 
+def _section_body(text: str, heading: str) -> str | None:
+    """Return the body of the level-two section named `heading`, if present."""
+    match = re.search(
+        rf"^##\s+{re.escape(heading)}\s*$\n?(?P<body>.*?)(?=^##\s+|\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    return match.group("body") if match is not None else None
+
+
 def _agents_quality_commands(
     context: CheckContext, config: dict[str, Any]
 ) -> list[Issue]:
     text = _read(context.root / config["path"])
     if text is None:
         return []
-    section_match = re.search(
-        r"^##\s+Quality Gates\s*$\n?(?P<body>.*?)(?=^##\s+|\Z)",
-        text,
-        re.MULTILINE | re.DOTALL,
-    )
+    body = _section_body(text, "Quality Gates")
     actual: list[str] = []
-    if section_match is not None:
+    if body is not None:
         actual = [
             re.sub(r"\s+", " ", command).strip()
             for command in re.findall(
                 r"^\s*(?:\d+[.)]|[-*+])\s+`([^`\r\n]+)`\s*$",
-                section_match.group("body"),
+                body,
                 re.MULTILINE,
             )
         ]
@@ -287,7 +389,62 @@ def _agents_quality_commands(
     ]
 
 
+_DIAL_LINE = re.compile(
+    r"^[ \t]*[-*+][ \t]+\*\*(?P<label>[^*\r\n]+?)[ \t]*:?\*\*[ \t]*"
+    r"(?P<level>\d+)[ \t]*/[ \t]*(?P<scale>\d+)[ \t]*$",
+    re.MULTILINE,
+)
+
+
+def _dial(label: str, level: object, scale: object) -> str:
+    return f"{label}: {level} / {scale}"
+
+
+def _agents_operating_dials(
+    context: CheckContext, config: dict[str, Any]
+) -> list[Issue]:
+    """RSK026: the operating dials are policy values, not prose an editor owns.
+
+    Deliberately parallel to `_agents_quality_commands`: the section must state
+    every dial, in the declared order, at the declared level. Prose around them
+    is the repository's business.
+    """
+    text = _read(context.root / config["path"])
+    if text is None:
+        return []
+    body = _section_body(text, config["section"])
+    actual: list[str] = []
+    if body is not None:
+        actual = [
+            _dial(
+                match.group("label").strip(), match.group("level"), match.group("scale")
+            )
+            for match in _DIAL_LINE.finditer(body)
+        ]
+    expected = [_dial(d["label"], d["level"], d["scale"]) for d in config["dials"]]
+    if actual == expected:
+        return []
+    return [
+        Issue(
+            config["path"],
+            f"{config['section']} must state every dial, in order, at the level "
+            "policy declares.",
+            actual,
+            expected,
+        )
+    ]
+
+
 def _text_pattern_each(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
+    """Report each declared path whose text does not match the pattern.
+
+    A **missing** path yields no issue: the path's own existence rule owns
+    absence, and every path this kind reads is covered by one — RSK001 and
+    RSK004 today. Reporting absence here too would name one fact twice.
+
+    `actual` stays `None` deliberately. The searched text is the whole file,
+    and the message and `expected` already carry everything actionable.
+    """
     pattern = re.compile(config["pattern"])
     issues = []
     for relative in config["paths"]:
@@ -297,17 +454,72 @@ def _text_pattern_each(context: CheckContext, config: dict[str, Any]) -> list[Is
                 Issue(
                     relative,
                     f"{relative} does not match {pattern.pattern!r}.",
-                    text,
-                    pattern.pattern,
+                    expected=pattern.pattern,
                 )
             )
     return issues
 
 
-def _shell_commands(run: str) -> list[list[str]]:
-    """Return executable command token lists from an Actions `run` scalar."""
+@dataclass(frozen=True)
+class ShellCommand:
+    """One command a `run` scalar executes, with the conditions gating it.
+
+    A guard is `None` when its condition is not a plain `if` test — an `else`
+    or `elif` branch, a loop body, a `case` arm — because policy declares a
+    permitted guard as one literal condition and nothing else can match it.
+    """
+
+    tokens: tuple[str, ...]
+    guards: tuple[tuple[str, ...] | None, ...] = ()
+
+
+_SHELL_OPERATORS = {";", ";;", "&&", "||", "&", "|"}
+_BLOCK_PREFIXES = {"then", "do", "{"}
+_BLOCK_CLOSERS = {"fi", "done", "esac"}
+_CONDITION_OPENERS = {"if", "elif", "while", "until"}
+_BODY_OPENERS = {"for", "case"}
+
+
+def _consume_shell_segment(
+    segment: list[str],
+    guards: list[tuple[str, ...] | None],
+    commands: list[ShellCommand],
+) -> None:
+    while segment and segment[0] in _BLOCK_PREFIXES:
+        segment.pop(0)
+    while segment and (segment[-1] in _BLOCK_CLOSERS or segment[-1] == "}"):
+        if segment.pop() in _BLOCK_CLOSERS and guards:
+            guards.pop()
+    if not segment:
+        return
+    keyword = segment[0]
+    if keyword == "else":
+        if guards:
+            guards[-1] = None
+        return
+    if keyword in _CONDITION_OPENERS:
+        if keyword == "elif" and guards:
+            guards[-1] = None
+        else:
+            guards.append(tuple(segment[1:]) if keyword == "if" else None)
+        return
+    if keyword in _BODY_OPENERS:
+        guards.append(None)
+        return
+    commands.append(ShellCommand(tuple(segment), tuple(guards)))
+
+
+def _shell_commands(run: str) -> list[ShellCommand]:
+    """Return executable commands from an Actions `run` scalar, with guards.
+
+    A conditional block can skip a command while the step still exits zero, so
+    a required command found inside one proves nothing on its own. The guard
+    travels with the command and only policy decides which condition, if any,
+    may gate a gate.
+    """
     normalized = re.sub(r"\\\r?\n", " ", run)
-    commands: list[list[str]] = []
+    commands: list[ShellCommand] = []
+    guards: list[tuple[str, ...] | None] = []
     for line in normalized.splitlines() or [normalized]:
         lexer = shlex.shlex(line, posix=True, punctuation_chars=";&|")
         lexer.whitespace_split = True
@@ -318,13 +530,8 @@ def _shell_commands(run: str) -> list[list[str]]:
         except ValueError:
             continue
         for token in [*tokens, ";"]:
-            if token in {";", "&&", "||", "&", "|"}:
-                while segment and segment[0] in {"then", "do", "{"}:
-                    segment.pop(0)
-                while segment and segment[-1] in {"fi", "done", "}"}:
-                    segment.pop()
-                if segment:
-                    commands.append(segment)
+            if token in _SHELL_OPERATORS:
+                _consume_shell_segment(segment, guards, commands)
                 segment = []
             else:
                 segment.append(token)
@@ -405,6 +612,47 @@ def _workflow_job(
     return document, jobs[config["job"]], []
 
 
+def _job_shell_commands(
+    document: YamlDocument, job: dict[str, Any], config: dict[str, Any]
+) -> tuple[list[ShellCommand], Issue | None]:
+    steps = job.get("steps")
+    if not isinstance(steps, list):
+        return [], Issue(
+            config["path"],
+            f"Job {config['job']!r} has no executable steps.",
+            steps,
+            "list of run steps",
+            document.line("jobs", config["job"], "steps"),
+        )
+    commands: list[ShellCommand] = []
+    for step in steps:
+        if isinstance(step, dict) and isinstance(step.get("run"), str):
+            commands.extend(_shell_commands(step["run"]))
+    return commands, None
+
+
+def _calls_workflow(job: dict[str, Any], workflow: str) -> bool:
+    """Whether the job delegates to `workflow`, at whatever ref it is pinned to.
+
+    The ref is deliberately not part of the identity: RSK029 already requires a
+    SHA and the standard also permits an immutable tag, so reading it here
+    would answer a different question from the one asked. GitHub resolves owner
+    and repository case-insensitively, so the comparison folds case.
+    """
+    uses = job.get("uses")
+    if not isinstance(uses, str):
+        return False
+    return uses.split("@", 1)[0].strip().casefold() == workflow.casefold()
+
+
+def _permitted_guards(declared: list[str]) -> set[tuple[str, ...]]:
+    return {tuple(shlex.split(guard)) for guard in declared}
+
+
+def _is_executed(command: ShellCommand, permitted: set[tuple[str, ...]]) -> bool:
+    return all(guard in permitted for guard in command.guards)
+
+
 def _github_workflow_commands(
     context: CheckContext, config: dict[str, Any]
 ) -> list[Issue]:
@@ -425,27 +673,24 @@ def _github_workflow_commands(
                 document.line("on"),
             )
         )
-    steps = job.get("steps")
-    if not isinstance(steps, list):
-        issues.append(
-            Issue(
-                config["path"],
-                f"Job {config['job']!r} has no executable steps.",
-                steps,
-                "list of run steps",
-                document.line("jobs", config["job"], "steps"),
-            )
-        )
+    actual_commands, error = _job_shell_commands(document, job, config)
+    if error is not None:
+        issues.append(error)
         return issues
-    actual_commands: list[list[str]] = []
-    for step in steps:
-        if isinstance(step, dict) and isinstance(step.get("run"), str):
-            actual_commands.extend(_shell_commands(step["run"]))
+    declared_guards = config["guards_by_profile"][context.profile]
+    permitted = _permitted_guards(declared_guards)
+    present = {command.tokens for command in actual_commands}
+    executed = {
+        command.tokens
+        for command in actual_commands
+        if _is_executed(command, permitted)
+    }
     required = [
-        shlex.split(command)
+        tuple(shlex.split(command))
         for command in config["commands_by_profile"][context.profile]
     ]
-    missing = [tokens for tokens in required if tokens not in actual_commands]
+    line = document.line("jobs", config["job"], "steps")
+    missing = [tokens for tokens in required if tokens not in present]
     if missing:
         issues.append(
             Issue(
@@ -453,11 +698,110 @@ def _github_workflow_commands(
                 "Quality job is missing complete executable commands: "
                 + ", ".join(shlex.join(tokens) for tokens in missing)
                 + ".",
-                [shlex.join(tokens) for tokens in actual_commands],
+                [shlex.join(command.tokens) for command in actual_commands],
                 [shlex.join(tokens) for tokens in required],
-                document.line("jobs", config["job"], "steps"),
+                line,
             )
         )
+    guarded = [
+        tokens for tokens in required if tokens in present and tokens not in executed
+    ]
+    if guarded:
+        issues.append(
+            Issue(
+                config["path"],
+                "Quality job runs required commands only under an undeclared "
+                "guard: " + ", ".join(shlex.join(tokens) for tokens in guarded) + ".",
+                [shlex.join(tokens) for tokens in guarded],
+                list(declared_guards),
+                line,
+            )
+        )
+    return issues
+
+
+def _github_workflow_invocation(
+    context: CheckContext, config: dict[str, Any]
+) -> list[Issue]:
+    """Require a job to execute a command carrying the token policy names.
+
+    The same correct invocation is spelled differently in different
+    repositories — an adopter runs a released checker with `uvx`, this
+    repository runs its own working tree with `uv run` — so an exact argv, the
+    way `_github_workflow_commands` matches, cannot express the requirement.
+    Containment can, at the cost of a weaker claim: the job satisfies the rule
+    when an executed command's argument list contains the token, whatever else
+    that command does.
+
+    A job may also delegate the whole invocation to the reusable workflow
+    policy names, which runs the checker itself and therefore leaves the caller
+    no steps to inspect. That call is the invocation, so it resolves the rule;
+    another repository's reusable workflow is no evidence of anything and does
+    not.
+    """
+    document, job, errors = _workflow_job(context, config)
+    if errors:
+        return errors
+    assert document is not None
+    assert job is not None
+    assert isinstance(document.data, dict)
+    issues: list[Issue] = []
+    # A job that never starts invokes nothing, so the trigger is part of the
+    # claim rather than a separate rule's business.
+    if not _trigger_present(document.data.get("on"), config["trigger"]):
+        issues.append(
+            Issue(
+                config["path"],
+                f"Workflow does not trigger on {config['trigger']}.",
+                document.data.get("on"),
+                config["trigger"],
+                document.line("on"),
+            )
+        )
+    reusable = config["reusable_workflow"]
+    if _calls_workflow(job, reusable):
+        return issues
+    token = config["token"]
+    commands, error = _job_shell_commands(document, job, config)
+    if error is not None:
+        issues.append(
+            Issue(
+                config["path"],
+                f"Job {config['job']!r} has no executable steps and does not "
+                f"call {reusable}.",
+                job.get("uses", job.get("steps")),
+                [f"a step running {token}", f"uses: {reusable}"],
+                document.line("jobs", config["job"]),
+            )
+        )
+        return issues
+    declared_guards = config["guards_by_profile"][context.profile]
+    permitted = _permitted_guards(declared_guards)
+    invocations = [command for command in commands if token in command.tokens]
+    line = document.line("jobs", config["job"], "steps")
+    if any(_is_executed(command, permitted) for command in invocations):
+        return issues
+    if invocations:
+        issues.append(
+            Issue(
+                config["path"],
+                f"Job {config['job']!r} invokes {token} only under an undeclared "
+                "guard.",
+                [shlex.join(command.tokens) for command in invocations],
+                list(declared_guards),
+                line,
+            )
+        )
+        return issues
+    issues.append(
+        Issue(
+            config["path"],
+            f"Job {config['job']!r} executes no command invoking {token}.",
+            [shlex.join(command.tokens) for command in commands],
+            token,
+            line,
+        )
+    )
     return issues
 
 
@@ -711,6 +1055,15 @@ def _git_remote_url(root: Path) -> str | None:
 def _gh_api(
     context: CheckContext, endpoint: str, *, paginate: bool = False
 ) -> tuple[subprocess.CompletedProcess[str] | None, Issue | None]:
+    """Query the platform once per run, reusing an answer already fetched.
+
+    Several rules read the same branch protection. Repeating the round-trip
+    costs time and lets two rules disagree because one query flaked while the
+    other succeeded.
+    """
+    cached = context._platform_responses.get((endpoint, paginate))
+    if cached is not None:
+        return cached
     command = ["gh", "api"]
     if paginate:
         command.extend(("--paginate", "--slurp"))
@@ -724,16 +1077,20 @@ def _gh_api(
             timeout=30,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired) as error:
-        return None, (
+        response: tuple[subprocess.CompletedProcess[str] | None, Issue | None] = (
+            None,
             Issue(
                 ".",
                 f"Platform command unavailable: {error}",
                 None,
                 "GitHub enforcement response",
                 status="indeterminate",
-            )
+            ),
         )
-    return result, None
+    else:
+        response = (result, None)
+    context._platform_responses[(endpoint, paginate)] = response
+    return response
 
 
 def _platform_query_failure(
@@ -1301,7 +1658,7 @@ def _github_workflow_permissions(
 ) -> list[Issue]:
     document, job, errors = _workflow_job(context, config)
     if errors:
-        return []
+        return errors
     assert document is not None
     assert job is not None
     assert isinstance(document.data, dict)
@@ -1315,7 +1672,8 @@ def _github_workflow_permissions(
     return [
         Issue(
             config["path"],
-            "Quality job permissions do not match the least-privilege policy.",
+            f"The {config['job']} job's permissions do not match the "
+            "least-privilege policy.",
             permissions,
             expected,
             line,
@@ -1328,10 +1686,7 @@ def _remote_uses(reference: str) -> bool:
 
 
 def _immutable_reference(reference: str) -> bool:
-    return (
-        "@" in reference
-        and _FULL_SHA.fullmatch(reference.rsplit("@", 1)[1]) is not None
-    )
+    return "@" in reference and is_full_commit_sha(reference.rsplit("@", 1)[1])
 
 
 def _github_workflow_pins(context: CheckContext, config: dict[str, Any]) -> list[Issue]:
@@ -1374,11 +1729,14 @@ def _github_workflow_pins(context: CheckContext, config: dict[str, Any]) -> list
 
 CHECK_HANDLERS: dict[str, CheckHandler] = {
     "path_exists": _path_exists,
-    "markdown_headings": _markdown_headings,
+    "markdown_shape": _markdown_shape,
+    "toml_table_order": _toml_table_order,
     "text_contains_all": _text_contains_all,
     "agents_quality_commands": _agents_quality_commands,
+    "agents_operating_dials": _agents_operating_dials,
     "text_pattern_each": _text_pattern_each,
     "github_workflow_commands": _github_workflow_commands,
+    "github_workflow_invocation": _github_workflow_invocation,
     "pre_commit_hooks": _pre_commit_hooks,
     "uv_build_backend": _uv_build_backend,
     "ruff_baseline": _ruff_baseline,
@@ -1394,12 +1752,10 @@ CHECK_HANDLERS: dict[str, CheckHandler] = {
 
 
 def _finding(rule: Rule, issue: Issue) -> Finding:
-    severity = "platform" if issue.status == "indeterminate" else rule.severity
     return Finding(
         rule.id,
         rule.title,
         rule.level,
-        severity,
         issue.path,
         issue.line,
         issue.message,
@@ -1425,6 +1781,54 @@ def _load_ignore_config(root: Path, policy: Policy) -> dict[str, str]:
     }
 
 
+def _unused_exemption(rule: Rule) -> Finding:
+    """Report a declared exemption that suppressed nothing this run.
+
+    `level` stays the rule's canonical level, because that is the one thing
+    `level` names anywhere else; `status` carries what this line reports. The
+    status keeps it out of the exit code, so a dead exemption is visible
+    without becoming a failure.
+    """
+    return Finding(
+        rule.id,
+        rule.title,
+        rule.level,
+        "pyproject.toml",
+        None,
+        f"{rule.id} is exempted in [tool.repo-check.ignore] but suppressed no "
+        "finding this run.",
+        None,
+        None,
+        f"Delete the {rule.id} entry from [tool.repo-check.ignore], or keep it "
+        "only with a reason that says why it must outlive what it suppressed.",
+        "unused-exemption",
+    )
+
+
+def _active_exemption(rule: Rule, reason: str, silenced: list[Finding]) -> Finding:
+    """Report what a declared exemption suppressed this run.
+
+    Twin of `_unused_exemption`, with the same split: `level` stays the rule's
+    canonical level and `status` carries what this line reports, which keeps
+    it out of the exit code. Reporting once beside the exemption rather than
+    once per silenced finding keeps the entry — the thing a reviewer weighs —
+    from being buried under the findings it hid; `actual` carries where.
+    """
+    return Finding(
+        rule.id,
+        rule.title,
+        rule.level,
+        "pyproject.toml",
+        None,
+        f"{rule.id} is exempted in [tool.repo-check.ignore] and suppressed "
+        f"{len(silenced)} finding(s) this run: {reason}",
+        sorted({finding.path for finding in silenced}),
+        None,
+        rule.remediation,
+        "suppressed",
+    )
+
+
 def check_repo(
     root: Path,
     policy: Policy,
@@ -1436,14 +1840,34 @@ def check_repo(
     resolved_profile = resolve_profile(root, policy, profile)
     context = CheckContext(root=root, policy=policy, profile=resolved_profile)
     findings: list[Finding] = []
+    evaluated: set[str] = set()
     for rule in policy.rules:
         if resolved_profile not in rule.profiles:
             continue
         if rule.enforcement == "platform" and not include_platform:
             continue
+        evaluated.add(rule.id)
         handler = CHECK_HANDLERS[rule.check.kind]
         findings.extend(
             _finding(rule, issue) for issue in handler(context, rule.check.config)
         )
     ignored = _load_ignore_config(root, policy)
-    return [finding for finding in findings if finding.rule_id not in ignored]
+    kept = [finding for finding in findings if finding.rule_id not in ignored]
+    # A suppression that leaves no trace makes a green run and a run that only
+    # looks green the same output, so every exemption that silenced something
+    # reports it.
+    silenced = set(ignored) & {finding.rule_id for finding in findings}
+    kept.extend(
+        _active_exemption(
+            policy.rule(rule_id),
+            ignored[rule_id],
+            [finding for finding in findings if finding.rule_id == rule_id],
+        )
+        for rule_id in sorted(silenced)
+    )
+    # Only a rule this run actually evaluated can be reported as suppressing
+    # nothing: a rule the profile excludes, or a platform rule nobody asked
+    # for, had no finding to suppress in the first place.
+    unused = (evaluated & set(ignored)) - {finding.rule_id for finding in findings}
+    kept.extend(_unused_exemption(policy.rule(rule_id)) for rule_id in sorted(unused))
+    return kept

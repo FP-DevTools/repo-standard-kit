@@ -1,0 +1,3 @@
+- Logic changes require unit tests
+- Boundary changes require integration tests
+- Bug fixes require regression tests

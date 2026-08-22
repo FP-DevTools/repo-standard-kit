@@ -4,11 +4,18 @@ from __future__ import annotations
 
 import json
 
-from repo_standard.policy.models import Policy
+from repo_standard.policy.models import Policy, ShapeSection
 
 
 def render_compiled(policy: Policy) -> str:
     return json.dumps(policy.to_data(), indent=2, sort_keys=True) + "\n"
+
+
+def _absent_in(section: ShapeSection) -> str:
+    """Name the profiles a required section is relaxed for, if any."""
+    if not section.allow_missing_profiles:
+        return "-"
+    return ", ".join(f"`{profile}`" for profile in section.allow_missing_profiles)
 
 
 def render_reference(policy: Policy) -> str:
@@ -21,9 +28,10 @@ def render_reference(policy: Policy) -> str:
         f"Standard version: `{policy.standard_version}`",
         f"Standard major: `{policy.standard_major}`",
         "",
-        "This normative catalogue is generated from `policy/base.yaml` and",
-        "`policy/profiles/`. The linked prose explains the policy; executable",
-        "values and rule applicability come only from the versioned YAML model.",
+        "This normative catalogue is generated from `policy/base.yaml`,",
+        "`policy/profiles/`, and `policy/shapes.yaml`. The linked prose explains",
+        "the policy; executable values and rule applicability come only from the",
+        "versioned YAML model.",
         "",
         "## Profiles",
         "",
@@ -47,6 +55,43 @@ def render_reference(policy: Policy) -> str:
                 "",
             ]
         )
+    lines.extend(
+        [
+            "## File Shapes",
+            "",
+            "Each shape is the single canonical section list for one governed",
+            "file. Checks reject a document that departs from it, and generated",
+            "documents are produced by walking it in the order below.",
+            "",
+        ]
+    )
+    for shape in policy.shapes:
+        lines.extend(
+            [
+                f"### {shape.id}",
+                "",
+                f"- Path: `{shape.path}`",
+                f"- Kind: `{shape.kind}`",
+                f"- Enforced by: `{shape.rule}`",
+                f"- Undeclared sections: "
+                f"{'allowed' if shape.allow_unlisted else 'rejected'}",
+            ]
+        )
+        if shape.heading_level is not None:
+            lines.append(f"- Heading level: `{shape.heading_level}`")
+        lines.extend(
+            [
+                "",
+                "| Section | Name | Level | May be absent in |",
+                "| --- | --- | --- | --- |",
+            ]
+        )
+        lines.extend(
+            f"| `{section.id}` | `{section.heading}` | `{section.level}` | "
+            f"{_absent_in(section)} |"
+            for section in shape.sections
+        )
+        lines.append("")
     lines.extend(["## Rules", ""])
     for rule in policy.rules:
         lines.extend(
@@ -66,6 +111,28 @@ def render_reference(policy: Policy) -> str:
                 "",
             ]
         )
+        # Most check config is machinery. Dials are calibrated values a reader
+        # of the standard needs, so publishing them here keeps prose documents
+        # from having to keep a copy that can drift.
+        if "dials" in rule.check.config:
+            lines.extend(["| Dial | Level |", "| --- | --- |"])
+            lines.extend(
+                f"| {dial['label']} | {dial['level']} / {dial['scale']} |"
+                for dial in rule.check.config["dials"]
+            )
+            lines.append("")
+        # A permitted guard is not machinery either: it is the only condition a
+        # repository may put between CI and a required command, so the reader
+        # gets it here instead of from a prose copy that can drift.
+        guards = rule.check.config.get("guards_by_profile")
+        if isinstance(guards, dict):
+            lines.extend(["| Profile | Permitted guard |", "| --- | --- |"])
+            lines.extend(
+                f"| `{profile}` | "
+                f"{', '.join(f'`{guard}`' for guard in declared) or 'none'} |"
+                for profile, declared in sorted(guards.items())
+            )
+            lines.append("")
     if policy.retired_rule_ids:
         lines.extend(
             [

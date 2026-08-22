@@ -6,9 +6,14 @@ import argparse
 import shutil
 import subprocess
 import sys
+from datetime import date
 from pathlib import Path
 
+import tomlkit
+
+from repo_standard.bootstrap_defaults import DEFAULT_PYTHON_VERSION
 from repo_standard.policy import load_compiled_policy
+from repo_standard.project_metadata import validate_package_name
 
 _POLICY = load_compiled_policy()
 PLACEHOLDERS: dict[str, str] = dict(_POLICY.rule("RSK011").check.config["placeholders"])
@@ -20,6 +25,32 @@ IGNORED_STARTER_ENTRIES = {
     ".ruff_cache",
     ".ty_cache",
 }
+
+# Each selectable licence maps to its shipped text and its SPDX expression.
+LICENSE_EXPRESSIONS: dict[str, str] = {
+    "proprietary": "LicenseRef-Proprietary",
+    "mit": "MIT",
+    "apache-2.0": "Apache-2.0",
+}
+
+LICENSE_NOTICES: dict[str, str] = {
+    "proprietary": (
+        "Proprietary. All rights reserved. See [`LICENSE`](LICENSE) for the "
+        "terms that apply."
+    ),
+    "mit": "Released under the MIT License. See [`LICENSE`](LICENSE).",
+    "apache-2.0": ("Released under the Apache License 2.0. See [`LICENSE`](LICENSE)."),
+}
+
+UNLICENSED_NOTICE = (
+    "Licence terms have not been selected for this repository yet, so no "
+    "`LICENSE` file is present. RSK018 recommends adding one: rerun `repo-init` "
+    "with `--license`, or add the terms your organisation has approved before "
+    "sharing this repository."
+)
+
+_COPYRIGHT_YEAR = "__COPYRIGHT_YEAR__"
+_COPYRIGHT_HOLDER = "__COPYRIGHT_HOLDER__"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -35,26 +66,38 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["service", "library", "cli"],
         default="library",
     )
-    parser.add_argument("--python-version", default="3.12")
+    parser.add_argument("--python-version", default=DEFAULT_PYTHON_VERSION)
     parser.add_argument("--author", default="")
+    parser.add_argument(
+        "--license",
+        choices=sorted(LICENSE_EXPRESSIONS),
+        default=None,
+        help=(
+            "Licence to write as LICENSE and declare in pyproject.toml. "
+            "Omitted, no LICENSE is written and README states that terms are "
+            "not yet selected."
+        ),
+    )
     parser.add_argument(
         "--output-dir",
         default=None,
         help="Target directory. Defaults to the current working directory.",
     )
-    parser.add_argument("--no-install", action="store_true")
+    parser.add_argument(
+        "--no-lock",
+        action="store_true",
+        help="Skip uv lock, leaving lockfile creation to the maintainer.",
+    )
+    parser.add_argument(
+        "--no-install",
+        action="store_true",
+        help="Skip environment synchronization and pre-commit hook installation.",
+    )
     return parser
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return build_parser().parse_args(argv)
-
-
-def validate_package_name(package_name: str) -> None:
-    if not package_name.isidentifier():
-        raise ValueError(
-            f"--package-name must be a valid Python identifier (got {package_name!r})"
-        )
 
 
 def validate_repo_name(repo_name: str) -> None:
@@ -129,6 +172,8 @@ def render_text_files(output_dir: Path, values: dict[str, str]) -> None:
             continue
         if not path.is_file():
             continue
+        if path == output_dir / "pyproject.toml":
+            continue
         try:
             text = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
@@ -164,16 +209,60 @@ def rename_package_dir(output_dir: Path, package_name: str) -> None:
         source_dir.rename(output_dir / "src" / package_name)
 
 
-def update_python_version(output_dir: Path, python_version: str) -> None:
-    pyproject_path = output_dir / "pyproject.toml"
-    if not pyproject_path.exists():
-        return
-    text = pyproject_path.read_text(encoding="utf-8")
-    text = text.replace(
-        'requires-python = ">=3.12"',
-        f'requires-python = ">={python_version}"',
+def resolve_license_dir() -> Path:
+    return Path(__file__).resolve().parent / "licenses"
+
+
+def license_notice(license_id: str | None) -> str:
+    """Return the README License body for the selected licence, if any."""
+    return UNLICENSED_NOTICE if license_id is None else LICENSE_NOTICES[license_id]
+
+
+def render_license(license_id: str, holder: str, year: int) -> str:
+    text = (resolve_license_dir() / f"{license_id}.txt").read_text(encoding="utf-8")
+    return text.replace(_COPYRIGHT_YEAR, str(year)).replace(_COPYRIGHT_HOLDER, holder)
+
+
+def write_license(output_dir: Path, license_id: str, holder: str) -> None:
+    (output_dir / "LICENSE").write_text(
+        render_license(license_id, holder, date.today().year), encoding="utf-8"
     )
-    pyproject_path.write_text(text, encoding="utf-8")
+
+
+def apply_project_metadata(
+    output_dir: Path,
+    *,
+    profile: str,
+    repo_name: str,
+    package_name: str | None,
+    description: str,
+    python_version: str,
+    author: str,
+    license_id: str | None,
+) -> None:
+    """Complete `[project]` fields that depend on optional bootstrap flags.
+
+    The starter manifest stays parseable while all user-controlled TOML values
+    are assigned through tomlkit rather than substituted as raw text.
+    """
+    path = output_dir / "pyproject.toml"
+    document = tomlkit.parse(path.read_text(encoding="utf-8"))
+    project = document["project"]
+    project["name"] = (
+        f"{repo_name}-workspace" if profile == "python-workspace" else repo_name
+    )
+    project["description"] = description
+    project["requires-python"] = f">={python_version}"
+    if not author:
+        del project["authors"]
+    else:
+        project["authors"] = [{"name": author}]
+    if license_id is not None:
+        project["license"] = LICENSE_EXPRESSIONS[license_id]
+        project["license-files"] = ["LICENSE"]
+    if package_name is not None:
+        document["tool"]["uv"]["build-backend"]["module-name"] = package_name
+    path.write_text(tomlkit.dumps(document), encoding="utf-8")
 
 
 def has_git_repository(output_dir: Path) -> bool:
@@ -210,26 +299,56 @@ def ensure_git_repository(output_dir: Path) -> None:
     )
 
 
-def run_optional_installs(output_dir: Path) -> None:
-    try:
-        subprocess.run(["uv", "sync"], cwd=output_dir, check=True)
-    except FileNotFoundError:
-        print(
-            "Skipped uv sync because the executable was not found.",
-            file=sys.stderr,
-        )
-        return
+def run_step(command: list[str], output_dir: Path, label: str) -> bool:
+    """Run one optional bootstrap step, reporting failure without aborting.
 
-    ensure_git_repository(output_dir)
+    Every optional step fails the same way: the generated files stay on disk,
+    the reason goes to stderr, and the caller reports a non-zero exit so the
+    failure is visible to a script. Aborting instead would leave a half-checked
+    repository behind a traceback.
+    """
     try:
-        subprocess.run(
-            ["uv", "run", "pre-commit", "install"], cwd=output_dir, check=True
-        )
+        subprocess.run(command, cwd=output_dir, check=True)
     except FileNotFoundError:
-        print(
-            "Skipped uv run pre-commit install because the executable was not found.",
-            file=sys.stderr,
-        )
+        print(f"Skipped {label} because the executable was not found.", file=sys.stderr)
+        return False
+    except subprocess.CalledProcessError as error:
+        print(f"{label} failed with exit status {error.returncode}.", file=sys.stderr)
+        return False
+    return True
+
+
+def run_lock(output_dir: Path) -> bool:
+    """Return whether `uv lock` produced a lock file."""
+    return run_step(["uv", "lock"], output_dir, "uv lock")
+
+
+def warn_when_lock_file_missing(output_dir: Path) -> None:
+    """Name RSK009 when bootstrap produced no lock file, for whatever reason."""
+    if (output_dir / "uv.lock").is_file():
+        return
+    print(
+        "No uv.lock was produced, so repo-check reports required finding RSK009. "
+        "Run `uv lock` in the new repository before committing.",
+        file=sys.stderr,
+    )
+
+
+def run_optional_installs(output_dir: Path) -> bool:
+    """Return whether environment synchronization and hook installation completed."""
+    if not run_step(["uv", "sync"], output_dir, "uv sync"):
+        return False
+
+    try:
+        ensure_git_repository(output_dir)
+    except RuntimeError as error:
+        print(error, file=sys.stderr)
+        return False
+    return run_step(
+        ["uv", "run", "pre-commit", "install"],
+        output_dir,
+        "uv run pre-commit install",
+    )
 
 
 def bootstrap_repo(
@@ -241,9 +360,12 @@ def bootstrap_repo(
     repo_type: str,
     python_version: str,
     author: str,
+    license_id: str | None,
     output_dir: Path,
+    no_lock: bool,
     no_install: bool,
-) -> Path:
+) -> bool:
+    """Generate the repository; return whether every attempted step completed."""
     if profile == "python-single":
         package_name = package_name or infer_package_name(repo_name)
         validate_package_name(package_name)
@@ -261,17 +383,33 @@ def bootstrap_repo(
         "repo_type": repo_type,
         "python_version": python_version,
         "author": author,
+        "license_notice": license_notice(license_id),
     }
     render_text_files(output_dir, values)
     if package_name is not None:
         rename_package_dir(output_dir, package_name)
-    update_python_version(output_dir, python_version)
+    if license_id is not None:
+        write_license(output_dir, license_id, author or repo_name)
+    apply_project_metadata(
+        output_dir,
+        profile=profile,
+        repo_name=repo_name,
+        package_name=package_name,
+        description=description,
+        python_version=python_version,
+        author=author,
+        license_id=license_id,
+    )
     ensure_no_unresolved_placeholders(output_dir)
 
+    complete = True
+    if not no_lock:
+        complete = run_lock(output_dir) and complete
     if not no_install:
-        run_optional_installs(output_dir)
+        complete = run_optional_installs(output_dir) and complete
+    warn_when_lock_file_missing(output_dir)
 
-    return output_dir
+    return complete
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -281,7 +419,7 @@ def main(argv: list[str] | None = None) -> int:
         validate_repo_name(args.repo_name)
     repo_name = args.repo_name or infer_repo_name(output_dir)
 
-    bootstrap_repo(
+    complete = bootstrap_repo(
         profile=args.profile,
         repo_name=repo_name,
         package_name=args.package_name,
@@ -289,11 +427,13 @@ def main(argv: list[str] | None = None) -> int:
         repo_type=args.repo_type,
         python_version=args.python_version,
         author=args.author,
+        license_id=args.license,
         output_dir=output_dir,
+        no_lock=args.no_lock,
         no_install=args.no_install,
     )
     print(f"Bootstrapped {repo_name} into {output_dir}")
-    return 0
+    return 0 if complete else 1
 
 
 if __name__ == "__main__":

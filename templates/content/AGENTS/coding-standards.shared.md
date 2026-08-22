@@ -1,0 +1,6 @@
+- Type all production function signatures
+- Minimize `Any` and justify it when required
+- Keep I/O boundaries explicit
+- Separate side effects from business logic
+- Separate durable logic from scripts
+- Preserve public interface stability by default

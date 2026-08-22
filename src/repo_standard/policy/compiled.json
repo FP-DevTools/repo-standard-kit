@@ -58,21 +58,9 @@
     {
       "check": {
         "config": {
-          "headings": [
-            "Repository Purpose",
-            "Repository Context",
-            "Human And Agent Responsibilities",
-            "Workflow",
-            "Quality Gates",
-            "Coding Standards",
-            "Testing Policy",
-            "Documentation Rules",
-            "Repository Layout",
-            "Change Control Notes"
-          ],
-          "path": "AGENTS.md"
+          "shape": "agents"
         },
-        "kind": "markdown_headings"
+        "kind": "markdown_shape"
       },
       "enforcement": "structural",
       "id": "RSK002",
@@ -81,13 +69,13 @@
         "python-single",
         "python-workspace"
       ],
-      "rationale": "Stable headings make repository operating boundaries discoverable.",
-      "remediation": "Add every required level-two heading to AGENTS.md.",
+      "rationale": "Stable, consistently ordered headings make repository operating boundaries discoverable.",
+      "remediation": "Add every required level-two heading to AGENTS.md in the order the agents shape declares.",
       "source": {
         "document": "docs/repo-standard.md",
         "section": "Required `AGENTS.md` Sections"
       },
-      "title": "Required AGENTS.md sections are present"
+      "title": "Required AGENTS.md sections are present and ordered"
     },
     {
       "check": {
@@ -191,6 +179,12 @@
               "uv build --all-packages"
             ]
           },
+          "guards_by_profile": {
+            "python-single": [],
+            "python-workspace": [
+              "compgen -G \"packages/*/pyproject.toml\" > /dev/null"
+            ]
+          },
           "job": "quality",
           "path": ".github/workflows/quality.yml",
           "trigger": "pull_request"
@@ -205,7 +199,7 @@
         "python-workspace"
       ],
       "rationale": "Pull requests must execute the same reproducible gates as local work.",
-      "remediation": "Add the pull_request trigger, quality job, and complete commands.",
+      "remediation": "Add the pull_request trigger, quality job, and complete commands, and gate a command only with the condition policy declares for the profile.",
       "source": {
         "document": "docs/quality-gates.md",
         "section": "5. CI Pull Request Gates"
@@ -414,6 +408,7 @@
           "placeholders": {
             "__AUTHOR__": "author",
             "__DESCRIPTION__": "description",
+            "__LICENSE_NOTICE__": "license_notice",
             "__PACKAGE_NAME__": "package_name",
             "__PYTHON_VERSION__": "python_version",
             "__REPO_NAME__": "repo_name",
@@ -501,7 +496,7 @@
       },
       "enforcement": "structural",
       "id": "RSK015",
-      "level": "recommended",
+      "level": "advisory",
       "profiles": [
         "python-single",
         "python-workspace"
@@ -589,7 +584,7 @@
       "check": {
         "config": {
           "path": "pyproject.toml",
-          "standard_major": "1"
+          "standard_major": "2"
         },
         "kind": "repo_metadata"
       },
@@ -601,7 +596,7 @@
         "python-workspace"
       ],
       "rationale": "Explicit metadata makes profile resolution stable as layouts evolve.",
-      "remediation": "Add tool.repo-standard with a valid profile and standard = \"1\".",
+      "remediation": "Add tool.repo-standard with a valid profile and standard = \"2\".",
       "source": {
         "document": "docs/repo-standard.md",
         "section": "Repository Contract"
@@ -678,9 +673,477 @@
         "section": "10. Enforcement"
       },
       "title": "Main branch protection recommends an approving review"
+    },
+    {
+      "check": {
+        "config": {
+          "shape": "readme"
+        },
+        "kind": "markdown_shape"
+      },
+      "enforcement": "structural",
+      "id": "RSK023",
+      "level": "required",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "A shared README spine lets a reader find purpose, install, use, and licence terms in the same place in every adopting repository.",
+      "remediation": "Add the required README sections and order every declared section as the readme shape declares; unlisted sections remain free.",
+      "source": {
+        "document": "docs/repo-standard.md",
+        "section": "File Shapes"
+      },
+      "title": "README.md follows the declared section shape"
+    },
+    {
+      "check": {
+        "config": {
+          "shape": "changelog"
+        },
+        "kind": "markdown_shape"
+      },
+      "enforcement": "structural",
+      "id": "RSK024",
+      "level": "required",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "An always-present Unreleased section gives contributors one obvious place to record a change before it is released.",
+      "remediation": "Add an Unreleased section, and keep any Compatibility Policy section ahead of it.",
+      "source": {
+        "document": "docs/repo-standard.md",
+        "section": "File Shapes"
+      },
+      "title": "CHANGELOG.md follows the declared section shape"
+    },
+    {
+      "check": {
+        "config": {
+          "shape": "pyproject"
+        },
+        "kind": "toml_table_order"
+      },
+      "enforcement": "structural",
+      "id": "RSK025",
+      "level": "required",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "A predictable table order keeps related configuration together and stops generated and hand-edited manifests from diverging.",
+      "remediation": "Order the declared pyproject tables as the pyproject shape declares; tables the shape does not list may appear anywhere.",
+      "source": {
+        "document": "docs/repo-standard.md",
+        "section": "File Shapes"
+      },
+      "title": "pyproject.toml declares tables in the canonical order"
+    },
+    {
+      "check": {
+        "config": {
+          "dials": [
+            {
+              "label": "Verbosity",
+              "level": 2,
+              "scale": 5
+            },
+            {
+              "label": "Precision, repeatability, determinism",
+              "level": 4,
+              "scale": 5
+            }
+          ],
+          "path": "AGENTS.md",
+          "section": "Agent Operating Mode"
+        },
+        "kind": "agents_operating_dials"
+      },
+      "enforcement": "structural",
+      "id": "RSK026",
+      "level": "required",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "Agent behaviour left to model defaults varies between runs and between repositories, which is the opposite of what a standard is for.",
+      "remediation": "State each dial in the Agent Operating Mode section of AGENTS.md, in the declared order and at the declared level.",
+      "source": {
+        "document": "docs/repo-standard.md",
+        "section": "Agent Operating Mode"
+      },
+      "title": "AGENTS.md states the calibrated agent operating dials"
+    },
+    {
+      "check": {
+        "config": {
+          "path": ".github/workflows/compliance.yml",
+          "path_type": "file"
+        },
+        "kind": "path_exists"
+      },
+      "enforcement": "structural",
+      "id": "RSK027",
+      "level": "required",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "The job that keeps the rest of the standard from drifting cannot itself go missing unnoticed. Existence is all this rule claims.",
+      "remediation": "Add .github/workflows/compliance.yml with a compliance job that checks the repository against repo-standard-kit on pull requests.",
+      "source": {
+        "document": "docs/quality-gates.md",
+        "section": "5. CI Pull Request Gates"
+      },
+      "title": "Compliance workflow exists"
+    },
+    {
+      "check": {
+        "config": {
+          "job": "compliance",
+          "path": ".github/workflows/compliance.yml",
+          "permissions": {
+            "contents": "read"
+          }
+        },
+        "kind": "github_workflow_permissions"
+      },
+      "enforcement": "structural",
+      "id": "RSK028",
+      "level": "required",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "The compliance job only reads the repository and reports on it, so a write scope would let the checker it fetches from outside change what it is auditing.",
+      "remediation": "Set the compliance job's effective permissions to exactly `contents: read`.",
+      "source": {
+        "document": "docs/quality-gates.md",
+        "section": "5. CI Pull Request Gates"
+      },
+      "title": "Compliance workflow uses least-privilege permissions"
+    },
+    {
+      "check": {
+        "config": {
+          "path": ".github/workflows/compliance.yml"
+        },
+        "kind": "github_workflow_pins"
+      },
+      "enforcement": "structural",
+      "id": "RSK029",
+      "level": "required",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "The compliance workflow executes code fetched from outside the repository, so an unpinned action beside it is the widest mutable surface the standard ships.",
+      "remediation": "Pin every remote action and reusable workflow in the compliance workflow to a 40-character SHA.",
+      "source": {
+        "document": "docs/quality-gates.md",
+        "section": "5. CI Pull Request Gates"
+      },
+      "title": "Compliance workflow pins remote actions immutably"
+    },
+    {
+      "check": {
+        "config": {
+          "guards_by_profile": {
+            "python-single": [],
+            "python-workspace": []
+          },
+          "job": "compliance",
+          "path": ".github/workflows/compliance.yml",
+          "reusable_workflow": "FP-DevTools/repo-standard-kit/.github/workflows/compliance-reusable.yml",
+          "token": "repo-check",
+          "trigger": "pull_request"
+        },
+        "kind": "github_workflow_invocation"
+      },
+      "enforcement": "structural",
+      "id": "RSK030",
+      "level": "required",
+      "profiles": [
+        "python-single",
+        "python-workspace"
+      ],
+      "rationale": "An existing, least-privileged, fully pinned compliance workflow can still execute nothing. This rule requires the compliance job to run the checker on pull requests.",
+      "remediation": "Trigger the compliance workflow on pull_request, then either run repo-check from a step of its compliance job \u2014 unguarded or under a condition policy declares for the profile \u2014 or have that job call the reusable workflow this kit publishes, which runs the checker for it.",
+      "source": {
+        "document": "docs/quality-gates.md",
+        "section": "5. CI Pull Request Gates"
+      },
+      "title": "Compliance workflow invokes the checker"
     }
   ],
   "schema_version": 1,
-  "standard_major": "1",
-  "standard_version": "1.2.0"
+  "shapes": [
+    {
+      "allow_unlisted": true,
+      "heading_level": 2,
+      "id": "agents",
+      "kind": "markdown_shape",
+      "path": "AGENTS.md",
+      "rule": "RSK002",
+      "sections": [
+        {
+          "allow_missing_profiles": [],
+          "heading": "Repository Purpose",
+          "id": "repository-purpose",
+          "level": "required"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "Repository Context",
+          "id": "repository-context",
+          "level": "required"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "Human And Agent Responsibilities",
+          "id": "human-and-agent-responsibilities",
+          "level": "required"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "Agent Operating Mode",
+          "id": "agent-operating-mode",
+          "level": "required"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "Single Source Of Truth",
+          "id": "single-source-of-truth",
+          "level": "required"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "Workflow",
+          "id": "workflow",
+          "level": "required"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "Quality Gates",
+          "id": "quality-gates",
+          "level": "required"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "Coding Standards",
+          "id": "coding-standards",
+          "level": "required"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "Testing Policy",
+          "id": "testing-policy",
+          "level": "required"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "Documentation Rules",
+          "id": "documentation-rules",
+          "level": "required"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "Repository Layout",
+          "id": "repository-layout",
+          "level": "required"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "Change Control Notes",
+          "id": "change-control-notes",
+          "level": "required"
+        }
+      ]
+    },
+    {
+      "allow_unlisted": true,
+      "heading_level": 2,
+      "id": "readme",
+      "kind": "markdown_shape",
+      "path": "README.md",
+      "rule": "RSK023",
+      "sections": [
+        {
+          "allow_missing_profiles": [],
+          "heading": "At A Glance",
+          "id": "at-a-glance",
+          "level": "optional"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "Overview",
+          "id": "overview",
+          "level": "required"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "Install",
+          "id": "install",
+          "level": "required"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "First 10 Minutes",
+          "id": "first-10-minutes",
+          "level": "optional"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "Configuration",
+          "id": "configuration",
+          "level": "optional"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "Usage",
+          "id": "usage",
+          "level": "required"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "Repo Structure",
+          "id": "repo-structure",
+          "level": "optional"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "Development",
+          "id": "development",
+          "level": "required"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "Deployment",
+          "id": "deployment",
+          "level": "optional"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "Compatibility And Versioning",
+          "id": "compatibility-and-versioning",
+          "level": "optional"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "Maintainers And Support",
+          "id": "maintainers-and-support",
+          "level": "optional"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "License",
+          "id": "license",
+          "level": "required"
+        }
+      ]
+    },
+    {
+      "allow_unlisted": true,
+      "heading_level": 2,
+      "id": "changelog",
+      "kind": "markdown_shape",
+      "path": "CHANGELOG.md",
+      "rule": "RSK024",
+      "sections": [
+        {
+          "allow_missing_profiles": [],
+          "heading": "Compatibility Policy",
+          "id": "compatibility-policy",
+          "level": "optional"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "[Unreleased]",
+          "id": "unreleased",
+          "level": "required"
+        }
+      ]
+    },
+    {
+      "allow_unlisted": true,
+      "heading_level": null,
+      "id": "pyproject",
+      "kind": "toml_table_order",
+      "path": "pyproject.toml",
+      "rule": "RSK025",
+      "sections": [
+        {
+          "allow_missing_profiles": [
+            "python-workspace"
+          ],
+          "heading": "project",
+          "id": "project",
+          "level": "required"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "project.scripts",
+          "id": "project-scripts",
+          "level": "optional"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "dependency-groups",
+          "id": "dependency-groups",
+          "level": "optional"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "build-system",
+          "id": "build-system",
+          "level": "optional"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "tool.uv.build-backend",
+          "id": "tool-uv-build-backend",
+          "level": "optional"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "tool.repo-standard",
+          "id": "tool-repo-standard",
+          "level": "optional"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "tool.ruff",
+          "id": "tool-ruff",
+          "level": "optional"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "tool.ruff.lint",
+          "id": "tool-ruff-lint",
+          "level": "optional"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "tool.pytest.ini_options",
+          "id": "tool-pytest-ini-options",
+          "level": "optional"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "tool.repo-check.ignore",
+          "id": "tool-repo-check-ignore",
+          "level": "optional"
+        },
+        {
+          "allow_missing_profiles": [],
+          "heading": "tool.ty.src",
+          "id": "tool-ty-src",
+          "level": "optional"
+        }
+      ]
+    }
+  ],
+  "standard_major": "2",
+  "standard_version": "2.0.0"
 }

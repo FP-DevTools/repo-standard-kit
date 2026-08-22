@@ -15,10 +15,12 @@ uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" \
 ```
 
 Use `python-workspace` for a workspace root. When `--profile` is omitted,
-`repo-adopt` first uses valid `[tool.repo-standard]` metadata and then the
-canonical policy detection markers. It stops and requests an explicit profile
-if metadata is invalid or multiple profiles match; it never guesses through an
-ambiguity.
+`repo-adopt` first uses the profile named in `[tool.repo-standard]` and then
+the canonical policy detection markers. It stops and requests an explicit
+profile if that profile is not one this kit publishes or if multiple profiles
+match; it never guesses through an ambiguity. A `standard` major from an
+earlier release is what adoption exists to upgrade, not a reason to refuse: it
+is reported, naming both majors, and the run continues.
 
 After reviewing the preview, apply the reconciliation from a clean checkout:
 
@@ -40,20 +42,37 @@ is already compliant and produces no planned changes.
 the checkout:
 
 - Standard-owned assets such as the compliance workflow, GitHub Actions
-  Dependabot entry, Markdown configuration, changelog skeleton, and
-  documentation directories are added when missing. Existing non-empty ADR
+  Dependabot entry, Markdown configuration, changelog skeleton, `.gitignore`,
+  and documentation directories are added when missing. Existing non-empty ADR
   and diagram directories are authoritative and are never seeded with starter
-  files or conflicting decision numbers.
+  files or conflicting decision numbers. An existing `.gitignore` is left
+  untouched; it is never merged with the starter's.
 - `pyproject.toml`, `.pre-commit-config.yaml`, and the quality workflow are
   structurally merged. Existing project dependencies, build settings,
-  services, custom hooks, and additional steps remain in place.
+  services, custom hooks, and additional steps remain in place. A workflow step
+  is matched by the commands it executes, so a gate the repository already runs
+  is reconciled rather than appended a second time under the same name. Hook
+  arguments the standard's hook shape does not model are load-bearing: they are
+  kept and reported, never dropped.
+- Lint families are selected only where a `required` rule demands one. A
+  `recommended` family is a judgement call that stays with the maintainer, so
+  adoption never turns a passing `ruff check` red to satisfy a recommendation.
+- Declared `pyproject.toml` tables are left in the order RSK025 declares, so
+  the manifest adoption rewrites does not come back as a required finding.
 - Mutable refs on known standard workflow actions are replaced by the immutable
   pins shipped by the selected kit; existing full-SHA pins remain intact. The
   isolated `repo-check` hook moves to the selected kit version. Unknown remote
   Actions without immutable pins are reported for a maintainer-selected SHA.
+- A job that declares `uses:` is a reusable-workflow call and never gains
+  steps, which would produce a job GitHub refuses to schedule. A call to this
+  kit's own reusable compliance workflow is reconciled to the released file and
+  the inputs it still accepts; one this kit does not publish is reported and
+  left untouched.
 - `README.md` and `AGENTS.md` remain project-owned. The adopter appends the
   standard reference and missing required sections, and reconciles the exact
-  policy-owned Quality Gates command list without replacing other prose.
+  policy-owned Quality Gates command list without replacing other prose. An
+  inserted `README.md` section states that it is empty rather than carrying
+  starter prose about a repository that does not exist.
 - A non-`uv_build` package backend is preserved and remains visible as the
   recommended RSK008 finding under strict checking. Unsupported standard
   metadata, malformed configuration, or another merge that changes project
@@ -109,27 +128,12 @@ Do not clone the standards repository as the base of a product repository.
 
 ## Recommended New Repository Flow
 
-1. Run the initializer directly with `uvx`:
-
-   ```bash
-   uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git" repo-init --profile python-single --repo-name widget-service
-   ```
-
-   `uvx` is the short form of `uv tool run`. It installs the bootstrap package
-   from this standards repository into an isolated tool environment, then runs
-   the packaged `repo-init` command.
-
-2. Either create and enter an empty target directory, or run `repo-init` through
-   `uvx` from the parent directory with `--repo-name` so it creates the
-   repository folder for you.
-3. Run `repo-init` with the Python profile and repository metadata.
-4. Review generated `AGENTS.md`, `README.md`, package naming, and CI.
-5. Run the generated repository quality gates.
-6. Make the initial commit on `main`.
-
-If the target directory is not yet a Git repository, `repo-init` initializes
-one automatically on `main` before installing pre-commit hooks. Add or change
-the remote afterward as needed.
+The flow is the golden path for your profile:
+[Golden Path: Single Package](#golden-path-single-package) or
+[Golden Path: Workspace](#golden-path-workspace). Both run the initializer
+directly with `uvx`, the short form of `uv tool run`. It installs the bootstrap
+package from this standards repository into an isolated tool environment, then
+runs the packaged `repo-init` command.
 
 For repeated use, install the tool once:
 
@@ -140,7 +144,7 @@ uv tool install --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.g
 Pin a standards version by adding a Git ref:
 
 ```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v1.2.0" repo-init --profile python-single --repo-name widget-service
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v2.0.0" repo-init --profile python-single --repo-name widget-service
 ```
 
 The generated repository derives its `AGENTS.md`, CI workflow, `pyproject.toml`,
@@ -170,15 +174,10 @@ After generation:
 1. Review `AGENTS.md`
 2. Run `uv sync`
 3. Run `uv run pre-commit install`
-4. Run `uv run pre-commit run --all-files`
-5. Run `uv run ruff format --check .`
-6. Run `uv run ruff check .`
-7. Run `uv run ty check`
-8. Run `uv run pytest`
-9. Run `uv build`
-10. Make the initial commit on `main`
-11. Push an initial pull request, then configure branch protection on `main`
-    as specified in `docs/quality-gates.md` so the gates become binding
+4. Run the quality-gate chain stated in `docs/quality-gates.md`
+5. Make the initial commit on `main`
+6. Push an initial pull request, then configure branch protection on `main`
+   as specified in `docs/quality-gates.md` so the gates become binding
 
 ### Golden Path: Workspace
 
@@ -205,6 +204,9 @@ repo-add-package \
   --description "Service package for widget API behavior"
 ```
 
+Then continue from step 1 of the single-package path above; the steps after
+generation are the same.
+
 If you prefer HTTPS instead of SSH, use the same command shape with the HTTPS
 Git URL for this repository.
 
@@ -222,8 +224,40 @@ Optional:
 - `--repo-type`
 - `--python-version`
 - `--author`
+- `--license`
 - `--output-dir`
+- `--no-lock`
 - `--no-install`
+
+By default, `repo-init` infers the repository name from the target directory.
+If you pass `--repo-name` without `--output-dir`, `repo-init` creates
+`./<repo-name>` and bootstraps into that new directory. If you pass both,
+`--output-dir` remains the explicit target and `--repo-name` overrides only the
+rendered repository metadata. Without `--description`, the generated files
+carry a placeholder description to refine later in `README.md`.
+
+`--python-version` sets `requires-python`, and `--author` becomes the
+`authors` entry in `pyproject.toml`; an unnamed author leaves the key out
+rather than shipping it empty.
+
+`--license` accepts `proprietary`, `mit`, or `apache-2.0`. It writes the full
+licence text to `LICENSE` and declares `license` and `license-files` in
+`pyproject.toml`. Omit it and no `LICENSE` is written: the README's `License`
+section then states that terms have not been selected yet and cites RSK018,
+which stays a visible recommendation until they are.
+
+`repo-init` carries the same lock and install split as `repo-adopt`: the
+default path runs `uv lock` followed by `uv sync`. Use `--no-lock` to leave
+lockfile creation to the maintainer and `--no-install` to skip environment
+synchronization and hook installation. These flags are independent because a
+constrained environment may permit one operation but not the other. `uv sync`
+writes `uv.lock` when none exists, so `--no-lock` on its own still leaves a
+lock file behind. Whenever bootstrap ends with no `uv.lock`, `repo-init` names
+RSK009 and the `uv lock` command that resolves it.
+
+When the target is not yet a Git repository, `repo-init` initializes one on
+`main` before installing pre-commit hooks, so hook installation works in a
+fresh directory. Add or change the remote afterward as needed.
 
 ## Expected Output
 
@@ -241,14 +275,15 @@ widget-service/
   .github/dependabot.yml
   .github/workflows/compliance.yml
   .github/workflows/quality.yml
+  .gitignore
   .pre-commit-config.yaml
   .pymarkdown.json
   AGENTS.md
   CHANGELOG.md
   README.md
   pyproject.toml
+  uv.lock
   docs/adr/0001-template.md
-  docs/diagrams/README.md
   src/widget_service/__init__.py
   tests/test_smoke.py
 ```
@@ -266,14 +301,15 @@ widget-platform/
   .github/dependabot.yml
   .github/workflows/compliance.yml
   .github/workflows/quality.yml
+  .gitignore
   .pre-commit-config.yaml
   .pymarkdown.json
   AGENTS.md
   CHANGELOG.md
   README.md
   pyproject.toml
+  uv.lock
   docs/adr/0001-template.md
-  docs/diagrams/README.md
   packages/.gitkeep
   tests/test_workspace_shell.py
 ```
@@ -290,29 +326,28 @@ Each later `repo-add-package --package-name widget_api` run adds:
 
 ### What Good Looks Like
 
+Accept the generated repository on what generation itself decided. Everything
+else it must satisfy is the standard, so leave that to `repo-check` and
+[docs/policy-reference.md](policy-reference.md) rather than restating rule
+values here.
+
 - No unresolved placeholders remain in generated files
 - The package directory matches the requested package name
 - `AGENTS.md` is concrete enough to use immediately, with no generic filler
-- The repository passes the full `docs/quality-gates.md` chain
-- `[tool.repo-standard]` declares the generated profile and standard major
-- The quality workflow grants only `contents: read` and pins remote actions to
-  full commit SHAs; Dependabot is configured to propose GitHub Actions updates
-- Separate `quality` and `compliance` status checks run on pull requests and
-  are suitable for branch-protection enforcement
+- `repo-check .` reports no required findings, and the full
+  `docs/quality-gates.md` chain passes on the `uv.lock` the default path
+  produces, with the one `python-workspace` exception below
+
+A generated `python-workspace` shell holds no packages yet, so its fourth
+gate, `uv build --all-packages`, exits 2 with `Workspace does not contain any
+buildable packages` until the first `repo-add-package` run. Add the package
+before running the chain locally. CI is unaffected: the workspace quality
+workflow wraps that command in `compgen -G "packages/*/pyproject.toml"`. The
+chain in `AGENTS.md` stays unguarded because RSK003 requires it to be the
+exact ordered chain the standard declares for the profile.
 
 The generated compliance workflow runs the released checker through `uvx` in
 an isolated tool environment. It does not add `repo-standard-kit` to the new
 repository's dependencies or couple compliance to the generated `uv.lock`.
 See [Compliance Checking](compliance.md) for the equivalent reusable-workflow
 caller and its immutable workflow pin.
-
-By default, `repo-init` infers the repository name from the target directory.
-If you pass `--repo-name` without `--output-dir`, `repo-init` creates
-`./<repo-name>` and bootstraps into that new directory. If you pass both,
-`--output-dir` remains the explicit target and `--repo-name` overrides only the
-rendered repository metadata.
-By default, `repo-init` uses a placeholder description that you can refine
-later in `README.md`.
-By default, `repo-init` also initializes Git on `main` when needed so hook
-installation works in a fresh directory. Use `--no-install` if you want
-bootstrap to stop before environment setup and hook installation.

@@ -87,7 +87,10 @@ was never written to any prose convention. `md033` (no inline HTML) and
 both false-positive on conventions this standard itself relies on —
 `<angle-bracket>` fill-in-the-blank placeholders in `templates/`, and
 `__DUNDER__`-shaped bootstrap tokens, which are valid Markdown
-strong-emphasis syntax before a starter kit is rendered.
+strong-emphasis syntax before a starter kit is rendered. `md024` (no
+duplicate headings) shall run with `siblings_only` enabled, since documents
+in this repository legitimately repeat headings such as `### Added` under
+different release sections in `CHANGELOG.md`.
 
 ### Recommended tools
 
@@ -114,6 +117,25 @@ is inspected; comments, echoed strings, unrelated fields, and commands hidden
 inside a shell-wrapper string do not count. Whitespace, comments, multiline
 commands, and equivalent command formatting are normalized before comparison.
 
+A conditional block that skips a gate still exits zero, so a required command
+inside one proves nothing by itself. Policy owns the permitted guard: a
+required command counts when it is unguarded, or when its only condition is
+the guard the [policy reference](policy-reference.md#rsk006-quality-workflow-executes-the-mandatory-gate-chain)
+declares for the resolved profile. Any other condition, an `else` or `elif`
+branch, a loop body, and a `case` arm leave the command unproven.
+
+That reach ends at the shell. The conditionals modelled above are the ones
+written inside a `run:` body; a step's own `if:` and `continue-on-error:` are
+never read, because only `run:` is collected. A gate step carrying `if: false`
+or `continue-on-error: true` therefore satisfies RSK006, and the same holds
+for the RSK030 invocation below. The rules prove that the workflow spells the
+chain correctly, not that a pull request executes it. Closing that would mean
+evaluating Actions expressions, which the checker does not do, so the gap is
+disclosed rather than fixed: this standard is for internal development, where
+a repository disabling its own gates is a review problem rather than an
+adversary. Read a green `quality` status as evidence only alongside the
+workflow diff that produced it.
+
 Every pull request shall also run an independent `compliance` job that checks
 the repository against repo-standard-kit. The separate status prevents a
 quality workflow from weakening or removing required gates while still
@@ -137,6 +159,36 @@ that every remote action and reusable workflow referenced by the quality
 workflow is pinned to a full 40-character commit SHA. Local `./` actions and
 `docker://` references are exempt. Keep a version comment next to each SHA so
 Dependabot updates remain understandable.
+
+RSK027 enforces at the **required** level that
+`.github/workflows/compliance.yml` exists. RSK028 and RSK029 place the same two
+obligations on it that RSK020 and RSK021 place on the quality workflow, at the
+same **required** level: the `compliance` job's effective permissions are
+exactly `contents: read`, and every remote action and reusable workflow the
+compliance workflow references is pinned to a full 40-character commit SHA.
+This workflow fetches and executes the checker from outside the repository, so
+it is the reference set least safe to leave mutable.
+
+RSK030 enforces at the **required** level that the compliance job invokes the
+checker on pull requests: the workflow shall trigger on `pull_request`, and
+some command in `jobs.compliance.steps[*].run` shall carry `repo-check` in its
+argument list. The trigger belongs to this rule because the other three are
+satisfied by a workflow no pull request ever starts, which leaves the SHALL
+above unmet. A job calling the reusable workflow `repo-standard-kit` publishes
+at `.github/workflows/compliance-reusable.yml` satisfies the second half
+instead, because that workflow runs the checker and leaves the caller no steps
+to read; the rule recognises it by `owner/repo/path` and not by the ref, which
+is RSK029's subject. No other repository's reusable workflow counts, and a job
+that declares neither steps nor such a call fails. The match is containment
+rather than an exact command, because an adopter runs a released checker with
+`uvx` while this standards repository runs its own working tree with `uv run`,
+and both are correct. The guard semantics above apply unchanged, and no profile declares a
+permitted guard for this rule, so the invocation shall be unguarded. What
+containment buys is honest but limited: it cannot tell a real compliance run
+from a command that merely names the token, and it establishes only that the
+job invokes the checker at all. It does exclude a token that appears solely in
+a comment, which the shell lexer discards. Section 10 enforcement keeps the
+status check mandatory.
 
 ### Environment reproducibility
 
@@ -236,8 +288,8 @@ uv run pip-audit
 
 Identifies known vulnerabilities in dependencies.
 
-Vulnerability scanning remains optional for v1.0. No machine-enforced rule in
-this release requires `pip-audit` or another vulnerability scanner.
+Vulnerability scanning remains optional. No machine-enforced rule in this
+release requires `pip-audit` or another vulnerability scanner.
 
 ---
 
@@ -419,8 +471,10 @@ looks like. This section fixes the configuration those gates run with.
 ### Ruff configuration
 
 RSK010 enforces the explicit line-length declaration and mandatory Ruff
-families at the **required** level. RSK015 checks the preferred line length and
-RSK016 checks the `PT` family at the **recommended** level.
+families at the **required** level. RSK016 checks the `PT` family at the
+**recommended** level. RSK015 checks the preferred line length at the
+**advisory** level, because the value itself stays a per-repository decision
+below: the finding is reported but never fails, not even under `--strict`.
 
 Every adopting repository shall declare an explicit `line-length` in
 `[tool.ruff]`, and shall select at least the following rule families:

@@ -1,0 +1,147 @@
+schema_version: 1
+shapes:
+  - id: agents
+    path: AGENTS.md
+    kind: markdown_shape
+    rule: RSK002
+    heading_level: 2
+    allow_unlisted: true
+    sections:
+      - id: repository-purpose
+        heading: Repository Purpose
+        level: required
+      - id: repository-context
+        heading: Repository Context
+        level: required
+      - id: human-and-agent-responsibilities
+        heading: Human And Agent Responsibilities
+        level: required
+      - id: agent-operating-mode
+        heading: Agent Operating Mode
+        level: required
+      - id: single-source-of-truth
+        heading: Single Source Of Truth
+        level: required
+      - id: workflow
+        heading: Workflow
+        level: required
+      - id: quality-gates
+        heading: Quality Gates
+        level: required
+      - id: coding-standards
+        heading: Coding Standards
+        level: required
+      - id: testing-policy
+        heading: Testing Policy
+        level: required
+      - id: documentation-rules
+        heading: Documentation Rules
+        level: required
+      - id: repository-layout
+        heading: Repository Layout
+        level: required
+      - id: change-control-notes
+        heading: Change Control Notes
+        level: required
+
+  - id: readme
+    path: README.md
+    kind: markdown_shape
+    rule: RSK023
+    heading_level: 2
+    allow_unlisted: true
+    sections:
+      - id: at-a-glance
+        heading: At A Glance
+        level: optional
+      - id: overview
+        heading: Overview
+        level: required
+      - id: install
+        heading: Install
+        level: required
+      - id: first-10-minutes
+        heading: First 10 Minutes
+        level: optional
+      - id: configuration
+        heading: Configuration
+        level: optional
+      - id: usage
+        heading: Usage
+        level: required
+      - id: repo-structure
+        heading: Repo Structure
+        level: optional
+      - id: development
+        heading: Development
+        level: required
+      - id: deployment
+        heading: Deployment
+        level: optional
+      - id: compatibility-and-versioning
+        heading: Compatibility And Versioning
+        level: optional
+      - id: maintainers-and-support
+        heading: Maintainers And Support
+        level: optional
+      - id: license
+        heading: License
+        level: required
+
+  - id: changelog
+    path: CHANGELOG.md
+    kind: markdown_shape
+    rule: RSK024
+    heading_level: 2
+    allow_unlisted: true
+    sections:
+      - id: compatibility-policy
+        heading: Compatibility Policy
+        level: optional
+      - id: unreleased
+        heading: "[Unreleased]"
+        level: required
+
+  - id: pyproject
+    path: pyproject.toml
+    kind: toml_table_order
+    rule: RSK025
+    allow_unlisted: true
+    sections:
+      - id: project
+        heading: project
+        level: required
+        # A uv virtual workspace root is a container for its members, not a
+        # distribution, so it declares no [project]. A workspace root that is
+        # itself a distribution still declares one, in this position.
+        allow_missing_profiles: [python-workspace]
+      - id: project-scripts
+        heading: project.scripts
+        level: optional
+      - id: dependency-groups
+        heading: dependency-groups
+        level: optional
+      - id: build-system
+        heading: build-system
+        level: optional
+      - id: tool-uv-build-backend
+        heading: tool.uv.build-backend
+        level: optional
+      - id: tool-repo-standard
+        heading: tool.repo-standard
+        level: optional
+      - id: tool-ruff
+        heading: tool.ruff
+        level: optional
+      - id: tool-ruff-lint
+        heading: tool.ruff.lint
+        level: optional
+      - id: tool-pytest-ini-options
+        heading: tool.pytest.ini_options
+        level: optional
+      - id: tool-repo-check-ignore
+        heading: tool.repo-check.ignore
+        level: optional
+      - id: tool-ty-src
+        heading: tool.ty.src
+        level: optional

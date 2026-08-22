@@ -1,0 +1,3 @@
+- Logic changes require unit tests
+- Cross-package boundary changes require integration coverage where relevant
+- Bug fixes require regression tests

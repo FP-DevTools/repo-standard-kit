@@ -1,0 +1,3 @@
+- Keep reusable Python logic under `src/`
+- Type production function signatures
+- Keep starter assets and tests aligned with the documented standard

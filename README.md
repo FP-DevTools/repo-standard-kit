@@ -32,23 +32,40 @@ This repository provides:
 - GitHub Actions CI that mirrors the documented local quality gates
 - `uv`-based dependency and build configuration for Python projects
 
-## The Standard
+### The Standard
 
 [docs/repo-standard.md](docs/repo-standard.md) is the normative entry point. It
 states the contract a repository must satisfy and indexes the companion
 documents covering quality gates, the agent operating model, Git workflow,
-repository layout, bootstrapping, and the Python profiles.
+repository layout, bootstrapping, compliance checking, and the Python profiles.
 
 Templates and starter kits implement that standard; the documents it indexes
 define the intent and rules.
 
-## Current Profiles
+### Design Principles
+
+Why the standard is shaped the way it is. These are rationale, not rules — each
+is enforced by the document named beside it.
+
+- **Portable**: no workspace-specific filesystem assumptions, so the standard
+  travels between organizations — `docs/repo-standard.md`
+- **Practical**: exact commands and concrete file layouts, not abstract policy —
+  `docs/quality-gates.md`
+- **Collaborative**: explicit human and agent responsibility boundaries —
+  `docs/agent-operating-model.md`
+- **Typed**: strong typing expectations for Python code —
+  `docs/quality-gates.md`, `docs/policy-reference.md#profiles`
+- **Small-batch**: short-lived branches and small PRs for parallel work —
+  `docs/git-workflow.md`
+
+### Current Profiles
 
 - `python-single`: one package rooted at `src/<package_name>/`
 - `python-workspace`: monorepo with per-package projects under `packages/`
 
-Python is the only supported language today. Other languages are added only
-once a profile is fully documented and maintained.
+Python is the only supported language today. The generated
+[policy profile catalogue](docs/policy-reference.md#profiles) is authoritative;
+other languages are added only once their policy profile is maintained.
 
 ## Install
 
@@ -97,14 +114,15 @@ projects under `packages/`. The generated repository derives its `AGENTS.md`,
 CI workflow, `pyproject.toml`, and starter files from the resolved version of
 this repository.
 
-Then:
+Add `--license proprietary`, `--license mit`, or `--license apache-2.0` to write
+a real `LICENSE` and declare it in `pyproject.toml`. Without it the repository
+starts with no licence file and a `License` section saying terms have not been
+chosen, which RSK018 keeps reporting as a recommendation until they are.
 
-1. Review the generated `AGENTS.md`, `README.md`, and CI workflow.
-2. Run the quality gates in the generated repository.
-3. Make the initial commit on `main`.
-
-See [docs/bootstrap-workflow.md](docs/bootstrap-workflow.md) for the full
-option reference and the expected generated output.
+The golden path for your profile in
+[docs/bootstrap-workflow.md](docs/bootstrap-workflow.md#recommended-new-repository-flow)
+states what to do after generation, along with the full option reference and
+the expected generated output.
 
 ### Add A Package To A Workspace
 
@@ -165,20 +183,21 @@ resolution, output, and structural-check details.
 Add a Git ref to the `--from` URL. This works for every command above:
 
 ```bash
-uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v1.2.0" repo-init --profile python-single --repo-name widget-service
+uvx --from "git+ssh://git@github.com/FP-DevTools/repo-standard-kit.git@v2.0.0" repo-init --profile python-single --repo-name widget-service
 ```
 
 ## Repo Structure
 
 - `docs/`: the standard and its companion documents
-- `policy/`: canonical machine-enforced rules and profile detection metadata
-- `profiles/`: language or repo-type specific standards
-- `templates/`: fill-in-the-blank reference documents for adopting the standard
-  by hand
+- `policy/`: canonical machine-enforced rules, profile detection metadata, and
+  the file shapes governed documents must follow
+- `templates/`: reference documents rendered from the shapes, plus the
+  `content/` prose fragments they are rendered from
 - `src/repo_standard/`: packaged bootstrap implementation
 - `src/repo_standard/policy/`: strict policy models and compiled runtime policy
 - `src/repo_standard/starter_kits/`: copyable repository skeletons
-- `scripts/`: developer scripts, including `generate_policy.py`
+- `scripts/`: developer scripts — `generate_policy.py` compiles the canonical
+  policy, `generate_docs.py` renders every governed Markdown document
 - `tests/`: automated tests
 
 For the layout the standard prescribes for *your* repository, see
@@ -211,22 +230,6 @@ uv run python scripts/generate_policy.py
 
 `uv run pytest` fails when `src/repo_standard/policy/compiled.json` or
 [docs/policy-reference.md](docs/policy-reference.md) is stale.
-
-## Design Principles
-
-Why the standard is shaped the way it is. These are rationale, not rules — each
-is enforced by the document named beside it.
-
-- **Portable**: no workspace-specific filesystem assumptions, so the standard
-  travels between organizations — `docs/repo-standard.md`
-- **Practical**: exact commands and concrete file layouts, not abstract policy —
-  `docs/quality-gates.md`
-- **Collaborative**: explicit human and agent responsibility boundaries —
-  `docs/agent-operating-model.md`
-- **Typed**: strong typing expectations for Python code —
-  `docs/quality-gates.md`, `profiles/python-single.md`
-- **Small-batch**: short-lived branches and small PRs for parallel work —
-  `docs/git-workflow.md`
 
 ## License
 

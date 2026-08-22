@@ -13,15 +13,21 @@ Use this layout by default for Python repositories:
 - `src/<package_name>/`
 - `tests/`
 - `docs/adr/`
-- `docs/diagrams/`
 - `scripts/`
 - `examples/` when useful
+- `docs/diagrams/` when the repository keeps diagrams
 
-The core operating files above are governed by required rules in the main
-standard. The following layout aids are intentionally **recommended**:
-RSK012 checks `docs/adr/`, RSK017 checks `CHANGELOG.md`, and RSK018 checks
-`LICENSE`. Their absence is reported but is non-blocking unless strict checking
-is requested.
+Of the entries above, `AGENTS.md` and `README.md` are governed by required
+existence rules (RSK001, RSK004). No rule checks that `pyproject.toml` or
+`.pre-commit-config.yaml` exist, but required rules read their contents —
+RSK007, RSK010, and RSK019 — and report the file missing when it is absent.
+`tests/`, `src/<package_name>/`, `docs/diagrams/`, `scripts/`, and
+`examples/` are convention only: no rule checks for them. The starter kits do
+not scaffold `docs/diagrams/` either, so it is a name to use when the first
+diagram arrives rather than an empty directory every repository carries. The
+following layout aids are intentionally **recommended**: RSK012 checks
+`docs/adr/`, RSK017 checks `CHANGELOG.md`, and RSK018 checks `LICENSE`. Their
+absence is reported but is non-blocking unless strict checking is requested.
 
 ## Directory Responsibilities
 
@@ -29,7 +35,8 @@ is requested.
 - `tests/`: test code only
 - `docs/`: durable project knowledge
 - `docs/adr/`: architecture decisions
-- `docs/diagrams/`: workflow or architecture diagrams
+- `docs/diagrams/`: workflow or architecture diagrams, created when the first
+  one is written
 - `scripts/`: developer or operational helpers, not core business logic
 - `examples/`: user-facing or integration examples when they add value
 

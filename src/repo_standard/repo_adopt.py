@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import copy
-import importlib.metadata
 import json
 import os
 import re
@@ -22,8 +21,54 @@ from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 from tomlkit.exceptions import ParseError
 
-from repo_standard.compliance.checks import Finding, check_repo, load_policy
-from repo_standard.repo_init import PLACEHOLDERS, resolve_starter_dir
+from repo_standard.bootstrap_defaults import DEFAULT_PYTHON_VERSION
+from repo_standard.compliance.checks import (
+    Finding,
+    _shell_commands,
+    check_repo,
+    load_policy,
+)
+from repo_standard.github_references import is_full_commit_sha
+from repo_standard.policy import Shape
+from repo_standard.policy.models import LEVEL_ORDER
+from repo_standard.project_metadata import kit_version
+from repo_standard.repo_init import (
+    PLACEHOLDERS,
+    resolve_starter_dir,
+)
+
+ADOPTED_LICENSE_NOTICE = "See [`LICENSE`](LICENSE) for the terms that apply."
+# `repo_init.UNLICENSED_NOTICE` sends the reader to `repo-init --license`,
+# which is not a command an existing repository can run. Adoption states the
+# same fact and names what it can actually do about it.
+ADOPTION_UNLICENSED_NOTICE = (
+    "Licence terms have not been selected for this repository yet, so no "
+    "`LICENSE` file is present. RSK018 recommends adding one: add the terms "
+    "your organisation has approved before sharing this repository."
+)
+
+_KIT_REPOSITORY = "FP-DevTools/repo-standard-kit"
+_STANDARDS_LINK = f"[repo-standard-kit]: https://github.com/{_KIT_REPOSITORY}"
+# Standard 2 moved the reusable workflow to its own file and left it one input,
+# so a caller written against an earlier release resolves to nothing.
+_REUSABLE_COMPLIANCE = f"{_KIT_REPOSITORY}/.github/workflows/compliance-reusable.yml"
+_REUSABLE_INPUTS = ("standard-ref",)
+# RSK005 wants an explicit, linked reference in both documents. Rather than
+# inventing a heading no shape declares, the note goes into a section the shape
+# already requires, so adoption never introduces a section shape of its own.
+_STANDARDS_NOTE = {
+    "agents": (
+        "repository-context",
+        "Standards source: [repo-standard-kit] — quality gates derive from it, "
+        "and this repository is reviewed against it periodically for standards "
+        "drift.",
+    ),
+    "readme": (
+        "development",
+        "Repository workflow and quality gates follow [repo-standard-kit]. "
+        "Review this repository against the pinned standard when upgrading.",
+    ),
+}
 
 
 class AdoptionError(RuntimeError):
@@ -54,6 +99,9 @@ class AdoptionPlan:
     unchanged: tuple[str, ...]
     conflicts: tuple[str, ...]
     dependency_metadata_changed: bool
+    # Stated facts about the adoption that ask nothing of the maintainer, so
+    # they belong neither in the conflict list nor in the finding counts.
+    notices: tuple[str, ...] = ()
 
 
 _MANAGED_SURFACES = (
@@ -66,29 +114,22 @@ _MANAGED_SURFACES = (
     "AGENTS.md",
     "README.md",
     "CHANGELOG.md",
+    ".gitignore",
     "docs/adr",
-    "docs/diagrams",
 )
 _REMOTE_ACTION = re.compile(r"^[^./\s]+/[^@\s]+@(?P<ref>[^\s]+)$")
-_FULL_SHA = re.compile(r"^[0-9a-fA-F]{40}$")
 _COMMAND_LIST_BLOCK = re.compile(
     r"(?:^[ \t]*(?:\d+[.)]|[-*+])[ \t]+`[^`\r\n]+`[ \t]*\r?\n?)+",
+    re.MULTILINE,
+)
+_DIAL_LIST_BLOCK = re.compile(
+    r"(?:^[ \t]*[-*+][ \t]+\*\*[^*\r\n]+\*\*[ \t]*\d+[ \t]*/[ \t]*\d+[ \t]*\r?\n?)+",
     re.MULTILINE,
 )
 _ROUND_TRIP_YAML = YAML()
 _ROUND_TRIP_YAML.preserve_quotes = True
 _ROUND_TRIP_YAML.width = 88
 _ROUND_TRIP_YAML.indent(mapping=2, sequence=4, offset=2)
-
-
-def _kit_version() -> str:
-    try:
-        return importlib.metadata.version("repo-standard-kit")
-    except importlib.metadata.PackageNotFoundError:
-        pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
-        return str(
-            tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["version"]
-        )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -98,9 +139,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("target", nargs="?", default=".")
     parser.add_argument("--profile", choices=policy.profile_ids)
-    parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--no-lock", action="store_true")
-    parser.add_argument("--no-install", action="store_true")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Plan and print the reconciliation without writing, staging, or "
+        "running any command.",
+    )
+    parser.add_argument(
+        "--no-lock",
+        action="store_true",
+        help="Skip uv lock, leaving lockfile refresh to the maintainer.",
+    )
+    parser.add_argument(
+        "--no-install",
+        action="store_true",
+        help="Skip environment synchronization after reconciliation.",
+    )
     parser.add_argument(
         "--native-tls",
         action="store_true",
@@ -172,13 +226,22 @@ def _project_values(root: Path, document: Any) -> dict[str, str]:
     name = str(project.get("name") or root.name)
     description = str(project.get("description") or "Describe this repository.")
     normalized = re.sub(r"\W", "_", name.replace("-", "_")).lower()
+    requires = str(project.get("requires-python") or "")
+    floor = re.search(r">=\s*(\d+\.\d+)", requires)
     return {
         "repo_name": name,
         "package_name": normalized,
         "description": description,
         "repo_type": "library",
-        "python_version": "3.12",
+        "python_version": floor.group(1) if floor else DEFAULT_PYTHON_VERSION,
         "author": "",
+        # Adoption never chooses licence terms for a repository; it only
+        # reports whether the repository has already stated them.
+        "license_notice": (
+            ADOPTED_LICENSE_NOTICE
+            if (root / "LICENSE").is_file()
+            else ADOPTION_UNLICENSED_NOTICE
+        ),
     }
 
 
@@ -191,11 +254,13 @@ def _resolve_profile(root: Path, document: Any, override: str | None) -> str:
         if not isinstance(metadata, dict):
             raise AdoptionError("[tool.repo-standard] must be a TOML table")
         profile = metadata.get("profile")
-        standard = metadata.get("standard")
-        if profile not in policy.profile_ids or standard != policy.standard_major:
+        # A stale standard major is the upgrade adoption exists to perform, so
+        # only an unrecognized profile leaves the intended profile in doubt.
+        if profile not in policy.profile_ids:
             raise AdoptionError(
-                "existing [tool.repo-standard] metadata is invalid; pass --profile "
-                "to make the intended profile explicit"
+                f"[tool.repo-standard] profile {profile!r} is not a profile this "
+                f"kit knows ({', '.join(policy.profile_ids)}); pass --profile to "
+                "make the intended profile explicit"
             )
         return str(profile)
 
@@ -228,25 +293,131 @@ def _resolve_profile(root: Path, document: Any, override: str | None) -> str:
     return default
 
 
-def _ensure_table(parent: Any, key: str) -> Any:
+def _standard_major_notice(document: Any) -> str | None:
+    """Name both standard majors when the repository is on an earlier one.
+
+    This is the state every repository adopted under an earlier major is in,
+    and it is what adoption repairs, so it is reported rather than refused.
+    """
+    metadata = document.get("tool", {}).get("repo-standard")
+    if not isinstance(metadata, dict):
+        return None
+    declared = metadata.get("standard")
+    current = load_policy().standard_major
+    if declared is None or str(declared) == current:
+        return None
+    return (
+        f"this repository declares standard {str(declared)!r} and this kit is "
+        f"standard {current!r}; adoption upgrades [tool.repo-standard] to it"
+    )
+
+
+def _sibling_order(shape: Shape, prefix: tuple[str, ...]) -> list[str]:
+    """Child names the shape declares under `prefix`, in declared order."""
+    order: list[str] = []
+    for heading in shape.headings:
+        parts = heading.split(".")
+        if len(parts) <= len(prefix) or tuple(parts[: len(prefix)]) != prefix:
+            continue
+        if parts[len(prefix)] not in order:
+            order.append(parts[len(prefix)])
+    return order
+
+
+def _place(
+    parent: Any, key: str, value: Any, shape: Shape, prefix: tuple[str, ...]
+) -> None:
+    """Add `key` where the shape says it belongs among its siblings.
+
+    tomlkit appends, and a table appended past the ones that should follow it is
+    an RSK025 finding. There is no insert-before in the public API, so the
+    declared tables that come after `key` are lifted out and put back in order;
+    each carries its own contents and trivia, so only their position moves.
+    """
+    order = _sibling_order(shape, prefix)
+    if key not in order:
+        parent[key] = value
+        return
+    following = [name for name in order[order.index(key) + 1 :] if name in parent]
+    moved = [(name, parent.pop(name)) for name in following]
+    parent[key] = value
+    for name, table in moved:
+        parent[name] = table
+
+
+def _ensure_table(
+    parent: Any, key: str, shape: Shape, prefix: tuple[str, ...] = ()
+) -> Any:
     value = parent.get(key)
     if value is None:
-        value = tomlkit.table()
-        parent[key] = value
+        _place(parent, key, tomlkit.table(), shape, prefix)
+        value = parent[key]
     if not isinstance(value, dict):
         raise AdoptionError(f"cannot merge TOML key {key!r}: expected a table")
     return value
+
+
+def _reorder_tables(parent: Any, shape: Shape, prefix: tuple[str, ...] = ()) -> None:
+    """Put the shape's declared tables back into canonical order, in place.
+
+    Placing each new table correctly is not enough: a table the repository
+    already had can sit anywhere, and adoption has no business handing back a
+    manifest that fails the rule it just rewrote the file for. RSK025 reads
+    table headers as a subsequence, so only the declared ones move -- each
+    takes a slot a declared table already occupied, and a table the shape does
+    not list keeps its position.
+    """
+    order = _sibling_order(shape, prefix)
+    keys = list(parent)
+    declared = [name for name in order if name in keys]
+    slots = [index for index, name in enumerate(keys) if name in declared]
+    if [keys[index] for index in slots] != declared:
+        for index, name in zip(slots, declared, strict=True):
+            keys[index] = name
+        # tomlkit has no reorder and no insert-before, so every key is lifted
+        # out and put back; each carries its own contents and trivia.
+        lifted = {name: parent.pop(name) for name in list(parent)}
+        for name in keys:
+            parent[name] = lifted[name]
+    for name in order:
+        child = parent.get(name)
+        if isinstance(child, dict):
+            _reorder_tables(child, shape, (*prefix, name))
+
+
+# The families a rule of each kind names, so adoption reads the requirement
+# from policy rather than from whatever the starter happens to select.
+_RUFF_SELECT_KINDS = {"ruff_baseline": "required_select", "ruff_select": "values"}
+
+
+def _required_ruff_families() -> list[str]:
+    """Lint families a `required` rule demands, in policy order.
+
+    Adoption may repair a `required` rule unasked. A `recommended` family is
+    the maintainer's call and adding one has turned a passing `ruff check` red,
+    so the level decides rather than the starter's `select` list.
+    """
+    families: list[str] = []
+    for rule in load_policy().rules:
+        key = _RUFF_SELECT_KINDS.get(rule.check.kind)
+        if key is None or rule.level != "required":
+            continue
+        families.extend(
+            family for family in rule.check.config[key] if family not in families
+        )
+    return families
 
 
 def _merge_pyproject(
     path: Path, document: Any, profile: str
 ) -> tuple[str, bool, list[str]]:
     starter = tomllib.loads(_read_starter(profile, "pyproject.toml"))
+    shape = _shape_for("RSK025")
     conflicts: list[str] = []
     dependency_changed = False
 
-    tool = _ensure_table(document, "tool")
-    metadata = _ensure_table(tool, "repo-standard")
+    tool = _ensure_table(document, "tool", shape)
+    metadata = _ensure_table(tool, "repo-standard", shape, ("tool",))
     unknown = set(metadata) - {"profile", "standard"}
     if unknown:
         conflicts.append(
@@ -256,7 +427,7 @@ def _merge_pyproject(
     metadata["profile"] = profile
     metadata["standard"] = load_policy().standard_major
 
-    groups = _ensure_table(document, "dependency-groups")
+    groups = _ensure_table(document, "dependency-groups", shape)
     dev = groups.get("dev")
     if dev is None:
         dev = tomlkit.array().multiline(True)
@@ -273,17 +444,17 @@ def _merge_pyproject(
             dev.append(requirement)
             dependency_changed = True
 
-    ruff = _ensure_table(tool, "ruff")
+    ruff = _ensure_table(tool, "ruff", shape, ("tool",))
     if "line-length" not in ruff:
         ruff["line-length"] = starter["tool"]["ruff"]["line-length"]
-    lint = _ensure_table(ruff, "lint")
+    lint = _ensure_table(ruff, "lint", shape, ("tool", "ruff"))
     select = lint.get("select")
     if select is None:
         select = tomlkit.array()
         lint["select"] = select
     if not isinstance(select, list):
         raise AdoptionError("cannot merge tool.ruff.lint.select: expected an array")
-    for family in starter["tool"]["ruff"]["lint"]["select"]:
+    for family in _required_ruff_families():
         if family not in select:
             select.append(family)
 
@@ -293,16 +464,18 @@ def _merge_pyproject(
             build = tomlkit.table()
             build["requires"] = starter["build-system"]["requires"]
             build["build-backend"] = starter["build-system"]["build-backend"]
-            document["build-system"] = build
+            _place(document, "build-system", build, shape, ())
             dependency_changed = True
         elif not isinstance(build, dict):
             raise AdoptionError("cannot merge build-system: expected a table")
 
+    _reorder_tables(document, shape)
     return tomlkit.dumps(document), dependency_changed, conflicts
 
 
-def _merge_pre_commit(path: Path, profile: str) -> str:
+def _merge_pre_commit(path: Path, profile: str) -> tuple[str, list[str]]:
     current = _load_yaml(path)
+    conflicts: list[str] = []
     expected = _ROUND_TRIP_YAML.load(_read_starter(profile, ".pre-commit-config.yaml"))
     repos = current.setdefault("repos", [])
     if not isinstance(repos, list):
@@ -337,10 +510,19 @@ def _merge_pre_commit(path: Path, profile: str) -> str:
             if hook is None:
                 hooks.append(copy.deepcopy(expected_hook))
                 continue
-            if "args" not in expected_hook:
-                hook.pop("args", None)
+            # `args` the starter does not model are load-bearing: dropping the
+            # baseline from `detect-secrets` turned a clean gate into 98
+            # findings. RSK007 compares the whole argument list, so keeping
+            # them leaves a finding -- one the maintainer can answer, unlike a
+            # silent deletion.
+            if "args" in hook and "args" not in expected_hook:
+                conflicts.append(
+                    f"{path.name}: hook {hook['id']!r} keeps args "
+                    f"{[str(arg) for arg in hook['args']]}, which the standard's "
+                    "hook shape does not model; RSK007 reports the difference"
+                )
             hook.update(copy.deepcopy(expected_hook))
-    return _dump_yaml(current)
+    return _dump_yaml(current), conflicts
 
 
 def _ensure_trigger(workflow: dict[str, Any], trigger: str) -> None:
@@ -361,6 +543,91 @@ def _ensure_trigger(workflow: dict[str, Any], trigger: str) -> None:
 
 def _action_family(value: str) -> str:
     return value.split("@", maxsplit=1)[0]
+
+
+def _uses_comment(step: Any) -> str | None:
+    """The `# v7.0.1` version annotation beside a step's `uses` value."""
+    comments = getattr(step, "ca", None)
+    token = comments.items.get("uses") if comments is not None else None
+    value = token[2].value if token is not None and token[2] is not None else ""
+    return value.split("\n", maxsplit=1)[0].strip() or None
+
+
+def _set_uses_comment(step: Any, comment: str) -> None:
+    """Rewrite the version annotation the repinned SHA just invalidated.
+
+    A stale annotation is worse than an absent one, because Dependabot reads
+    it as the pinned version. The existing token also carries whatever blank
+    line followed the step, so only its first line is replaced.
+    """
+    comments = getattr(step, "ca", None)
+    token = comments.items.get("uses") if comments is not None else None
+    if token is None or token[2] is None:
+        # Column 0 lets the emitter place the comment one space after the
+        # value; leaving the column to ruamel aligns it to whatever it last
+        # saw, which is not the same file twice.
+        step.yaml_add_eol_comment(comment, "uses", column=0)
+        return
+    existing = token[2].value
+    token[2].value = comment + existing[len(existing.split("\n", maxsplit=1)[0]) :]
+
+
+def _reconcile_reusable_call(path: Path, job: Any, called: str) -> list[str]:
+    """Reconcile a job that calls a reusable workflow instead of running steps.
+
+    Such a job has no steps of its own, and a `steps:` list beside its `uses:`
+    is a job GitHub refuses to schedule. What the kit can reconcile is what the
+    kit knows: where its own reusable workflow now lives and which inputs it
+    still accepts. Which revision to trust stays the maintainer's, so the
+    release tag goes in and the pin RSK029 wants is reported.
+    """
+    relative = path.relative_to(path.parents[2]).as_posix()
+    workflow, _, ref = called.rpartition("@")
+    if not workflow.startswith(f"{_KIT_REPOSITORY}/.github/workflows/"):
+        return [
+            f"{relative}: the job calls reusable workflow {called!r}, which this "
+            "kit does not publish; reconcile it by hand"
+        ]
+    conflicts: list[str] = []
+    version = f"v{kit_version()}"
+    if workflow != _REUSABLE_COMPLIANCE or not is_full_commit_sha(ref):
+        job["uses"] = f"{_REUSABLE_COMPLIANCE}@{version}"
+    if not is_full_commit_sha(str(job["uses"]).rsplit("@", maxsplit=1)[-1]):
+        conflicts.append(
+            f"{relative}: reusable workflow {job['uses']!r} needs a "
+            "maintainer-selected full commit SHA"
+        )
+    inputs = job.get("with")
+    if not isinstance(inputs, dict):
+        inputs = {}
+        job["with"] = inputs
+    dropped = sorted(set(inputs) - set(_REUSABLE_INPUTS))
+    for name in dropped:
+        del inputs[name]
+    inputs["standard-ref"] = version
+    if dropped:
+        conflicts.append(
+            f"{relative}: reusable workflow inputs {', '.join(dropped)} no longer "
+            "exist and were removed; own the command to keep what they asked for"
+        )
+    conflicts.append(
+        f"{relative}: the job calls the reusable workflow, so repo-check runs "
+        "there and this file declares no step of its own; own the command "
+        "instead to control how the checker is invoked"
+    )
+    return conflicts
+
+
+def _run_commands(run: str) -> set[tuple[str, ...]]:
+    """The commands a `run` scalar executes, whatever conditions gate them.
+
+    The same gate is spelled differently in different repositories -- a bare
+    `uv build --all-packages` against the starter's `compgen`-guarded form --
+    and comparing whole `run` bodies read those as two steps, so both were
+    written out under one name. Reusing the checker's own parser keeps one
+    answer to what a step executes.
+    """
+    return {command.tokens for command in _shell_commands(run)}
 
 
 def _merge_workflow(
@@ -391,6 +658,9 @@ def _merge_workflow(
         and current.get("permissions") != {"contents": "read"}
     ):
         job["permissions"] = {"contents": "read"}
+    if isinstance(job.get("uses"), str):
+        called_conflicts = _reconcile_reusable_call(path, job, job["uses"])
+        return _dump_yaml(current), called_conflicts
     steps = job.setdefault("steps", [])
     if not isinstance(steps, list):
         raise AdoptionError(f"cannot reconcile {path}: job steps must be a list")
@@ -413,14 +683,14 @@ def _merge_workflow(
                 None,
             )
         elif isinstance(expected_run, str):
-            expected_tokens = shlex.split(expected_run.replace("\n", " "))
+            expected_commands = _run_commands(expected_run)
             match = next(
                 (
                     step
                     for step in steps
                     if isinstance(step, dict)
                     and isinstance(step.get("run"), str)
-                    and shlex.split(step["run"].replace("\n", " ")) == expected_tokens
+                    and _run_commands(step["run"]) & expected_commands
                 ),
                 None,
             )
@@ -450,27 +720,35 @@ def _merge_workflow(
             steps.append(copy.deepcopy(expected_step))
         elif expected_uses is not None:
             current_ref = str(match["uses"]).rsplit("@", maxsplit=1)[-1]
-            if not _FULL_SHA.fullmatch(current_ref):
+            if not is_full_commit_sha(current_ref):
                 match["uses"] = expected_uses
+                # The starter's SHA and its version comment are one fact, so
+                # the pin carries the comment across rather than leaving the
+                # adopter's annotation describing the ref it replaced.
+                starter_comment = _uses_comment(expected_step)
+                if starter_comment is not None:
+                    _set_uses_comment(match, starter_comment)
         elif job_name == "compliance" and update_run:
             match["run"] = expected_run
 
+    # Both governed workflows are under a pin rule, and only actions the kit
+    # ships can be repinned from the starter. An action the repository added
+    # needs a SHA nobody but its maintainer can choose, so it is reported.
     conflicts: list[str] = []
-    if job_name == "quality":
-        for step in steps:
-            uses = step.get("uses") if isinstance(step, dict) else None
-            if (
-                not isinstance(uses, str)
-                or uses.startswith("./")
-                or uses.startswith("docker://")
-            ):
-                continue
-            match = _REMOTE_ACTION.match(uses)
-            if match is not None and not _FULL_SHA.fullmatch(match.group("ref")):
-                conflicts.append(
-                    f"{path.relative_to(path.parents[2]).as_posix()}: remote action "
-                    f"{uses!r} needs a maintainer-selected full commit SHA"
-                )
+    for step in steps:
+        uses = step.get("uses") if isinstance(step, dict) else None
+        if (
+            not isinstance(uses, str)
+            or uses.startswith("./")
+            or uses.startswith("docker://")
+        ):
+            continue
+        match = _REMOTE_ACTION.match(uses)
+        if match is not None and not is_full_commit_sha(match.group("ref")):
+            conflicts.append(
+                f"{path.relative_to(path.parents[2]).as_posix()}: remote action "
+                f"{uses!r} needs a maintainer-selected full commit SHA"
+            )
     return _dump_yaml(current), conflicts
 
 
@@ -519,66 +797,179 @@ def _section(text: str, heading: str) -> tuple[int, int, str] | None:
     return (match.start(), match.end(), match.group(0)) if match else None
 
 
-def _merge_agents(path: Path, profile: str, values: dict[str, str]) -> str:
-    template = _render(_read_starter(profile, "AGENTS.md"), values)
-    try:
-        text = path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return template
-    except UnicodeDecodeError as error:
-        raise AdoptionError(f"could not parse {path} as UTF-8") from error
-    headings = load_policy().rule("RSK002").check.config["headings"]
-    for heading in headings:
-        if _section(text, heading) is not None:
-            continue
-        source = _section(template, heading)
-        assert source is not None
-        text = text.rstrip() + "\n\n" + source[2].rstrip() + "\n"
+_LINK_DEFINITIONS = re.compile(r"(?:^\[[^\]\r\n]+\]:[^\r\n]*\r?\n?)+\Z", re.MULTILINE)
 
-    quality = _section(text, "Quality Gates")
-    assert quality is not None
-    block = quality[2]
-    heading_line, _, body = block.partition("\n")
-    commands = load_policy().rule("RSK003").check.config["commands_by_profile"][profile]
-    command_block = "\n".join(
-        f"{index}. `{command}`" for index, command in enumerate(commands, 1)
+
+def _append_block(text: str, block: str) -> str:
+    """Append `block`, keeping any trailing link-reference definitions last."""
+    body = text.rstrip() + "\n"
+    match = _LINK_DEFINITIONS.search(body)
+    if match is None:
+        return f"{body.rstrip()}\n\n{block.rstrip()}\n"
+    head = body[: match.start()].rstrip()
+    return f"{head}\n\n{block.rstrip()}\n\n{body[match.start() :].strip()}\n"
+
+
+def _append_link_definition(text: str, definition: str) -> str:
+    body = text.rstrip() + "\n"
+    match = _LINK_DEFINITIONS.search(body)
+    if match is None:
+        return f"{body}\n{definition}\n"
+    return f"{body[: match.end()].rstrip()}\n{definition}\n"
+
+
+def _insert_section(text: str, shape: Shape, heading: str, block: str) -> str:
+    """Insert `block` where `shape` says the section belongs.
+
+    Appending was safe while RSK002 checked presence alone. Shapes are
+    order-enforced, so a repaired section has to land before the first declared
+    section that follows it canonically, or the repair trades a missing-section
+    finding for an out-of-order one.
+    """
+    order = list(shape.headings)
+    for following in order[order.index(heading) + 1 :]:
+        location = _section(text, following)
+        if location is None:
+            continue
+        head = text[: location[0]].rstrip()
+        return f"{head}\n\n{block.rstrip()}\n\n{text[location[0] :]}"
+    return _append_block(text, block)
+
+
+def _fill_required_sections(text: str, shape: Shape, reference: str) -> str:
+    """Add every required section `text` lacks, taken from `reference`."""
+    for section in shape.sections:
+        if section.level != "required" or _section(text, section.heading) is not None:
+            continue
+        source = _section(reference, section.heading)
+        if source is None:
+            raise AdoptionError(
+                f"cannot reconcile {shape.path}: the reference document has no "
+                f"{section.heading!r} section"
+            )
+        text = _insert_section(text, shape, section.heading, source[2])
+    return text
+
+
+def _ensure_standards_reference(text: str, shape: Shape) -> str:
+    """Satisfy RSK005 inside a section the shape already declares."""
+    if "repo-standard-kit" in text:
+        return text
+    section_id, note = _STANDARDS_NOTE[shape.id]
+    location = _section(text, shape.section(section_id).heading)
+    if location is None:
+        return _append_block(text, f"{note}\n\n{_STANDARDS_LINK}")
+    block = f"{location[2].rstrip()}\n\n{note}\n\n"
+    return _append_link_definition(
+        text[: location[0]] + block + text[location[1] :], _STANDARDS_LINK
     )
-    list_match = _COMMAND_LIST_BLOCK.search(body)
-    if list_match is not None:
-        body = (
-            body[: list_match.start()] + command_block + "\n" + body[list_match.end() :]
-        )
+
+
+def _reconcile_block(
+    text: str, heading: str, block: str, pattern: re.Pattern[str]
+) -> str:
+    """Restate a policy-owned block inside a section the document already has.
+
+    An existing block is replaced where it stands, so surrounding prose keeps
+    its position; a section that states nothing gets the block first, ahead of
+    whatever prose it does carry.
+    """
+    location = _section(text, heading)
+    assert location is not None
+    heading_line, _, body = location[2].partition("\n")
+    match = pattern.search(body)
+    if match is not None:
+        body = body[: match.start()] + block + "\n" + body[match.end() :]
         replacement = f"{heading_line}\n{body}"
     else:
-        replacement = f"{heading_line}\n\n{command_block}\n"
+        replacement = f"{heading_line}\n\n{block}\n"
         if body.strip():
             replacement += "\n" + body.strip("\r\n") + "\n"
     replacement = replacement.rstrip() + "\n\n"
-    text = text[: quality[0]] + replacement + text[quality[1] :]
-    if "repo-standard-kit" not in text:
-        text = text.rstrip() + (
-            "\n\nThis repository adopts [repo-standard-kit] and its documented quality "
-            "baseline.\n\n[repo-standard-kit]: "
-            "https://github.com/FP-DevTools/repo-standard-kit\n"
+    return text[: location[0]] + replacement + text[location[1] :]
+
+
+def _reconcile_gate_chain(text: str, profile: str) -> str:
+    commands = load_policy().rule("RSK003").check.config["commands_by_profile"][profile]
+    block = "\n".join(
+        f"{index}. `{command}`" for index, command in enumerate(commands, 1)
+    )
+    return _reconcile_block(text, "Quality Gates", block, _COMMAND_LIST_BLOCK)
+
+
+def _reconcile_operating_dials(text: str) -> str:
+    """RSK026: the dial levels come from policy, never from the existing text."""
+    config = load_policy().rule("RSK026").check.config
+    block = "\n".join(
+        f"- **{dial['label']}:** {dial['level']} / {dial['scale']}"
+        for dial in config["dials"]
+    )
+    return _reconcile_block(text, config["section"], block, _DIAL_LIST_BLOCK)
+
+
+def _existing(path: Path) -> str | None:
+    try:
+        return path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    except UnicodeDecodeError as error:
+        raise AdoptionError(f"could not parse {path} as UTF-8") from error
+
+
+def _shape_for(rule_id: str) -> Shape:
+    """Resolve a shape through the rule that enforces it, never by literal id."""
+    policy = load_policy()
+    return policy.shape(policy.rule(rule_id).check.config["shape"])
+
+
+def _merge_agents(path: Path, profile: str, values: dict[str, str]) -> str:
+    reference = _render(_read_starter(profile, "AGENTS.md"), values)
+    text = _existing(path)
+    if text is None:
+        return reference
+    shape = _shape_for("RSK002")
+    text = _fill_required_sections(text, shape, reference)
+    text = _reconcile_gate_chain(text, profile)
+    text = _reconcile_operating_dials(text)
+    return _ensure_standards_reference(text, shape)
+
+
+_README_GAP = "`repo-adopt` added this required heading; it has no content yet."
+# Sections whose body adoption can state as fact, keyed by the value that
+# carries it. Everything else describes what the repository is for, which only
+# the maintainer knows.
+_README_BODIES = {"license": "license_notice"}
+
+
+def _fill_missing_readme_sections(
+    text: str, shape: Shape, values: dict[str, str]
+) -> str:
+    """Add every required README section, as fact where there is one.
+
+    The starter's bodies describe a repository `repo-init` has just generated
+    -- add the first package, replace this section -- which is false of a
+    repository that already exists and leaves the reader prose to delete. An
+    inserted section says it is empty and stops there, unless adoption can read
+    the answer off the repository, as it can for the licence terms.
+    """
+    for section in shape.sections:
+        if section.level != "required" or _section(text, section.heading) is not None:
+            continue
+        value = _README_BODIES.get(section.id)
+        body = values[value] if value is not None else _README_GAP
+        text = _insert_section(
+            text, shape, section.heading, f"## {section.heading}\n\n{body}\n"
         )
     return text
 
 
 def _merge_readme(path: Path, profile: str, values: dict[str, str]) -> str:
-    try:
-        text = path.read_text(encoding="utf-8")
-    except FileNotFoundError:
+    text = _existing(path)
+    if text is None:
         return _render(_read_starter(profile, "README.md"), values)
-    except UnicodeDecodeError as error:
-        raise AdoptionError(f"could not parse {path} as UTF-8") from error
-    if "repo-standard-kit" in text:
-        return text
-    return text.rstrip() + (
-        "\n\n## Repository Standards\n\nRepository workflow and quality gates follow "
-        "[repo-standard-kit]. Review this repository against the pinned standard "
-        "when upgrading.\n\n[repo-standard-kit]: "
-        "https://github.com/FP-DevTools/repo-standard-kit\n"
-    )
+    shape = _shape_for("RSK023")
+    text = _fill_missing_readme_sections(text, shape, values)
+    return _ensure_standards_reference(text, shape)
 
 
 def _planned(path: Path, content: str, root: Path) -> PlannedFile | None:
@@ -598,14 +989,28 @@ def plan_adoption(root: Path, profile: str | None = None) -> AdoptionPlan:
     document = _parse_toml(root / "pyproject.toml")
     selected = _resolve_profile(root, document, profile)
     policy = load_policy()
-    if not check_repo(root, policy, profile=selected):
+    # The short circuit below returns an empty plan when `check_repo` finds
+    # nothing to repair. No rule checks .gitignore -- a file this repo-specific
+    # is a poor fit for a structural rule -- so a repository can be clean by
+    # every rule and still have none, which is why presence is asked here
+    # rather than inferred from the findings.
+    gitignore_present = (root / ".gitignore").is_file()
+    # Only a `violation` names something adoption could repair: a report about
+    # the exemption configuration, active or dead, must not turn a repository
+    # that is clean by every rule into one adoption starts rewriting.
+    repairable = [
+        finding
+        for finding in check_repo(root, policy, profile=selected)
+        if finding.status == "violation"
+    ]
+    if not repairable and gitignore_present:
         unchanged = tuple(
             relative for relative in _MANAGED_SURFACES if (root / relative).exists()
         )
         return AdoptionPlan(
             root=root,
             profile=selected,
-            version=_kit_version(),
+            version=kit_version(),
             changes=(),
             unchanged=unchanged,
             conflicts=(),
@@ -616,16 +1021,19 @@ def plan_adoption(root: Path, profile: str | None = None) -> AdoptionPlan:
     changes: list[PlannedFile] = []
     unchanged: list[str] = []
     conflicts: list[str] = []
+    notices = [notice for notice in (_standard_major_notice(document),) if notice]
 
     pyproject, dependency_changed, pyproject_conflicts = _merge_pyproject(
         root / "pyproject.toml", document, selected
     )
     conflicts.extend(pyproject_conflicts)
+    pre_commit, pre_commit_conflicts = _merge_pre_commit(
+        root / ".pre-commit-config.yaml", selected
+    )
+    conflicts.extend(pre_commit_conflicts)
     generated: dict[str, str] = {
         "pyproject.toml": pyproject,
-        ".pre-commit-config.yaml": _merge_pre_commit(
-            root / ".pre-commit-config.yaml", selected
-        ),
+        ".pre-commit-config.yaml": pre_commit,
         ".pymarkdown.json": _merge_json(
             root / ".pymarkdown.json", selected, ".pymarkdown.json"
         ),
@@ -653,17 +1061,20 @@ def plan_adoption(root: Path, profile: str | None = None) -> AdoptionPlan:
             _read_starter(selected, "CHANGELOG.md"), values
         )
 
-    for directory, starter_file in (
-        ("docs/adr", "docs/adr/0001-template.md"),
-        ("docs/diagrams", "docs/diagrams/README.md"),
-    ):
-        path = root / directory
-        if path.is_dir() and any(path.iterdir()):
-            unchanged.append(directory)
-        else:
-            generated[starter_file] = _render(
-                _read_starter(selected, starter_file), values
-            )
+    gitignore = root / ".gitignore"
+    if gitignore.exists():
+        unchanged.append(".gitignore")
+    else:
+        generated[".gitignore"] = _read_starter(selected, ".gitignore")
+
+    # A repository that already keeps decision records keeps its own; the
+    # template is only seeded where there is nothing to overwrite.
+    adr = root / "docs/adr"
+    if adr.is_dir() and any(adr.iterdir()):
+        unchanged.append("docs/adr")
+    else:
+        template = "docs/adr/0001-template.md"
+        generated[template] = _render(_read_starter(selected, template), values)
 
     for relative, content in generated.items():
         change = _planned(root / relative, content, root)
@@ -674,11 +1085,12 @@ def plan_adoption(root: Path, profile: str | None = None) -> AdoptionPlan:
     return AdoptionPlan(
         root=root,
         profile=selected,
-        version=_kit_version(),
+        version=kit_version(),
         changes=tuple(changes),
         unchanged=tuple(sorted(set(unchanged))),
         conflicts=tuple(conflicts),
         dependency_metadata_changed=dependency_changed,
+        notices=tuple(notices),
     )
 
 
@@ -742,6 +1154,8 @@ def _remaining_findings(plan: AdoptionPlan) -> list[Finding]:
 
 
 def _print_summary(plan: AdoptionPlan, findings: list[Finding] | None) -> None:
+    for notice in plan.notices:
+        print(f"note: {notice}")
     for action in ("added", "updated"):
         paths = [
             change.path.as_posix() for change in plan.changes if change.action == action
@@ -757,13 +1171,23 @@ def _print_summary(plan: AdoptionPlan, findings: list[Finding] | None) -> None:
     if findings is None:
         print("remaining findings: not evaluated during dry-run")
         return
-    required = [finding for finding in findings if finding.level == "required"]
-    recommended = [finding for finding in findings if finding.level == "recommended"]
-    print(f"remaining required findings: {len(required)}")
-    for finding in required:
-        print(f"  - {finding.rule_id} {finding.path}: {finding.message}")
-    print(f"remaining recommended findings: {len(recommended)}")
-    for finding in recommended:
+    # Walking the declared levels keeps this summary complete when policy gains
+    # one; naming them here is how `advisory` findings went unreported.
+    suppressed = [finding for finding in findings if finding.status == "suppressed"]
+    for level in LEVEL_ORDER:
+        matching = [
+            finding
+            for finding in findings
+            if finding.level == level and finding.status != "suppressed"
+        ]
+        print(f"remaining {level} findings: {len(matching)}")
+        for finding in matching:
+            print(f"  - {finding.rule_id} {finding.path}: {finding.message}")
+    # A silenced finding counted as remaining would contradict the exit code,
+    # and dropped from the summary it is the same blind spot `repo-check` just
+    # closed, so it is reported on a line of its own.
+    print(f"suppressed by [tool.repo-check.ignore]: {len(suppressed)}")
+    for finding in suppressed:
         print(f"  - {finding.rule_id} {finding.path}: {finding.message}")
 
 
@@ -799,9 +1223,15 @@ def main(argv: list[str] | None = None) -> int:
                 _run(shlex.split(command), root, native_tls=args.native_tls)
         findings = _remaining_findings(plan)
         _print_summary(plan, findings)
-        return (
-            1 if plan.conflicts or any(f.level == "required" for f in findings) else 0
-        )
+        # Same rule `repo-check` applies: only a `violation` can fail a run.
+        # An `unused-exemption` is reported at its rule's canonical level and
+        # must not turn adoption into a failure.
+        blocking = [
+            finding
+            for finding in findings
+            if finding.level == "required" and finding.status == "violation"
+        ]
+        return 1 if plan.conflicts or blocking else 0
     except AdoptionError as error:
         print(f"repo-adopt: {error}", file=sys.stderr)
         return 2

@@ -1,0 +1,20 @@
+Proprietary License
+
+Copyright (c) __COPYRIGHT_YEAR__ __COPYRIGHT_HOLDER__. All rights reserved.
+
+This software and its accompanying documentation are confidential and
+proprietary to the copyright holder. No licence, express or implied, is
+granted by this document.
+
+No part of this software may be used, copied, modified, merged, published,
+distributed, sublicensed, sold, or disclosed to any third party without the
+prior written permission of the copyright holder. Use is permitted only by
+those the copyright holder has authorised in writing, and only for the
+purposes stated in that authorisation.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
