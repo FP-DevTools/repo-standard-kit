@@ -52,8 +52,8 @@ def mandatory_ci_commands(profile: str = "python-single") -> list[str]:
     return list(rule.check.config["commands_by_profile"][profile])
 
 
-def required_agents_sections() -> list[str]:
-    return list(shape_of("RSK002").required)
+def required_agents_sections(profile: str = "python-single") -> list[str]:
+    return list(shape_of("RSK002").required_for(profile))
 
 
 def shape_of(rule_id: str) -> Shape:

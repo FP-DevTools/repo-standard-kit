@@ -182,3 +182,10 @@ each refer to their generated shape table. The tables distinguish required from
 optional sections; undeclared sections and tables stay legal in any position.
 RSK023, RSK024, and RSK025 enforce their respective shapes at the **required**
 level.
+
+A required section may be relaxed for named profiles, listed in the shape
+table's *May be absent in* column. The relaxation covers presence only: a
+repository on such a profile may omit the section, and one that carries it is
+still held to the declared order. `pyproject.toml`'s `project` table is relaxed
+for `python-workspace`, because a uv virtual workspace root is a container for
+its members rather than a distribution of its own.

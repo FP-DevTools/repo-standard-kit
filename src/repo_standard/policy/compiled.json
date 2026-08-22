@@ -887,61 +887,73 @@
       "rule": "RSK002",
       "sections": [
         {
+          "allow_missing_profiles": [],
           "heading": "Repository Purpose",
           "id": "repository-purpose",
           "level": "required"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "Repository Context",
           "id": "repository-context",
           "level": "required"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "Human And Agent Responsibilities",
           "id": "human-and-agent-responsibilities",
           "level": "required"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "Agent Operating Mode",
           "id": "agent-operating-mode",
           "level": "required"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "Single Source Of Truth",
           "id": "single-source-of-truth",
           "level": "required"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "Workflow",
           "id": "workflow",
           "level": "required"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "Quality Gates",
           "id": "quality-gates",
           "level": "required"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "Coding Standards",
           "id": "coding-standards",
           "level": "required"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "Testing Policy",
           "id": "testing-policy",
           "level": "required"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "Documentation Rules",
           "id": "documentation-rules",
           "level": "required"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "Repository Layout",
           "id": "repository-layout",
           "level": "required"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "Change Control Notes",
           "id": "change-control-notes",
           "level": "required"
@@ -957,61 +969,73 @@
       "rule": "RSK023",
       "sections": [
         {
+          "allow_missing_profiles": [],
           "heading": "At A Glance",
           "id": "at-a-glance",
           "level": "optional"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "Overview",
           "id": "overview",
           "level": "required"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "Install",
           "id": "install",
           "level": "required"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "First 10 Minutes",
           "id": "first-10-minutes",
           "level": "optional"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "Configuration",
           "id": "configuration",
           "level": "optional"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "Usage",
           "id": "usage",
           "level": "required"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "Repo Structure",
           "id": "repo-structure",
           "level": "optional"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "Development",
           "id": "development",
           "level": "required"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "Deployment",
           "id": "deployment",
           "level": "optional"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "Compatibility And Versioning",
           "id": "compatibility-and-versioning",
           "level": "optional"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "Maintainers And Support",
           "id": "maintainers-and-support",
           "level": "optional"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "License",
           "id": "license",
           "level": "required"
@@ -1027,11 +1051,13 @@
       "rule": "RSK024",
       "sections": [
         {
+          "allow_missing_profiles": [],
           "heading": "Compatibility Policy",
           "id": "compatibility-policy",
           "level": "optional"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "[Unreleased]",
           "id": "unreleased",
           "level": "required"
@@ -1047,56 +1073,69 @@
       "rule": "RSK025",
       "sections": [
         {
+          "allow_missing_profiles": [
+            "python-workspace"
+          ],
           "heading": "project",
           "id": "project",
           "level": "required"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "project.scripts",
           "id": "project-scripts",
           "level": "optional"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "dependency-groups",
           "id": "dependency-groups",
           "level": "optional"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "build-system",
           "id": "build-system",
           "level": "optional"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "tool.uv.build-backend",
           "id": "tool-uv-build-backend",
           "level": "optional"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "tool.repo-standard",
           "id": "tool-repo-standard",
           "level": "optional"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "tool.ruff",
           "id": "tool-ruff",
           "level": "optional"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "tool.ruff.lint",
           "id": "tool-ruff-lint",
           "level": "optional"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "tool.pytest.ini_options",
           "id": "tool-pytest-ini-options",
           "level": "optional"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "tool.repo-check.ignore",
           "id": "tool-repo-check-ignore",
           "level": "optional"
         },
         {
+          "allow_missing_profiles": [],
           "heading": "tool.ty.src",
           "id": "tool-ty-src",
           "level": "optional"

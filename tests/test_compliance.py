@@ -98,10 +98,12 @@ def _shape(rule_id: str) -> Shape:
     return POLICY.shape(POLICY.rule(rule_id).check.config["shape"])
 
 
-def _markdown_shaped(title: str, body: str = "Detail.") -> str:
+def _markdown_shaped(
+    title: str, body: str = "Detail.", profile: str = "python-single"
+) -> str:
     """Render a document carrying exactly the required sections of a shape."""
     sections = "\n\n".join(
-        f"## {heading}\n\n{body}" for heading in _shape(title).required
+        f"## {heading}\n\n{body}" for heading in _shape(title).required_for(profile)
     )
     return sections
 
@@ -109,7 +111,7 @@ def _markdown_shaped(title: str, body: str = "Detail.") -> str:
 def _minimal_repo(tmp_path: Path, profile: str = "python-single") -> Path:
     root = tmp_path / "compliant-repo"
     root.mkdir()
-    headings = _shape("RSK002").required
+    headings = _shape("RSK002").required_for(profile)
     gate_chain = "\n".join(
         f"{index}. `{command}`"
         for index, command in enumerate(
@@ -2026,7 +2028,7 @@ def test_rsk002_uses_the_shared_agents_shape_record() -> None:
     shape = _shape("RSK002")
     assert shape.path == "AGENTS.md"
     assert shape.heading_level == 2
-    assert shape.required == shape.headings
+    assert shape.required_for("python-single") == shape.headings
     assert POLICY.rule("RSK002").level == "required"
 
 
@@ -2039,8 +2041,58 @@ def test_shape_rules_are_required_for_v2(
 
 def test_readme_shape_distinguishes_required_sections() -> None:
     shape = _shape("RSK023")
-    assert shape.required
-    assert set(shape.required).issubset(shape.headings)
+    required = shape.required_for("python-single")
+    assert required
+    assert set(required).issubset(shape.headings)
+
+
+def _rsk025_messages(root: Path, profile: str) -> list[str]:
+    return [
+        finding.message
+        for finding in check_repo(root, POLICY, profile=profile)
+        if finding.rule_id == "RSK025"
+    ]
+
+
+def _drop_project_table(root: Path, tail: str = "") -> None:
+    """Rewrite pyproject.toml as a root that declares no distribution."""
+    path = root / "pyproject.toml"
+    text = path.read_text(encoding="utf-8")
+    body = text.split("\n\n", 1)[1]
+    path.write_text(f"{body}{tail}", encoding="utf-8")
+
+
+def test_virtual_workspace_root_needs_no_project_table(tmp_path: Path) -> None:
+    """uv's workspace container carries no distribution of its own."""
+    root = _minimal_repo(tmp_path, "python-workspace")
+    _drop_project_table(root, '\n[tool.uv.workspace]\nmembers = ["packages/*"]\n')
+    assert _rsk025_messages(root, "python-workspace") == []
+
+
+def test_workspace_root_that_is_a_distribution_still_conforms(tmp_path: Path) -> None:
+    """The relaxation permits both workspace roots; it forbids neither."""
+    root = _minimal_repo(tmp_path, "python-workspace")
+    assert _rsk025_messages(root, "python-workspace") == []
+
+
+def test_workspace_root_project_table_is_still_ordered(tmp_path: Path) -> None:
+    """Relaxing presence must not relax position."""
+    root = _minimal_repo(tmp_path, "python-workspace")
+    path = root / "pyproject.toml"
+    head, _, body = path.read_text(encoding="utf-8").partition("\n\n")
+    path.write_text(f"{body}\n{head}\n", encoding="utf-8")
+    assert _rsk025_messages(root, "python-workspace") == [
+        "Declared sections are out of canonical order."
+    ]
+
+
+def test_single_package_root_still_requires_a_project_table(tmp_path: Path) -> None:
+    """The relaxation is scoped to one profile, not removed from the rule."""
+    root = _minimal_repo(tmp_path, "python-single")
+    _drop_project_table(root)
+    assert _rsk025_messages(root, "python-single") == [
+        "Missing required sections: project."
+    ]
 
 
 def test_missing_required_section_reports_its_shape_rule(tmp_path: Path) -> None:
@@ -2227,6 +2279,18 @@ def _retype_agents_shape_as_toml(data: dict[str, object]) -> None:
         (
             lambda data: data["shapes"][1].update({"path": "AGENTS.md"}),
             "two shapes govern the same path",
+        ),
+        (
+            lambda data: data["shapes"][0]["sections"][0].update(
+                {"allow_missing_profiles": ["no-such-profile"]}
+            ),
+            "profiles RSK002 does not check",
+        ),
+        (
+            lambda data: data["shapes"][1]["sections"][0].update(
+                {"allow_missing_profiles": ["python-workspace"]}
+            ),
+            "unsupported for a 'optional' section",
         ),
     ],
 )
